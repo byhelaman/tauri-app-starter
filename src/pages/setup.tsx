@@ -1,0 +1,115 @@
+import { Controller, useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
+import { saveSupabaseConfig, getSupabaseConfig } from "@/lib/supabase"
+import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import { Separator } from "@/components/ui/separator"
+
+const setupSchema = z.object({
+  url: z
+    .string()
+    .url("Enter a valid URL")
+    .startsWith("https://", "URL must start with https://"),
+  anonKey: z.string().min(20, "Enter a valid anon key"),
+})
+
+type SetupValues = z.infer<typeof setupSchema>
+
+export function SetupPage() {
+  const saved = getSupabaseConfig()
+
+  const form = useForm<SetupValues>({
+    resolver: zodResolver(setupSchema),
+    defaultValues: {
+      url: saved.url || "",
+      anonKey: saved.anonKey || "",
+    },
+  })
+
+  const onSubmit = (values: SetupValues) => {
+    saveSupabaseConfig(values.url, values.anonKey)
+  }
+
+  return (
+    <div className="flex min-h-svh bg-muted items-center justify-center p-6 md:p-10">
+      <div className="flex w-full max-w-sm flex-col gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Setup required</CardTitle>
+            <CardDescription>
+              Enter your Supabase project credentials to get started
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={form.handleSubmit(onSubmit)}>
+              <FieldGroup>
+                <Controller
+                  name="url"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="supabase-url">Project URL</FieldLabel>
+                      <Input
+                        {...field}
+                        id="supabase-url"
+                        type="url"
+                        placeholder="https://your-project.supabase.co"
+                        aria-invalid={fieldState.invalid}
+                      />
+                      <FieldError errors={[fieldState.error]} />
+                    </Field>
+                  )}
+                />
+
+                <Controller
+                  name="anonKey"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="supabase-anon-key">Publishable key</FieldLabel>
+                      <Input
+                        {...field}
+                        id="supabase-anon-key"
+                        type="password"
+                        placeholder="sb_publishable_OjZWm6IkpXVCJ9..."
+                        aria-invalid={fieldState.invalid}
+                      />
+                      <FieldDescription>
+                        Found in Project Settings → API Keys
+                      </FieldDescription>
+                      <FieldError errors={[fieldState.error]} />
+                    </Field>
+                  )}
+                />
+
+                <Field>
+                  <Button type="submit" disabled={form.formState.isSubmitting}>
+                    Save and continue
+                  </Button>
+                  <FieldDescription className="text-center">
+                    Or use a <code className="px-1 bg-muted rounded">.env</code> file and restart.
+                  </FieldDescription>
+                </Field>
+              </FieldGroup>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
