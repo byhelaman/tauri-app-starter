@@ -125,7 +125,7 @@ export function SignInForm({
             onClick={form.handleSubmit(onSubmit)}
             className="w-full"
           >
-            {form.formState.isSubmitting ? "Signing in..." : "Sign in"}
+            {form.formState.isSubmitting ? "Signing in..." : "Sign In"}
           </Button>
         </CardFooter>
       </Card>

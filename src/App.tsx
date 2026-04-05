@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 import { isSupabaseConfigured } from "@/lib/supabase"
 import { AuthProvider } from "@/contexts/auth-context"
 import { AuthGuard } from "@/components/auth-guard"
+import { ThemeProvider } from "@/components/theme-provider"
 import { UpdaterProvider } from "@/components/updater-context"
 import { UpdateDialog } from "@/components/update-dialog"
 import { Toaster } from "@/components/ui/sonner"
@@ -21,6 +22,7 @@ function App() {
   }
 
   return (
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
     <UpdaterProvider>
       <BrowserRouter>
         <AuthProvider>
@@ -36,6 +38,7 @@ function App() {
         </AuthProvider>
       </BrowserRouter>
     </UpdaterProvider>
+    </ThemeProvider>
   )
 }
 
