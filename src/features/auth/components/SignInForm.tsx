@@ -8,14 +8,15 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
 import {
   Field,
-  FieldDescription,
   FieldGroup,
   FieldError,
   FieldLabel,
@@ -63,6 +64,9 @@ export function SignInForm({
         <CardHeader>
           <CardTitle>Welcome back!</CardTitle>
           <CardDescription>Sign in to your account</CardDescription>
+          <CardAction>
+            <Button variant="link" onClick={onSignUp}>Sign Up</Button>
+          </CardAction>
         </CardHeader>
         <CardContent>
           <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -111,24 +115,19 @@ export function SignInForm({
                 )}
               />
 
-              <Field>
-                <Button type="submit" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? "Signing in..." : "Sign in"}
-                </Button>
-                <FieldDescription className="text-center">
-                  Don't have an account?{" "}
-                  <button
-                    type="button"
-                    onClick={onSignUp}
-                    className="underline underline-offset-4 hover:text-primary"
-                  >
-                    Sign up
-                  </button>
-                </FieldDescription>
-              </Field>
             </FieldGroup>
           </form>
         </CardContent>
+        <CardFooter>
+          <Button
+            type="submit"
+            disabled={form.formState.isSubmitting}
+            onClick={form.handleSubmit(onSubmit)}
+            className="w-full"
+          >
+            {form.formState.isSubmitting ? "Signing in..." : "Sign in"}
+          </Button>
+        </CardFooter>
       </Card>
     </div>
   )

@@ -8,8 +8,10 @@ import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -117,6 +119,11 @@ export function RecoveryForm({
             ? "Enter your email and the code we'll send you."
             : "Choose a new password for your account."}
         </CardDescription>
+        <CardAction>
+          {step === 1
+            ? <Button variant="link" onClick={onSignIn}>Sign In</Button>
+            : <Button variant="link" onClick={() => setStep(1)}>Back</Button>}
+        </CardAction>
       </CardHeader>
       <CardContent>
         {step === 1 && (
@@ -171,21 +178,6 @@ export function RecoveryForm({
                 )}
               />
 
-              <Field>
-                <Button type="submit" disabled={step1.formState.isSubmitting}>
-                  {step1.formState.isSubmitting ? "Verifying..." : "Continue"}
-                </Button>
-                <FieldDescription className="text-center">
-                  Already have an account?{" "}
-                  <button
-                    type="button"
-                    onClick={onSignIn}
-                    className="underline underline-offset-4 hover:text-primary"
-                  >
-                    Sign in
-                  </button>
-                </FieldDescription>
-              </Field>
             </FieldGroup>
           </form>
         )}
@@ -210,25 +202,22 @@ export function RecoveryForm({
                   </Field>
                 )}
               />
-
-              <Field>
-                <Button type="submit" disabled={step2.formState.isSubmitting}>
-                  {step2.formState.isSubmitting ? "Resetting..." : "Reset password"}
-                </Button>
-                <FieldDescription className="text-center">
-                  <button
-                    type="button"
-                    onClick={() => setStep(1)}
-                    className="underline underline-offset-4 hover:text-primary"
-                  >
-                    Back
-                  </button>
-                </FieldDescription>
-              </Field>
             </FieldGroup>
           </form>
         )}
       </CardContent>
+      <CardFooter>
+        {step === 1 && (
+          <Button type="submit" disabled={step1.formState.isSubmitting} onClick={step1.handleSubmit(onStep1Submit)} className="w-full">
+            {step1.formState.isSubmitting ? "Verifying..." : "Continue"}
+          </Button>
+        )}
+        {step === 2 && (
+          <Button type="submit" disabled={step2.formState.isSubmitting} onClick={step2.handleSubmit(onStep2Submit)} className="w-full">
+            {step2.formState.isSubmitting ? "Resetting..." : "Reset password"}
+          </Button>
+        )}
+      </CardFooter>
     </Card>
   )
 }

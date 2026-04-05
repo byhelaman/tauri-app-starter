@@ -7,18 +7,38 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencias
 node_modules
+
+# Build
 dist
 dist-ssr
-*.local
 
-# Editor directories and files
+# Entorno
+.env
+.env.local
+.env.*.local
+
+# Tauri
+src-tauri/target
+
+# Clave privada de firma del updater
+*.key
+*.pem
+
+# Editor
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# Referencias locales
+_references/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -8,8 +8,10 @@ import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -98,6 +100,9 @@ export function SignupForm({
       <CardHeader>
         <CardTitle>Get started</CardTitle>
         <CardDescription>Create a new account</CardDescription>
+        <CardAction>
+          <Button variant="link" onClick={onSignIn}>Sign In</Button>
+        </CardAction>
       </CardHeader>
       <CardContent>
         <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -169,24 +174,15 @@ export function SignupForm({
               )}
             />
 
-            <Field>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Creating account..." : "Create account"}
-              </Button>
-              <FieldDescription className="text-center">
-                Have an account?{" "}
-                <button
-                  type="button"
-                  onClick={onSignIn}
-                  className="underline underline-offset-4 hover:text-primary"
-                >
-                  Sign in
-                </button>
-              </FieldDescription>
-            </Field>
           </FieldGroup>
         </form>
       </CardContent>
+      <CardFooter>
+        <Button type="submit" disabled={form.formState.isSubmitting} onClick={form.handleSubmit(onSubmit)}
+          className="w-full">
+          {form.formState.isSubmitting ? "Creating account..." : "Create account"}
+        </Button>
+      </CardFooter>
     </Card>
   )
 }

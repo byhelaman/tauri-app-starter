@@ -7,6 +7,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -18,7 +19,6 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Separator } from "@/components/ui/separator"
 
 const setupSchema = z.object({
   url: z
@@ -86,7 +86,6 @@ export function SetupPage() {
                         {...field}
                         id="supabase-anon-key"
                         type="password"
-                        placeholder="sb_publishable_OjZWm6IkpXVCJ9..."
                         aria-invalid={fieldState.invalid}
                       />
                       <FieldDescription>
@@ -97,17 +96,14 @@ export function SetupPage() {
                   )}
                 />
 
-                <Field>
-                  <Button type="submit" disabled={form.formState.isSubmitting}>
-                    Save and continue
-                  </Button>
-                  <FieldDescription className="text-center">
-                    Or use a <code className="px-1 bg-muted rounded">.env</code> file and restart.
-                  </FieldDescription>
-                </Field>
               </FieldGroup>
             </form>
           </CardContent>
+          <CardFooter className="flex-col gap-2">
+            <Button type="submit" disabled={form.formState.isSubmitting} onClick={form.handleSubmit(onSubmit)} className="w-full">
+              Save and continue
+            </Button>
+          </CardFooter>
         </Card>
       </div>
     </div>
