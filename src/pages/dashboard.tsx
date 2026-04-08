@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react"
+import { getVersion } from "@tauri-apps/api/app"
 import { useAuth } from "@/contexts/auth-context"
 import { UserNav } from "@/components/user-nav"
 import { Button } from "@/components/ui/button"
@@ -13,10 +15,15 @@ const NAV_ITEMS = ["Dashboard", "Projects", "Team", "Analytics"]
 
 export function DashboardPage() {
   const { user } = useAuth()
+  const [version, setVersion] = useState<string | null>(null)
+
+  useEffect(() => {
+    getVersion().then(setVersion).catch(() => null)
+  }, [])
 
   return (
     <div className="flex min-h-svh flex-col">
-      <header className="px-6 py-2 flex items-center gap-6">
+      <header className="px-4 py-2 flex items-center gap-6">
         <nav className="flex items-center gap-1 flex-1">
           {NAV_ITEMS.map((label) => (
             <Button key={label} variant="ghost">
@@ -39,6 +46,11 @@ export function DashboardPage() {
           </CardContent>
         </Card>
       </main>
+      {version && (
+        <footer className="px-6 py-3 text-xs text-muted-foreground text-right">
+          v{version}
+        </footer>
+      )}
     </div>
   )
 }

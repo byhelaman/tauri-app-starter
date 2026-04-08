@@ -53,7 +53,9 @@ Abre el archivo `supabase/migrations/001_foundation.sql`, copia todo el contenid
 | `get_all_users` | RPC para listar usuarios (requiere `users.view`) |
 | `update_user_role` | RPC para cambiar el rol de un usuario (requiere `users.manage`) |
 | `delete_user` | RPC para eliminar un usuario (requiere `users.manage`) |
+| `delete_own_account` | RPC para que el usuario elimine su propia cuenta (bloqueada si es el único `super_admin`) |
 | `verify_user_password` | RPC para verificar la contraseña actual |
+| `check_email_exists` | RPC para verificar si un email existe — solo disponible para admins (`hierarchy >= 80`) |
 | `create_role` / `delete_role` | RPCs de gestión dinámica de roles (solo `super_admin`) |
 | Políticas RLS | Acceso controlado en todas las tablas |
 | Triggers de seguridad | Bloquean cambios de email y auto-escalada de roles |

@@ -50,68 +50,7 @@ Private key saved to: /Users/.../.tauri/tu-app.key
 
 ## Workflow de GitHub Actions
 
-Crea el archivo `.github/workflows/release.yml`:
-
-```yaml
-name: Release
-
-on:
-  push:
-    tags:
-      - "v*"
-
-jobs:
-  release:
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: windows-latest
-            args: "--target x86_64-pc-windows-msvc"
-
-    runs-on: ${{ matrix.platform }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'windows-latest' && 'x86_64-pc-windows-msvc' || '' }}
-
-      - name: Install frontend dependencies
-        run: pnpm install
-
-      - name: Build and release
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "v__VERSION__"
-          releaseBody: |
-            ## Cambios en esta versión
-
-            Ver los commits para el detalle completo.
-          releaseDraft: false
-          prerelease: false
-          args: ${{ matrix.args }}
-```
+El archivo `.github/workflows/release.yml` ya está incluido en el repositorio. Se dispara automáticamente al hacer push de cualquier tag `v*`.
 
 ---
 

@@ -292,15 +292,24 @@ BEGIN
 END;
 $$;
 
--- Verifica si un email ya existe (útil para el UX de registro)
+-- Verifica si un email ya existe — restringida a admins (hierarchy >= 80)
+-- para evitar enumeración de usuarios por parte de usuarios no privilegiados.
 CREATE OR REPLACE FUNCTION public.check_email_exists(p_email TEXT)
 RETURNS BOOLEAN
-LANGUAGE sql
+LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = ''
 AS $$
-    SELECT EXISTS (SELECT 1 FROM public.profiles WHERE email = p_email);
+DECLARE
+    caller_level int;
+BEGIN
+    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level')::int), 0);
+    IF caller_level < 80 THEN
+        RAISE EXCEPTION 'Permiso denegado: requiere privilegios de admin';
+    END IF;
+    RETURN EXISTS (SELECT 1 FROM public.profiles WHERE email = p_email);
+END;
 $$;
 
 -- Verifica la contraseña propia (usar antes de operaciones sensibles como cambiar contraseña)
@@ -565,16 +574,32 @@ BEGIN
 END;
 $$;
 
--- Elimina la propia cuenta
+-- Elimina la propia cuenta.
+-- Bloqueado si el usuario es el único super_admin del sistema.
 CREATE OR REPLACE FUNCTION public.delete_own_account()
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
 AS $$
-DECLARE _uid UUID := auth.uid();
+DECLARE
+    _uid         UUID := auth.uid();
+    _user_role   TEXT;
+    _super_count INT;
 BEGIN
     IF _uid IS NULL THEN RAISE EXCEPTION 'No autenticado'; END IF;
+
+    SELECT role INTO _user_role FROM public.profiles WHERE id = _uid;
+
+    IF _user_role = 'super_admin' THEN
+        SELECT COUNT(*) INTO _super_count
+        FROM public.profiles WHERE role = 'super_admin';
+
+        IF _super_count <= 1 THEN
+            RAISE EXCEPTION 'No puedes eliminar tu cuenta: eres el único super_admin del sistema';
+        END IF;
+    END IF;
+
     DELETE FROM auth.users WHERE id = _uid;
 END;
 $$;
