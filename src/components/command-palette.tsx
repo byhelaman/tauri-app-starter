@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { LayoutDashboard, Users, BarChart2, FolderKanban, Settings, Bell, User, LogOut } from "lucide-react"
+import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Kbd, KbdGroup } from "@/components/ui/kbd"
@@ -15,8 +16,15 @@ import {
   CommandShortcut,
 } from "@/components/ui/command"
 
-export function CommandPalette() {
+interface CommandPaletteProps {
+  onOpenProfile?: () => void
+  onOpenSettings?: () => void
+  onOpenNotifications?: () => void
+}
+
+export function CommandPalette({ onOpenProfile, onOpenSettings, onOpenNotifications }: CommandPaletteProps) {
   const { signOut } = useAuth()
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
@@ -30,6 +38,11 @@ export function CommandPalette() {
     return () => document.removeEventListener("keydown", handleKey)
   }, [])
 
+  function run(fn?: () => void) {
+    setOpen(false)
+    fn?.()
+  }
+
   return (
     <>
       <Button
@@ -39,8 +52,7 @@ export function CommandPalette() {
       >
         <span>Search...</span>
         <KbdGroup className="hidden sm:flex">
-          <Kbd>⌘</Kbd>
-          <Kbd>K</Kbd>
+          <Kbd>⌘K</Kbd>
         </KbdGroup>
       </Button>
 
@@ -51,19 +63,19 @@ export function CommandPalette() {
             <CommandEmpty>No results found.</CommandEmpty>
 
             <CommandGroup heading="Navigation">
-              <CommandItem onSelect={() => setOpen(false)}>
+              <CommandItem onSelect={() => run(() => navigate("/"))}>
                 <LayoutDashboard />
                 Dashboard
               </CommandItem>
-              <CommandItem onSelect={() => setOpen(false)}>
+              <CommandItem onSelect={() => run(() => navigate("/projects"))}>
                 <FolderKanban />
                 Projects
               </CommandItem>
-              <CommandItem onSelect={() => setOpen(false)}>
+              <CommandItem onSelect={() => run(() => navigate("/team"))}>
                 <Users />
                 Team
               </CommandItem>
-              <CommandItem onSelect={() => setOpen(false)}>
+              <CommandItem onSelect={() => run(() => navigate("/analytics"))}>
                 <BarChart2 />
                 Analytics
               </CommandItem>
@@ -72,20 +84,21 @@ export function CommandPalette() {
             <CommandSeparator />
 
             <CommandGroup heading="Account">
-              <CommandItem onSelect={() => setOpen(false)}>
+              <CommandItem onSelect={() => run(onOpenProfile)}>
                 <User />
                 Profile
                 <CommandShortcut>⇧⌘P</CommandShortcut>
               </CommandItem>
-              <CommandItem onSelect={() => setOpen(false)}>
+              <CommandItem onSelect={() => run(onOpenSettings)}>
                 <Settings />
                 Settings
+                <CommandShortcut>⌘,</CommandShortcut>
               </CommandItem>
-              <CommandItem onSelect={() => setOpen(false)}>
+              <CommandItem onSelect={() => run(onOpenNotifications)}>
                 <Bell />
                 Notifications
               </CommandItem>
-              <CommandItem onSelect={() => { setOpen(false); signOut() }}>
+              <CommandItem onSelect={() => run(signOut)}>
                 <LogOut />
                 Sign out
               </CommandItem>

@@ -9,6 +9,10 @@ import { UpdateDialog } from "@/components/update-dialog"
 import { Toaster } from "@/components/ui/sonner"
 import { SignInPage } from "@/features/auth/components/SignInPage"
 import { DashboardPage } from "@/pages/dashboard"
+import { ProjectsPage } from "@/pages/projects"
+import { TeamPage } from "@/pages/team"
+import { AnalyticsPage } from "@/pages/analytics"
+import { AppLayout } from "@/components/app-layout"
 import { SetupPage } from "@/pages/setup"
 
 function App() {
@@ -29,7 +33,12 @@ function App() {
           <Routes>
             <Route path="/login" element={<SignInPage />} />
             <Route element={<AuthGuard />}>
-              <Route path="/" element={<DashboardPage />} />
+              <Route element={<AppLayout />}>
+                <Route path="/" element={<DashboardPage />} />
+                <Route path="/projects" element={<ProjectsPage />} />
+                <Route path="/team" element={<TeamPage />} />
+                <Route path="/analytics" element={<AnalyticsPage />} />
+              </Route>
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

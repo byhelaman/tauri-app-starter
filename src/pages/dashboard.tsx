@@ -1,11 +1,4 @@
-import { useEffect, useState } from "react"
-import { getVersion } from "@tauri-apps/api/app"
-import { BellIcon } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import { UserNav } from "@/components/user-nav"
-import { CommandPalette } from "@/components/command-palette"
-import { NotificationsModal, DEMO_NOTIFICATIONS } from "@/components/notifications-modal"
-import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -14,56 +7,52 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
-const NAV_ITEMS = ["Dashboard", "Projects", "Team", "Analytics"]
+const ACTIVITY = [
+  { user: "alex@company.com", action: "pushed to", target: "main", time: "2m ago" },
+  { user: "sara@company.com", action: "opened PR in", target: "mobile-app", time: "18m ago" },
+  { user: "john@company.com", action: "closed issue in", target: "api", time: "1h ago" },
+  { user: "alex@company.com", action: "commented on", target: "design-system", time: "3h ago" },
+  { user: "sara@company.com", action: "merged PR in", target: "website", time: "5h ago" },
+]
 
 export function DashboardPage() {
   const { user } = useAuth()
-  const [version, setVersion] = useState<string | null>(null)
-  const [notificationsOpen, setNotificationsOpen] = useState(false)
-  const [unreadCount, setUnreadCount] = useState(() => DEMO_NOTIFICATIONS.filter((n) => !n.read).length)
-
-  useEffect(() => {
-    getVersion().then(setVersion).catch(() => null)
-  }, [])
 
   return (
-    <div className="flex min-h-svh flex-col">
-      <header className="px-4 py-2 flex items-center gap-6">
-        <nav className="flex items-center gap-1 flex-1">
-          {NAV_ITEMS.map((label) => (
-            <Button key={label} variant="ghost">
-              {label}
-            </Button>
+    <main className="flex-1 p-6 max-w-4xl w-full space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Welcome back!</CardTitle>
+          <CardDescription>Signed in as {user?.email}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Your starter template is ready. Start building here.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Activity</CardTitle>
+          <CardDescription>Latest team actions</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {ACTIVITY.map((a, i) => (
+            <div key={i} className="flex gap-3 text-sm">
+              <div className="mt-1.5 size-1.5 rounded-full bg-muted-foreground shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="leading-snug">
+                  <span className="font-medium">{a.user.split("@")[0]}</span>
+                  <span className="text-muted-foreground"> {a.action} </span>
+                  <span className="font-medium">{a.target}</span>
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{a.time}</p>
+              </div>
+            </div>
           ))}
-        </nav>
-        <CommandPalette />
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="relative" onClick={() => setNotificationsOpen(true)}>
-            <BellIcon />
-            {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-primary" />}
-          </Button>
-          <UserNav onOpenNotifications={() => setNotificationsOpen(true)} />
-        </div>
-      </header>
-      <main className="flex-1 p-6 max-w-4xl w-full">
-        <Card>
-          <CardHeader>
-            <CardTitle>Welcome back!</CardTitle>
-            <CardDescription>Signed in as {user?.email}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Your starter template is ready. Start building here.
-            </p>
-          </CardContent>
-        </Card>
-      </main>
-      <NotificationsModal open={notificationsOpen} onOpenChange={setNotificationsOpen} onUnreadCountChange={setUnreadCount} />
-      {version && (
-        <footer className="px-6 py-3 text-xs text-muted-foreground text-right">
-          v{version}
-        </footer>
-      )}
-    </div>
+        </CardContent>
+      </Card>
+    </main>
   )
 }
