@@ -1,4 +1,24 @@
+import { useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
+import { Button } from "@/components/ui/button"
+
+function ThrowError(): never {
+  throw new Error(
+    "TypeError: Cannot read properties of undefined (reading 'map')\n\n" +
+    "The above error occurred in the <DashboardPage> component:\n\n" +
+    "    at DashboardPage (src/pages/dashboard.tsx:42:18)\n" +
+    "    at RenderedRoute (react-router-dom@7.1.3/dist/index.js:412:5)\n" +
+    "    at Routes (react-router-dom@7.1.3/dist/index.js:515:3)\n" +
+    "    at AuthGuard (src/components/auth-guard.tsx:12:9)\n" +
+    "    at AppLayout (src/components/app-layout.tsx:20:5)\n" +
+    "    at BrowserRouter (react-router-dom@7.1.3/dist/index.js:188:3)\n" +
+    "    at AuthProvider (src/contexts/auth-context.tsx:8:3)\n" +
+    "    at UpdaterProvider (src/components/updater-context.tsx:8:3)\n" +
+    "    at ThemeProvider (next-themes@0.4.4/dist/index.js:55:3)\n\n" +
+    "Consider adding an error boundary to your tree to customize error handling behavior.\n" +
+    "Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries."
+  )
+}
 import {
   Card,
   CardContent,
@@ -17,6 +37,9 @@ const ACTIVITY = [
 
 export function DashboardPage() {
   const { user } = useAuth()
+  const [crash, setCrash] = useState(false)
+
+  if (crash) return <ThrowError />
 
   return (
     <main className="flex-1 p-6 max-w-4xl w-full space-y-6">
@@ -29,6 +52,9 @@ export function DashboardPage() {
           <p className="text-sm text-muted-foreground">
             Your starter template is ready. Start building here.
           </p>
+          <Button variant="destructive" size="sm" className="mt-3" onClick={() => setCrash(true)}>
+            [Demo] Throw error
+          </Button>
         </CardContent>
       </Card>
 

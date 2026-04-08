@@ -6,6 +6,7 @@ import { AuthGuard } from "@/components/auth-guard"
 import { ThemeProvider } from "@/components/theme-provider"
 import { UpdaterProvider } from "@/components/updater-context"
 import { UpdateDialog } from "@/components/update-dialog"
+import { ErrorBoundary } from "@/components/error-boundary"
 import { Toaster } from "@/components/ui/sonner"
 import { SignInPage } from "@/features/auth/components/SignInPage"
 import { DashboardPage } from "@/pages/dashboard"
@@ -26,6 +27,7 @@ function App() {
   }
 
   return (
+    <ErrorBoundary>
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
     <UpdaterProvider>
       <BrowserRouter>
@@ -48,6 +50,7 @@ function App() {
       </BrowserRouter>
     </UpdaterProvider>
     </ThemeProvider>
+    </ErrorBoundary>
   )
 }
 
