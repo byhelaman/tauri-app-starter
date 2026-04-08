@@ -1,12 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react"
-import { AlertTriangleIcon, ChevronRightIcon, RefreshCwIcon } from "lucide-react"
+import { AlertTriangleIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Empty,
   EmptyContent,
@@ -54,29 +48,16 @@ export class ErrorBoundary extends Component<Props, State> {
               </EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
-              <Collapsible defaultOpen className="w-full">
-                <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="sm" className="group w-full justify-between text-muted-foreground">
-                    Error details
-                    <ChevronRightIcon className="transition-transform group-data-[state=open]:rotate-90" />
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <ScrollArea className="mt-1 h-60 rounded-md border bg-muted/50">
-                    <pre className="px-3 py-2 whitespace-pre-wrap break-all text-xs text-destructive text-left">
-                      {error.message}
-                    </pre>
-                  </ScrollArea>
-                </CollapsibleContent>
-              </Collapsible>
+              <div className="w-full">
+                <div className="max-h-45 overflow-y-auto rounded-md border bg-muted/50">
+                  <pre className="px-3 py-2 whitespace-pre-wrap text-wrap text-xs text-destructive text-left">
+                    {error.message}
+                  </pre>
+                </div>
+              </div>
               <div className="flex gap-2">
-                <Button onClick={this.reset}>
-                  {/* <RefreshCwIcon data-icon="inline-start" /> */}
-                  Try again
-                </Button>
-                <Button variant="outline" onClick={this.reset}>
-                  Reload
-                </Button>
+                <Button onClick={this.reset}>Try again</Button>
+                <Button variant="outline" onClick={this.reset}>Reload</Button>
               </div>
             </EmptyContent>
           </Empty>

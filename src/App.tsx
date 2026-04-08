@@ -13,6 +13,7 @@ import { DashboardPage } from "@/pages/dashboard"
 import { ProjectsPage } from "@/pages/projects"
 import { TeamPage } from "@/pages/team"
 import { AnalyticsPage } from "@/pages/analytics"
+import { TasksPage } from "@/pages/tasks"
 import { AppLayout } from "@/components/app-layout"
 import { SetupPage } from "@/pages/setup"
 
@@ -40,6 +41,7 @@ function App() {
                 <Route path="/projects" element={<ProjectsPage />} />
                 <Route path="/team" element={<TeamPage />} />
                 <Route path="/analytics" element={<AnalyticsPage />} />
+                <Route path="/tasks" element={<TasksPage />} />
               </Route>
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

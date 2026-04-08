@@ -42,7 +42,7 @@ export function DashboardPage() {
   if (crash) return <ThrowError />
 
   return (
-    <main className="flex-1 p-6 max-w-4xl w-full space-y-6">
+    <main className="flex-1 p-6 w-full space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Welcome back!</CardTitle>
