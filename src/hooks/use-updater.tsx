@@ -11,6 +11,7 @@ interface UseUpdaterReturn {
   checkForUpdates: () => Promise<Update | null>
   downloadAndInstall: () => Promise<void>
   closeUpdateDialog: () => void
+  simulateUpdate: () => void
   update: Update | null
   isChecking: boolean
   isDownloading: boolean
@@ -35,20 +36,22 @@ export function useUpdater(): UseUpdaterReturn {
       setUpdate(result)
       return result
     } catch (err) {
-      console.error("Error al verificar actualizaciones:", err)
-      setError(err instanceof Error ? err.message : "Error al verificar actualizaciones")
+      console.error("Failed to check for updates:", err)
+      setError(err instanceof Error ? err.message : "Failed to check for updates")
       return null
     } finally {
       setIsChecking(false)
     }
   }, [])
 
-  // Verificar al montar y luego cada 4 horas
+  // Check on mount, then every 4 hours
   useEffect(() => {
     checkForUpdates()
     const id = setInterval(checkForUpdates, POLL_INTERVAL)
     return () => clearInterval(id)
   }, [checkForUpdates])
+
+  const [isSimulated, setIsSimulated] = useState(false)
 
   const downloadAndInstall = useCallback(async () => {
     if (!update) return
@@ -56,6 +59,23 @@ export function useUpdater(): UseUpdaterReturn {
     setIsDownloading(true)
     setProgress({ downloaded: 0, total: null })
     setError(null)
+
+    if (isSimulated) {
+      const total = 8 * 1024 * 1024 // 8 MB fake size
+      const steps = 40
+      const chunkSize = total / steps
+      setProgress({ downloaded: 0, total })
+      for (let i = 1; i <= steps; i++) {
+        await new Promise((r) => setTimeout(r, 60))
+        setProgress({ downloaded: chunkSize * i, total })
+      }
+      await new Promise((r) => setTimeout(r, 600))
+      setIsDownloading(false)
+      setProgress(null)
+      setIsSimulated(false)
+      setUpdate(null)
+      return
+    }
 
     try {
       await update.downloadAndInstall((event) => {
@@ -75,20 +95,27 @@ export function useUpdater(): UseUpdaterReturn {
       })
       await relaunch()
     } catch (err) {
-      console.error("Error al instalar actualización:", err)
-      setError(err instanceof Error ? err.message : "Error al instalar la actualización")
+      console.error("Failed to install update:", err)
+      setError(err instanceof Error ? err.message : "Failed to install update")
       setIsDownloading(false)
     }
-  }, [update])
+  }, [update, isSimulated])
 
   const closeUpdateDialog = useCallback(() => {
     setUpdate(null)
+    setIsSimulated(false)
+  }, [])
+
+  const simulateUpdate = useCallback(() => {
+    setIsSimulated(true)
+    setUpdate({ version: "9.9.9", body: "Bug fixes and performance improvements." } as unknown as Update)
   }, [])
 
   return {
     checkForUpdates,
     downloadAndInstall,
     closeUpdateDialog,
+    simulateUpdate,
     update,
     isChecking,
     isDownloading,

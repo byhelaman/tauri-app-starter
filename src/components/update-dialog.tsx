@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { DownloadIcon } from "lucide-react"
 import { useUpdaterContext } from "@/components/updater-context"
 import {
   AlertDialog,
@@ -12,6 +13,11 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Progress } from "@/components/ui/progress"
 
+function formatBytes(bytes: number) {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 export function UpdateDialog() {
   const {
     downloadAndInstall,
@@ -23,7 +29,7 @@ export function UpdateDialog() {
     error,
   } = useUpdaterContext()
 
-  // Mantiene los datos visibles durante la animación de cierre
+  // Keep data visible during close animation
   const [lastKnownUpdate, setLastKnownUpdate] = useState<typeof update>(null)
 
   useEffect(() => {
@@ -35,26 +41,42 @@ export function UpdateDialog() {
 
   const progressPercent = progress?.total
     ? Math.round((progress.downloaded / progress.total) * 100)
-    : 0
+    : null
+
+  const isDone = progressPercent === 100
 
   return (
     <AlertDialog open={!!update}>
       <AlertDialogContent className="sm:max-w-md">
         <AlertDialogHeader>
           <AlertDialogTitle>
-            Nueva versión disponible: {displayUpdate.version}
+            Update available — v{displayUpdate.version}
           </AlertDialogTitle>
           <AlertDialogDescription>
-            {displayUpdate.body || "Hay una nueva versión disponible. ¿Deseas actualizar ahora?"}
+            {displayUpdate.body || "A new version is available. Would you like to update now?"}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
         {isDownloading && (
-          <div className="py-2">
-            <Progress value={progressPercent} />
-            <p className="text-muted-foreground mt-2 text-center text-sm">
-              Descargando... {progressPercent}%
-            </p>
+          <div className="flex flex-col gap-2 py-1">
+            <Progress value={progressPercent ?? 0} className="h-2" />
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              {isDone ? (
+                <span className="text-foreground font-medium">Download complete — installing…</span>
+              ) : progressPercent !== null ? (
+                <>
+                  <span className="flex items-center gap-1.5">
+                    <DownloadIcon className="size-3" />
+                    Downloading…
+                  </span>
+                  <span>
+                    {formatBytes(progress!.downloaded)} / {formatBytes(progress!.total!)} — {progressPercent}%
+                  </span>
+                </>
+              ) : (
+                <span>Starting download…</span>
+              )}
+            </div>
           </div>
         )}
 
@@ -64,13 +86,13 @@ export function UpdateDialog() {
 
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isDownloading} onClick={closeUpdateDialog}>
-            Más tarde
+            Later
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={downloadAndInstall}
             disabled={isDownloading || isChecking}
           >
-            {isDownloading ? "Instalando..." : "Actualizar ahora"}
+            {isDownloading ? (isDone ? "Installing…" : "Downloading…") : "Update now"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

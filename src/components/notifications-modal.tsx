@@ -135,7 +135,7 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
                     <ItemTitle>
                       {n.title}
                       {!n.read && (
-                        <span className="size-1.5 rounded-full bg-primary" />
+                        <span className="size-1.5 rounded-full bg-amber-400" />
                       )}
                     </ItemTitle>
                     <ItemDescription>{n.body}</ItemDescription>

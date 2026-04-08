@@ -68,7 +68,7 @@ export function AppLayout() {
           >
             <BellIcon />
             {unreadCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-primary" />
+              <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-amber-400" />
             )}
           </Button>
           <UserNav
