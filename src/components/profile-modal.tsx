@@ -1,5 +1,7 @@
 import { useTheme } from "next-themes"
+import { toast } from "sonner"
 import { useAuth } from "@/contexts/auth-context"
+import { supabase } from "@/lib/supabase"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -62,6 +64,15 @@ interface ProfileModalProps {
 export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
   const { user, signOut } = useAuth()
   const { theme, setTheme } = useTheme()
+
+  async function handleDeleteAccount() {
+    const { error } = await supabase!.rpc("delete_own_account")
+    if (error) {
+      toast.error(error.message)
+      return
+    }
+    await signOut()
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -233,7 +244,7 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction variant="destructive" onClick={signOut}>
+                      <AlertDialogAction variant="destructive" onClick={handleDeleteAccount}>
                         Yes, delete my account
                       </AlertDialogAction>
                     </AlertDialogFooter>

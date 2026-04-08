@@ -1,10 +1,10 @@
-import { useState, useRef } from "react"
 import { toast } from "sonner"
 import { useNavigate } from "react-router-dom"
 import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { supabase } from "@/lib/supabase"
+import { useRateLimit } from "@/hooks/use-rate-limit"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -38,15 +38,16 @@ const signupSchema = z.object({
 
 type SignupValues = z.infer<typeof signupSchema>
 
-const COOLDOWN_SECONDS = 60
-
 export function SignupForm({
   onSignIn,
   ...props
 }: React.ComponentProps<typeof Card> & { onSignIn?: () => void }) {
   const navigate = useNavigate()
-  const [cooldown, setCooldown] = useState(0)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const { isLocked, lockoutRemaining, recordFailure } = useRateLimit({
+    maxAttempts: 5,
+    lockoutSeconds: 60,
+    storageKey: "rl:send-code",
+  })
 
   const form = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
@@ -55,19 +56,6 @@ export function SignupForm({
 
   const emailValue = form.watch("email")
   const passwordValue = form.watch("password")
-
-  const startCooldown = () => {
-    setCooldown(COOLDOWN_SECONDS)
-    intervalRef.current = setInterval(() => {
-      setCooldown((prev) => {
-        if (prev <= 1) {
-          clearInterval(intervalRef.current!)
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-  }
 
   const handleSendCode = async () => {
     const { error } = await supabase!.auth.signUp({
@@ -79,7 +67,7 @@ export function SignupForm({
       return
     }
     toast.success("Code sent! Check your email.")
-    startCooldown()
+    recordFailure()
   }
 
   const onSubmit = async (data: SignupValues) => {
@@ -163,9 +151,9 @@ export function SignupForm({
                       <InputGroupButton
                         variant="link"
                         onClick={handleSendCode}
-                        disabled={cooldown > 0 || !emailValue || passwordValue.length < 8}
+                        disabled={isLocked || !emailValue || passwordValue.length < 8}
                       >
-                        {cooldown > 0 ? `Resend in ${cooldown}s` : "Send code"}
+                        {isLocked ? `Resend in ${lockoutRemaining}s` : "Send code"}
                       </InputGroupButton>
                     </InputGroupAddon>
                   </InputGroup>

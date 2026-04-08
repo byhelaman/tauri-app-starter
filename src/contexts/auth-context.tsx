@@ -19,10 +19,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!supabase) return
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setLoading(false)
-    })
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        setSession(session)
+      })
+      .catch((err) => {
+        console.error("Failed to get session:", err)
+      })
+      .finally(() => {
+        setLoading(false)
+      })
 
     const {
       data: { subscription },

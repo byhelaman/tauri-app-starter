@@ -4,6 +4,7 @@ import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { useAuth } from "@/contexts/auth-context"
+import { useRateLimit } from "@/hooks/use-rate-limit"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -20,6 +21,7 @@ import {
   FieldGroup,
   FieldError,
   FieldLabel,
+  FieldDescription,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 
@@ -44,15 +46,32 @@ export function SignInForm({
   const location = useLocation()
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? "/"
 
+  const { attempts, isLocked, lockoutRemaining, recordFailure } = useRateLimit({
+    maxAttempts: 5,
+    lockoutSeconds: 60,
+    storageKey: "rl:sign-in",
+  })
+
   const form = useForm<SignInValues>({
     resolver: zodResolver(signInSchema),
     defaultValues: { email: "", password: "" },
   })
 
   const onSubmit = async (data: SignInValues) => {
+    if (isLocked) return
+
     const { error } = await signIn(data.email, data.password)
     if (error) {
-      toast.error("Invalid email or password.")
+      recordFailure()
+      const newAttempts = attempts + 1
+      const remaining = 5 - newAttempts
+      if (remaining <= 0) {
+        toast.error(`Too many failed attempts. Try again in 60 seconds.`)
+      } else if (remaining <= 2) {
+        toast.error(`Invalid email or password. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`)
+      } else {
+        toast.error("Invalid email or password.")
+      }
       return
     }
     navigate(from, { replace: true })
@@ -83,6 +102,7 @@ export function SignInForm({
                       type="email"
                       placeholder="m@example.com"
                       aria-invalid={fieldState.invalid}
+                      disabled={isLocked}
                     />
                     <FieldError errors={[fieldState.error]} />
                   </Field>
@@ -109,8 +129,12 @@ export function SignInForm({
                       id="password"
                       type="password"
                       aria-invalid={fieldState.invalid}
+                      disabled={isLocked}
                     />
-                    <FieldError errors={[fieldState.error]} />
+                    {isLocked
+                      ? <FieldDescription className="text-destructive">Too many attempts — try again in {lockoutRemaining}s</FieldDescription>
+                      : <FieldError errors={[fieldState.error]} />
+                    }
                   </Field>
                 )}
               />
@@ -121,11 +145,15 @@ export function SignInForm({
         <CardFooter>
           <Button
             type="submit"
-            disabled={form.formState.isSubmitting}
+            disabled={form.formState.isSubmitting || isLocked}
             onClick={form.handleSubmit(onSubmit)}
             className="w-full"
           >
-            {form.formState.isSubmitting ? "Signing in..." : "Sign In"}
+            {isLocked
+              ? `Locked (${lockoutRemaining}s)`
+              : form.formState.isSubmitting
+                ? "Signing in..."
+                : "Sign In"}
           </Button>
         </CardFooter>
       </Card>

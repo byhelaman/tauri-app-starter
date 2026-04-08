@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { RefreshCw } from "lucide-react"
+import { useUpdaterContext } from "@/components/updater-context"
 import {
   Dialog,
   DialogContent,
@@ -49,6 +50,8 @@ function SettingRow({
 }
 
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
+  const { checkForUpdates, isChecking } = useUpdaterContext()
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -130,8 +133,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 </Field>
               </FieldGroup>
 
-              <Button variant="outline" className="w-full">
-                Check for updates
+              <Button variant="outline" className="w-full" onClick={checkForUpdates} disabled={isChecking}>
+                {isChecking ? "Checking..." : "Check for updates"}
               </Button>
             </div>
           </TabsContent>

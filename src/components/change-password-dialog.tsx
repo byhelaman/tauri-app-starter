@@ -1,6 +1,10 @@
+import { useState } from "react"
 import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import { toast } from "sonner"
+import { supabase } from "@/lib/supabase"
+import { useRateLimit } from "@/hooks/use-rate-limit"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -17,7 +21,11 @@ import {
   FieldLabel,
   FieldGroup,
   FieldError,
+  FieldDescription,
 } from "@/components/ui/field"
+
+const MAX_ATTEMPTS = 5
+const LOCKOUT_SECONDS = 30
 
 const schema = z
   .object({
@@ -33,17 +41,59 @@ const schema = z
 type FormValues = z.infer<typeof schema>
 
 export function ChangePasswordDialog() {
+  const [open, setOpen] = useState(false)
+  const { attempts, isLocked, lockoutRemaining, recordFailure } = useRateLimit({
+    maxAttempts: MAX_ATTEMPTS,
+    lockoutSeconds: LOCKOUT_SECONDS,
+    storageKey: "rl:change-password",
+  })
+
   const { control, handleSubmit, reset, formState: { isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" },
   })
 
-  function onSubmit(_data: FormValues) {
-    // TODO: connect to verify_user_password RPC + supabase.auth.updateUser
+  function handleClose(v: boolean) {
+    setOpen(v)
+    if (!v) reset()
+  }
+
+  async function onSubmit(data: FormValues) {
+    if (isLocked) return
+
+    const { data: valid, error: rpcError } = await supabase!.rpc("verify_user_password", {
+      p_password: data.currentPassword,
+    })
+
+    if (rpcError || !valid) {
+      recordFailure()
+      const newAttempts = attempts + 1
+      if (newAttempts >= MAX_ATTEMPTS) {
+        toast.error(`Too many failed attempts. Try again in ${LOCKOUT_SECONDS} seconds.`)
+      } else {
+        const remaining = MAX_ATTEMPTS - newAttempts
+        toast.error(
+          remaining <= 2
+            ? `Incorrect password. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`
+            : "Current password is incorrect."
+        )
+      }
+      return
+    }
+
+    const { error } = await supabase!.auth.updateUser({ password: data.newPassword })
+
+    if (error) {
+      toast.error(error.message)
+      return
+    }
+
+    toast.success("Password updated successfully")
+    handleClose(false)
   }
 
   return (
-    <Dialog onOpenChange={(open) => { if (!open) reset() }}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogTrigger asChild>
         <Button variant="outline" className="w-full">Change password</Button>
       </DialogTrigger>
@@ -62,8 +112,11 @@ export function ChangePasswordDialog() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="current-password">Current password</FieldLabel>
-                  <Input {...field} id="current-password" type="password" aria-invalid={fieldState.invalid} />
-                  <FieldError errors={[fieldState.error]} />
+                  <Input {...field} id="current-password" type="password" aria-invalid={fieldState.invalid} disabled={isLocked} />
+                  {isLocked
+                    ? <FieldDescription className="text-destructive">Locked — try again in {lockoutRemaining}s</FieldDescription>
+                    : <FieldError errors={[fieldState.error]} />
+                  }
                 </Field>
               )}
             />
@@ -73,7 +126,7 @@ export function ChangePasswordDialog() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="new-password">New password</FieldLabel>
-                  <Input {...field} id="new-password" type="password" aria-invalid={fieldState.invalid} />
+                  <Input {...field} id="new-password" type="password" aria-invalid={fieldState.invalid} disabled={isLocked} />
                   <FieldError errors={[fieldState.error]} />
                 </Field>
               )}
@@ -84,14 +137,16 @@ export function ChangePasswordDialog() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="confirm-password">Confirm new password</FieldLabel>
-                  <Input {...field} id="confirm-password" type="password" aria-invalid={fieldState.invalid} />
+                  <Input {...field} id="confirm-password" type="password" aria-invalid={fieldState.invalid} disabled={isLocked} />
                   <FieldError errors={[fieldState.error]} />
                 </Field>
               )}
             />
           </FieldGroup>
           <DialogFooter showCloseButton className="mt-4">
-            <Button type="submit" disabled={isSubmitting}>Update password</Button>
+            <Button type="submit" disabled={isSubmitting || isLocked}>
+              {isLocked ? `Locked (${lockoutRemaining}s)` : "Update password"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
