@@ -1,5 +1,6 @@
 import { columns, type Task } from "@/features/tasks/columns"
 import { DataTable } from "@/features/tasks/data-table"
+import { PageHeader } from "@/components/page-header"
 
 const TASKS: Task[] = [
   { id: "TASK-001", title: "Set up CI/CD pipeline", status: "done", priority: "high", assignee: "alex" },
@@ -19,10 +20,7 @@ const TASKS: Task[] = [
 export function TasksPage() {
   return (
     <main className="h-full overflow-hidden flex flex-col p-6 gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Tasks</h1>
-        <p className="text-sm text-muted-foreground">Manage and track your team's work.</p>
-      </div>
+      <PageHeader title="Tasks" description="Manage and track your team's work." />
       <DataTable
         columns={columns}
         data={TASKS}

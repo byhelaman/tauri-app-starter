@@ -50,7 +50,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <EmptyContent>
               <div className="w-full">
                 <div className="max-h-45 overflow-y-auto rounded-md border bg-muted/50">
-                  <pre className="px-3 py-2 whitespace-pre-wrap text-wrap text-xs text-destructive text-left">
+                  <pre className="px-3 py-2 whitespace-pre-wrap text-wrap text-xs text-left">
                     {error.message}
                   </pre>
                 </div>

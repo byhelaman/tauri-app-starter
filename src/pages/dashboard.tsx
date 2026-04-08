@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/page-header"
 
 function ThrowError(): never {
   throw new Error(
@@ -43,14 +44,15 @@ export function DashboardPage() {
 
   return (
     <main className="flex-1 p-6 w-full space-y-6">
+      <PageHeader title="Welcome back!" description={`Signed in as ${user?.email}`} />
       <Card>
         <CardHeader>
-          <CardTitle>Welcome back!</CardTitle>
-          <CardDescription>Signed in as {user?.email}</CardDescription>
+          <CardTitle>Getting started</CardTitle>
+          <CardDescription>Your starter template is ready.</CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Your starter template is ready. Start building here.
+            Start building your app here. Remove this card when you no longer need it.
           </p>
           <Button variant="destructive" size="sm" className="mt-3" onClick={() => setCrash(true)}>
             [Demo] Throw error

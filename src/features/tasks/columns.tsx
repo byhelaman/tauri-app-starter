@@ -69,7 +69,6 @@ export const columns: ColumnDef<Task>[] = [
     header: ({ column }) => (
       <Button
         variant="ghost"
-        size="sm"
         className="-ml-3"
         onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
       >
@@ -92,7 +91,6 @@ export const columns: ColumnDef<Task>[] = [
     header: ({ column }) => (
       <Button
         variant="ghost"
-        size="sm"
         className="-ml-3"
         onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
       >
