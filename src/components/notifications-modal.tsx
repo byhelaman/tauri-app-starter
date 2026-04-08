@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { CheckCheckIcon, ShieldCheckIcon, UserPlusIcon, XIcon, ZapIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -30,7 +30,7 @@ interface Notification {
   read: boolean
 }
 
-const DEMO_NOTIFICATIONS: Notification[] = [
+export const DEMO_NOTIFICATIONS: Notification[] = [
   {
     id: 1,
     icon: ShieldCheckIcon,
@@ -68,11 +68,16 @@ const DEMO_NOTIFICATIONS: Notification[] = [
 interface NotificationsModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onUnreadCountChange?: (count: number) => void
 }
 
-export function NotificationsModal({ open, onOpenChange }: NotificationsModalProps) {
+export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: NotificationsModalProps) {
   const [notifications, setNotifications] = useState(DEMO_NOTIFICATIONS)
   const unreadCount = notifications.filter((n) => !n.read).length
+
+  useEffect(() => {
+    onUnreadCountChange?.(unreadCount)
+  }, [unreadCount, onUnreadCountChange])
 
   function markAllRead() {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))

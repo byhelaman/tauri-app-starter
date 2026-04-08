@@ -26,6 +26,8 @@ Copy `.env.example` to `.env` and fill in Supabase credentials:
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 
+If neither env var is set, the app renders `SetupPage` (`src/pages/setup.tsx`) on first launch, which lets the user enter credentials that are then persisted to `localStorage`. Env vars always take precedence over `localStorage`.
+
 Prerequisites: Node 20+, pnpm 9+, Rust toolchain, Supabase account.
 
 ## Architecture
@@ -43,6 +45,12 @@ This is a **Tauri 2 desktop app template** with React 19 + TypeScript frontend b
 **Auth flow**: Email/password login with optional OTP sign-up and password recovery. All forms use React Hook Form + Zod. Post-login redirects to the originally requested route. Supabase tokens are stored in localStorage with auto-refresh; session refresh is also triggered on window focus/visibility events (important for long-running desktop apps).
 
 **Adding features**: New pages go in `src/pages/`, new feature modules in `src/features/<name>/`. UI components use shadcn/ui (components in `src/components/ui/`). Path alias `@/` maps to `src/`.
+
+**Custom UI primitives** (not in shadcn — do not try to install them):
+- `Field` / `FieldGroup` / `FieldLabel` / `FieldDescription` / `FieldError` / `FieldContent` — form layout primitives used in all forms and modals. `Field` supports `orientation="vertical"` (default) or `"horizontal"` (label + control side-by-side).
+- `Item` / `ItemGroup` / `ItemMedia` / `ItemContent` / `ItemTitle` / `ItemDescription` / `ItemActions` — list/card-row primitives used in notification and profile views.
+
+**User nav modals**: `user-nav.tsx` controls `ProfileModal`, `SettingsModal`, and `NotificationsModal` via a single `ModalType` state (`"profile" | "settings" | "notifications" | null`). Add new user-nav modals by extending this union and following the same open/onOpenChange prop pattern.
 
 **Theming**: `next-themes` wraps the app; toggle is in `user-nav.tsx`.
 

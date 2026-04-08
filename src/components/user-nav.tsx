@@ -29,7 +29,11 @@ function getInitials(email: string) {
   return email.slice(0, 2).toUpperCase()
 }
 
-export function UserNav() {
+interface UserNavProps {
+  onOpenNotifications?: () => void
+}
+
+export function UserNav({ onOpenNotifications }: UserNavProps) {
   const { user, signOut } = useAuth()
   const { theme, setTheme } = useTheme()
   const [modal, setModal] = useState<ModalType>(null)
@@ -38,7 +42,7 @@ export function UserNav() {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="rounded-full">
+          <Button variant="ghost" size="icon">
             <Avatar>
               <AvatarFallback>{getInitials(user?.email ?? "?")}</AvatarFallback>
             </Avatar>
@@ -55,7 +59,7 @@ export function UserNav() {
               <SettingsIcon />
               Settings
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setModal("notifications")}>
+            <DropdownMenuItem onSelect={() => onOpenNotifications ? onOpenNotifications() : setModal("notifications")}>
               <BellIcon />
               Notifications
             </DropdownMenuItem>

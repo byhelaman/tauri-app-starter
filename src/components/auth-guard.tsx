@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom"
 import { useAuth } from "@/contexts/auth-context"
+import { Spinner } from "@/components/ui/spinner"
 
 export function AuthGuard() {
   const { session, loading } = useAuth()
@@ -8,7 +9,7 @@ export function AuthGuard() {
   if (loading) {
     return (
       <div className="flex min-h-svh items-center justify-center">
-        <div className="text-muted-foreground text-sm">Loading...</div>
+        <Spinner />
       </div>
     )
   }
