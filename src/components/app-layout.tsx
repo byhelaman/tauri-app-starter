@@ -40,7 +40,7 @@ export function AppLayout() {
   )
 
   return (
-    <div className="flex flex-col min-h-svh">
+    <div className="flex flex-col h-svh">
       <header className="sticky top-0 z-10 bg-background/80 backdrop-blur px-4 py-2 flex items-center gap-6">
         <nav className="flex items-center gap-1 flex-1">
           {NAV_ITEMS.map(({ label, to }) => (
@@ -80,7 +80,9 @@ export function AppLayout() {
         </div>
       </header>
 
-      <Outlet />
+      <div className="flex-1 overflow-y-auto min-h-0">
+        <Outlet />
+      </div>
 
       <ProfileModal
         open={modal === "profile"}

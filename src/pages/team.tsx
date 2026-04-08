@@ -11,7 +11,7 @@ import {
 
 export function TeamPage() {
   return (
-    <main className="flex-1 flex items-center justify-center p-6">
+    <main className="h-full flex items-center justify-center p-6">
       <Empty>
         <EmptyHeader>
           <EmptyMedia variant="icon">

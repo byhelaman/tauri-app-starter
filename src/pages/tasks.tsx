@@ -18,7 +18,7 @@ const TASKS: Task[] = [
 
 export function TasksPage() {
   return (
-    <main className="flex-1 p-6 w-full space-y-6">
+    <main className="h-full overflow-hidden flex flex-col p-6 gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Tasks</h1>
         <p className="text-sm text-muted-foreground">Manage and track your team's work.</p>
