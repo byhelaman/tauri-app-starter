@@ -6,6 +6,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogBody,
 } from "@/components/ui/dialog"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
@@ -45,6 +46,7 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
           <DialogDescription>Application configuration and administration.</DialogDescription>
         </DialogHeader>
 
+        <DialogBody>
         <Tabs defaultValue="roles">
           <TabsList className="w-full">
             <TabsTrigger value="roles">Roles</TabsTrigger>
@@ -99,6 +101,7 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
             </div>
           </TabsContent>
         </Tabs>
+        </DialogBody>
 
         <DialogFooter showCloseButton />
       </DialogContent>

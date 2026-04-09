@@ -75,8 +75,7 @@ function RowActions({ task, onDelete }: RowActionsProps) {
             Copy ID
           </DropdownMenuItem>
           <DropdownMenuItem>Edit</DropdownMenuItem>
-          <DropdownMenuItem
-            className="text-destructive"
+          <DropdownMenuItem variant="destructive"
             onClick={() => setConfirmOpen(true)}
           >
             Delete

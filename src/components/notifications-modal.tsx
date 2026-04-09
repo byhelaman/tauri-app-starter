@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { CheckCheckIcon, ShieldCheckIcon, UserPlusIcon, XIcon, ZapIcon } from "lucide-react"
+import { AlertTriangleIcon, CheckCheckIcon, FileTextIcon, RefreshCwIcon, ShieldCheckIcon, UserPlusIcon, XIcon, ZapIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogBody,
 } from "@/components/ui/dialog"
 import {
   Item,
@@ -49,6 +50,14 @@ export const DEMO_NOTIFICATIONS: Notification[] = [
   },
   {
     id: 3,
+    icon: AlertTriangleIcon,
+    title: "Login from new device",
+    body: "A sign-in was detected from Windows 11 in New York.",
+    time: "2h ago",
+    read: false,
+  },
+  {
+    id: 4,
     icon: ZapIcon,
     title: "Usage limit",
     body: "You've used 80% of your monthly quota.",
@@ -56,11 +65,35 @@ export const DEMO_NOTIFICATIONS: Notification[] = [
     read: true,
   },
   {
-    id: 4,
+    id: 5,
+    icon: RefreshCwIcon,
+    title: "Sync completed",
+    body: "All data has been synced successfully.",
+    time: "5h ago",
+    read: true,
+  },
+  {
+    id: 6,
+    icon: FileTextIcon,
+    title: "Report ready",
+    body: "Your April usage report is ready to download.",
+    time: "Yesterday",
+    read: true,
+  },
+  {
+    id: 7,
     icon: CheckCheckIcon,
     title: "All tasks completed",
     body: "Your scheduled tasks finished successfully.",
     time: "Yesterday",
+    read: true,
+  },
+  {
+    id: 8,
+    icon: UserPlusIcon,
+    title: "Role updated",
+    body: "Your role has been changed to Admin by a super admin.",
+    time: "2 days ago",
     read: true,
   },
 ]
@@ -112,52 +145,54 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
           </div>
         </DialogHeader>
 
-        {notifications.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">
-            No notifications.
-          </p>
-        ) : (
-          <ItemGroup>
-            {notifications.map((n) => {
-              const Icon = n.icon
-              return (
-                <Item
-                  key={n.id}
-                  size="sm"
-                  variant={n.read ? "default" : "muted"}
-                  className={cn("cursor-pointer", !n.read && "hover:bg-muted/70")}
-                  onClick={() => markRead(n.id)}
-                >
-                  <ItemMedia variant="icon">
-                    <Icon />
-                  </ItemMedia>
-                  <ItemContent>
-                    <ItemTitle>
-                      {n.title}
-                      {!n.read && (
-                        <span className="size-1.5 rounded-full bg-amber-400" />
-                      )}
-                    </ItemTitle>
-                    <ItemDescription>{n.body}</ItemDescription>
-                  </ItemContent>
-                  <ItemActions>
-                    <span className="text-xs text-muted-foreground">{n.time}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        dismiss(n.id)
-                      }}
-                    >
-                      <XIcon />
-                    </Button>
-                  </ItemActions>
-                </Item>
-              )
-            })}
-          </ItemGroup>
-        )}
+        <DialogBody>
+          {notifications.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No notifications.
+            </p>
+          ) : (
+            <ItemGroup>
+              {notifications.map((n) => {
+                const Icon = n.icon
+                return (
+                  <Item
+                    key={n.id}
+                    size="sm"
+                    variant={n.read ? "default" : "muted"}
+                    className={cn("cursor-pointer", !n.read && "hover:bg-muted/70")}
+                    onClick={() => markRead(n.id)}
+                  >
+                    <ItemMedia variant="icon">
+                      <Icon />
+                    </ItemMedia>
+                    <ItemContent>
+                      <ItemTitle>
+                        {n.title}
+                        {!n.read && (
+                          <span className="size-1.5 rounded-full bg-amber-400" />
+                        )}
+                      </ItemTitle>
+                      <ItemDescription>{n.body}</ItemDescription>
+                    </ItemContent>
+                    <ItemActions>
+                      <span className="text-xs text-muted-foreground">{n.time}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          dismiss(n.id)
+                        }}
+                      >
+                        <XIcon />
+                      </Button>
+                    </ItemActions>
+                  </Item>
+                )
+              })}
+            </ItemGroup>
+          )}
+        </DialogBody>
       </DialogContent>
     </Dialog>
   )

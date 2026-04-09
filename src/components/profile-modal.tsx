@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogBody,
 } from "@/components/ui/dialog"
 import {
   Select,
@@ -74,6 +75,7 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
           <DialogDescription>Manage your account settings.</DialogDescription>
         </DialogHeader>
 
+        <DialogBody>
         <Tabs defaultValue="general">
           <TabsList className="w-full">
             <TabsTrigger value="general">General</TabsTrigger>
@@ -263,6 +265,7 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
             </FieldGroup>
           </TabsContent>
         </Tabs>
+        </DialogBody>
 
         <DialogFooter showCloseButton>
           <Button>Save changes</Button>
