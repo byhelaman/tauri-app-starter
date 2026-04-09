@@ -213,7 +213,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         { label: "Privacy Statement", href: "#" },
                         { label: "Terms of Service", href: "#" },
                       ].map(({ label, href }) => (
-                        <a key={label} href={href} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                        <a key={label} href={href} className="text-sm text-muted-foreground hover:text-foreground transition-colors w-fit">
                           {label}
                         </a>
                       ))}

@@ -57,6 +57,7 @@ export function UserNav({ onOpenProfile, onOpenSettings, onOpenNotifications, on
           <DropdownMenuItem onSelect={onOpenSystem}>
             <ShieldIcon />
             System
+            <DropdownMenuShortcut>⇧⌘S</DropdownMenuShortcut>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={onOpenNotifications}>
             <BellIcon />

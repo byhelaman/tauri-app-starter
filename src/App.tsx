@@ -20,10 +20,10 @@ import { SetupPage } from "@/pages/setup"
 function App() {
   if (!isSupabaseConfigured) {
     return (
-      <>
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
         <SetupPage />
         <Toaster />
-      </>
+      </ThemeProvider>
     )
   }
 

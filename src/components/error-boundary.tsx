@@ -49,7 +49,7 @@ export class ErrorBoundary extends Component<Props, State> {
             </EmptyHeader>
             <EmptyContent>
               <div className="w-full">
-                <div className="max-h-45 overflow-y-auto rounded-md border bg-muted/50">
+                <div className="max-h-45 overflow-y-auto rounded-md border bg-muted/50 scrollbar">
                   <pre className="px-3 py-2 whitespace-pre-wrap text-wrap text-xs text-left">
                     {error.message}
                   </pre>

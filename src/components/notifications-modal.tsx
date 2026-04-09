@@ -157,7 +157,7 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
                 return (
                   <Item
                     key={n.id}
-                    size="sm"
+                    size="xs"
                     variant={n.read ? "default" : "muted"}
                     className={cn("cursor-pointer", !n.read && "hover:bg-muted/70")}
                     onClick={() => markRead(n.id)}

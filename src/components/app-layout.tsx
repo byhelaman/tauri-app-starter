@@ -32,6 +32,10 @@ export function AppLayout() {
         e.preventDefault()
         setModal("settings")
       }
+      if (e.ctrlKey && e.shiftKey && e.key === "S") {
+        e.preventDefault()
+        setModal("system")
+      }
     }
     document.addEventListener("keydown", handleKey)
     return () => document.removeEventListener("keydown", handleKey)

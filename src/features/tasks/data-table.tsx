@@ -111,7 +111,7 @@ export function DataTable<TData, TValue>({
         </DropdownMenu>
       </div>
 
-      <div className="overflow-auto max-h-[calc(100svh-17rem)] [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-track]:border-l [&::-webkit-scrollbar-track]:border-l-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-clip-padding">
+      <div className="overflow-auto max-h-[calc(100svh-17rem)] scrollbar">
         <div className="rounded-md border">
           <Table>
             <TableHeader>

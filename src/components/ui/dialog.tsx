@@ -90,10 +90,7 @@ function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="dialog-body"
       className={cn(
-        "px-1 flex-1 min-h-0 overflow-x-hidden overflow-y-auto",
-        "[&::-webkit-scrollbar]:w-2.5",
-        "[&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-track]:border-l [&::-webkit-scrollbar-track]:border-l-transparent",
-        "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-clip-padding",
+        "flex-1 min-h-0 overflow-x-hidden overflow-y-auto scrollbar px-1 pb-1",
         className
       )}
       {...props}
