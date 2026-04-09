@@ -1,5 +1,5 @@
 import { useTheme } from "next-themes"
-import { BellIcon, FileText, HelpCircle, LogOutIcon, MonitorIcon, MoonIcon, Palette, SettingsIcon, SunIcon, User } from "lucide-react"
+import { BellIcon, FileText, HelpCircle, LogOutIcon, MonitorIcon, MoonIcon, Palette, SettingsIcon, ShieldIcon, SunIcon, User } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -27,9 +27,10 @@ interface UserNavProps {
   onOpenProfile?: () => void
   onOpenSettings?: () => void
   onOpenNotifications?: () => void
+  onOpenSystem?: () => void
 }
 
-export function UserNav({ onOpenProfile, onOpenSettings, onOpenNotifications }: UserNavProps) {
+export function UserNav({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenSystem }: UserNavProps) {
   const { user, signOut } = useAuth()
   const { theme, setTheme } = useTheme()
 
@@ -52,6 +53,10 @@ export function UserNav({ onOpenProfile, onOpenSettings, onOpenNotifications }: 
           <DropdownMenuItem onSelect={onOpenSettings}>
             <SettingsIcon />
             Settings
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onOpenSystem}>
+            <ShieldIcon />
+            System
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={onOpenNotifications}>
             <BellIcon />

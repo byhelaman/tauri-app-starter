@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   Field,
@@ -19,6 +18,18 @@ import {
   FieldContent,
   FieldGroup,
 } from "@/components/ui/field"
+import { Separator } from "./ui/separator"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 interface SettingsModalProps {
   open: boolean
@@ -59,12 +70,34 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
           <DialogDescription>Manage your preferences.</DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="notifications">
+        <Tabs defaultValue="general">
           <TabsList className="w-full">
+            <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="privacy">Privacy</TabsTrigger>
             <TabsTrigger value="application">Application</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="general" className="mt-4">
+            <FieldGroup>
+              <SettingRow
+                id="launch-at-login"
+                label="Launch at login"
+                description="Start the app automatically when you sign in to Windows"
+              />
+              <SettingRow
+                id="start-minimized"
+                label="Start minimized"
+                description="Launch in the background without showing the window"
+              />
+              <SettingRow
+                id="close-to-tray"
+                label="Close to system tray"
+                description="Keep the app running in the background when closed"
+                defaultChecked
+              />
+            </FieldGroup>
+          </TabsContent>
 
           <TabsContent value="notifications" className="mt-4">
             <FieldGroup>
@@ -107,21 +140,6 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
           <TabsContent value="application" className="mt-4">
             <div className="flex flex-col gap-4">
-              <div className="rounded-lg border bg-muted/40 divide-y text-sm">
-                <div className="flex items-center justify-between px-3 py-2">
-                  <span className="text-muted-foreground">Version</span>
-                  <span className="font-mono font-medium">v1.0.0</span>
-                </div>
-                <div className="flex items-center justify-between px-3 py-2">
-                  <span className="text-muted-foreground">Platform</span>
-                  <span>Windows x64</span>
-                </div>
-                <div className="flex items-center justify-between px-3 py-2">
-                  <span className="text-muted-foreground">Release channel</span>
-                  <Badge variant="secondary">stable</Badge>
-                </div>
-              </div>
-
               <FieldGroup>
                 <Field orientation="horizontal">
                   <FieldContent>
@@ -130,14 +148,77 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   </FieldContent>
                   <Switch id="auto-update" defaultChecked />
                 </Field>
+                <Field orientation="horizontal">
+                  <FieldContent>
+                    <FieldLabel>Check for updates</FieldLabel>
+                    <FieldDescription>Look for a newer version right now</FieldDescription>
+                  </FieldContent>
+                  <Button variant="outline" size="sm" onClick={checkForUpdates} disabled={isChecking}>
+                    {isChecking ? "Checking..." : "Check"}
+                  </Button>
+                </Field>
               </FieldGroup>
 
-              <Button variant="outline" className="w-full" onClick={checkForUpdates} disabled={isChecking}>
-                {isChecking ? "Checking..." : "Check for updates"}
-              </Button>
               <Button variant="outline" className="w-full text-muted-foreground" onClick={simulateUpdate}>
                 [Demo] Simulate update
               </Button>
+
+              <FieldGroup>
+                <Field orientation="horizontal">
+                  <FieldContent>
+                    <FieldLabel>Reset to defaults</FieldLabel>
+                    <FieldDescription>Clears all local data and restores preferences to their defaults</FieldDescription>
+                  </FieldContent>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" size="sm">Reset</Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Reset to defaults?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will clear all local data and restore all preferences to their defaults. The app will reload.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => { localStorage.clear(); window.location.reload() }}>
+                          Reset
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </Field>
+              </FieldGroup>
+
+              <Separator />
+
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-0.5">
+                  <p className="text-sm font-medium">About</p>
+                  <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+                    <span>Version v0.3.4</span>
+                    <span>Environment: Production</span>
+                    <span>Build: 2026-03-27</span>
+                    <span>Tauri v2.10.1</span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <p className="text-sm font-medium">Legal</p>
+                  <div className="flex flex-col gap-1">
+                    {[
+                      { label: "License Terms", href: "#" },
+                      { label: "Privacy Statement", href: "#" },
+                      { label: "Terms of Service", href: "#" },
+                    ].map(({ label, href }) => (
+                      <a key={label} href={href} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                        {label}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">© 2026 Your Company. All rights reserved.</p>
             </div>
           </TabsContent>
         </Tabs>

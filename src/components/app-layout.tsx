@@ -6,6 +6,7 @@ import { CommandPalette } from "@/components/command-palette"
 import { NotificationsModal, DEMO_NOTIFICATIONS } from "@/components/notifications-modal"
 import { ProfileModal } from "@/components/profile-modal"
 import { SettingsModal } from "@/components/settings-modal"
+import { SystemModal } from "@/components/system-modal"
 import { Button } from "@/components/ui/button"
 
 const NAV_ITEMS = [
@@ -16,7 +17,7 @@ const NAV_ITEMS = [
   { label: "Tasks", to: "/tasks" },
 ]
 
-type ModalType = "profile" | "settings" | "notifications" | null
+type ModalType = "profile" | "settings" | "notifications" | "system" | null
 
 export function AppLayout() {
   const [modal, setModal] = useState<ModalType>(null)
@@ -76,6 +77,7 @@ export function AppLayout() {
             onOpenProfile={() => setModal("profile")}
             onOpenSettings={() => setModal("settings")}
             onOpenNotifications={() => setModal("notifications")}
+            onOpenSystem={() => setModal("system")}
           />
         </div>
       </header>
@@ -96,6 +98,10 @@ export function AppLayout() {
         open={modal === "notifications"}
         onOpenChange={(open) => setModal(open ? "notifications" : null)}
         onUnreadCountChange={setUnreadCount}
+      />
+      <SystemModal
+        open={modal === "system"}
+        onOpenChange={(open) => setModal(open ? "system" : null)}
       />
     </div>
   )

@@ -13,8 +13,6 @@
     "windows": [
       {
         "title": "tauri-app",
-        "min-width": 800,
-        "min-height": 600,
         "width": 1024,
         "height": 600,
         "visible": false

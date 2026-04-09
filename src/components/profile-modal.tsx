@@ -3,7 +3,6 @@ import { toast } from "sonner"
 import { useAuth } from "@/contexts/auth-context"
 import { supabase } from "@/lib/supabase"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ChangePasswordDialog } from "@/components/change-password-dialog"
@@ -44,21 +43,14 @@ import {
   FieldContent,
 } from "@/components/ui/field"
 import { Switch } from "@/components/ui/switch"
-import {
-  Item,
-  ItemMedia,
-  ItemContent,
-  ItemTitle,
-  ItemDescription,
-} from "@/components/ui/item"
-
-function getInitials(email: string) {
-  return email.slice(0, 2).toUpperCase()
-}
 
 interface ProfileModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+}
+
+function getInitials(email: string) {
+  return email.slice(0, 2).toUpperCase()
 }
 
 export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
@@ -82,20 +74,6 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
           <DialogDescription>Manage your account settings.</DialogDescription>
         </DialogHeader>
 
-        {/* Identity */}
-        <Item>
-          <ItemMedia>
-            <Avatar className="size-10">
-              <AvatarFallback>{getInitials(user?.email ?? "?")}</AvatarFallback>
-            </Avatar>
-          </ItemMedia>
-          <ItemContent>
-            <ItemTitle>{user?.email?.split("@")[0]}</ItemTitle>
-            <ItemDescription>{user?.email}</ItemDescription>
-          </ItemContent>
-          <Badge variant="secondary">Member</Badge>
-        </Item>
-
         <Tabs defaultValue="general">
           <TabsList className="w-full">
             <TabsTrigger value="general">General</TabsTrigger>
@@ -106,6 +84,19 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
           {/* General */}
           <TabsContent value="general" className="mt-4">
             <FieldGroup>
+
+              <Field>
+                <FieldLabel>Avatar</FieldLabel>
+                <div className="flex items-center gap-4">
+                  <Avatar className="size-18">
+                    <AvatarFallback className="text-lg">{getInitials(user?.email ?? "?")}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm">Upload photo</Button>
+                  </div>
+                </div>
+              </Field>
+
               <Field>
                 <FieldLabel htmlFor="display-name">Display name</FieldLabel>
                 <Input
@@ -133,6 +124,18 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
                   placeholder="Tell us a little about yourself"
                 />
               </Field>
+              <Field orientation="horizontal">
+                <FieldContent>
+                  <FieldLabel>Role</FieldLabel>
+                  <FieldDescription>Member</FieldDescription>
+                </FieldContent>
+              </Field>
+              <Field orientation="horizontal">
+                <FieldContent>
+                  <FieldLabel>Permissions</FieldLabel>
+                  <FieldDescription>View content, create tasks, export data.</FieldDescription>
+                </FieldContent>
+              </Field>
             </FieldGroup>
           </TabsContent>
 
@@ -154,18 +157,26 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
                   </SelectContent>
                 </Select>
               </Field>
-              <Field orientation="horizontal">
-                <FieldContent>
-                  <FieldLabel htmlFor="auto-update">Auto-update</FieldLabel>
-                  <FieldDescription>Download updates automatically.</FieldDescription>
-                </FieldContent>
-                <Switch id="auto-update" defaultChecked />
+              <Field>
+                <FieldLabel>Language</FieldLabel>
+                <Select defaultValue="en">
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="en">English</SelectItem>
+                      <SelectItem value="es">Spanish</SelectItem>
+                      <SelectItem value="fr">French</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
               </Field>
               <Separator />
               <Field orientation="horizontal">
                 <FieldContent>
                   <FieldLabel>Restore defaults</FieldLabel>
-                  <FieldDescription>Reset all preferences to their default values.</FieldDescription>
+                  <FieldDescription>Reset theme and display preferences to their defaults.</FieldDescription>
                 </FieldContent>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -221,13 +232,11 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
 
               <Separator />
 
-              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 flex flex-col gap-3">
-                <div className="flex flex-col gap-0.5">
-                  <p className="text-sm font-medium text-destructive">Danger zone</p>
-                  <p className="text-sm text-muted-foreground">
-                    Permanently delete your account and all associated data.
-                  </p>
-                </div>
+              <Field>
+                <FieldLabel className="text-destructive">Danger zone</FieldLabel>
+                <FieldDescription>
+                  Permanently delete your account and all associated data.
+                </FieldDescription>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="destructive" className="w-full">
@@ -250,7 +259,7 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
-              </div>
+              </Field>
             </FieldGroup>
           </TabsContent>
         </Tabs>
