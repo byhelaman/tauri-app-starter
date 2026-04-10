@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js"
 
-const STORAGE_KEY_URL = "app_supabase_url"
-const STORAGE_KEY_ANON = "app_supabase_anon_key"
+export const STORAGE_KEY_URL = "app_supabase_url"
+export const STORAGE_KEY_ANON = "app_supabase_anon_key"
 
 // Env vars take precedence; localStorage is the fallback for desktop setup
 const supabaseUrl =
@@ -61,17 +61,18 @@ export const stopSessionRefresh = () => {
   }
 }
 
-if (isSupabaseConfigured && typeof window !== "undefined") {
+if (supabase && typeof window !== "undefined") {
+  const client = supabase
   startSessionRefresh()
 
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState === "visible") {
       startSessionRefresh()
-      const { data: { session } } = await supabase!.auth.getSession()
+      const { data: { session } } = await client.auth.getSession()
       if (session?.expires_at) {
         const secondsUntilExpiry = session.expires_at - Math.floor(Date.now() / 1000)
         if (secondsUntilExpiry < 5 * 60) {
-          await supabase!.auth.refreshSession()
+          await client.auth.refreshSession()
         }
       }
     } else {

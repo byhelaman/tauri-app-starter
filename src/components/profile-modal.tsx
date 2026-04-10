@@ -59,7 +59,8 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
   const { theme, setTheme } = useTheme()
 
   async function handleDeleteAccount() {
-    const { error } = await supabase!.rpc("delete_own_account")
+    if (!supabase) return
+    const { error } = await supabase.rpc("delete_own_account")
     if (error) {
       toast.error(error.message)
       return

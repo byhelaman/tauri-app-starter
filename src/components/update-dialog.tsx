@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Download, DownloadIcon, Package } from "lucide-react"
+import { Download } from "lucide-react"
 import { useUpdaterContext } from "@/components/updater-context"
 import {
   AlertDialog,

@@ -58,7 +58,8 @@ export function SignupForm({
   const passwordValue = form.watch("password")
 
   const handleSendCode = async () => {
-    const { error } = await supabase!.auth.signUp({
+    if (!supabase) return
+    const { error } = await supabase.auth.signUp({
       email: emailValue,
       password: passwordValue,
     })
@@ -71,7 +72,8 @@ export function SignupForm({
   }
 
   const onSubmit = async (data: SignupValues) => {
-    const { error } = await supabase!.auth.verifyOtp({
+    if (!supabase) return
+    const { error } = await supabase.auth.verifyOtp({
       email: data.email,
       token: data.code,
       type: "signup",
@@ -93,7 +95,7 @@ export function SignupForm({
         </CardAction>
       </CardHeader>
       <CardContent>
-        <form onSubmit={form.handleSubmit(onSubmit)}>
+        <form id="signup-form" onSubmit={form.handleSubmit(onSubmit)}>
           <FieldGroup>
             <Controller
               name="email"
@@ -166,7 +168,7 @@ export function SignupForm({
         </form>
       </CardContent>
       <CardFooter>
-        <Button type="submit" disabled={form.formState.isSubmitting} onClick={form.handleSubmit(onSubmit)}
+        <Button type="submit" form="signup-form" disabled={form.formState.isSubmitting}
           className="w-full">
           {form.formState.isSubmitting ? "Creating account..." : "Create account"}
         </Button>

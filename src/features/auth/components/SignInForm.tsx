@@ -88,7 +88,7 @@ export function SignInForm({
           </CardAction>
         </CardHeader>
         <CardContent>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
+          <form id="sign-in-form" onSubmit={form.handleSubmit(onSubmit)}>
             <FieldGroup>
               <Controller
                 name="email"
@@ -145,8 +145,8 @@ export function SignInForm({
         <CardFooter>
           <Button
             type="submit"
+            form="sign-in-form"
             disabled={form.formState.isSubmitting || isLocked}
-            onClick={form.handleSubmit(onSubmit)}
             className="w-full"
           >
             {isLocked

@@ -70,9 +70,10 @@ export function AppLayout() {
             variant="ghost"
             size="icon"
             className="relative"
+            aria-label="Notifications"
             onClick={() => setModal("notifications")}
           >
-            <BellIcon />
+            <BellIcon aria-hidden="true" />
             {unreadCount > 0 && (
               <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-amber-400" />
             )}

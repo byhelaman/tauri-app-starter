@@ -61,7 +61,9 @@ export function ChangePasswordDialog() {
   async function onSubmit(data: FormValues) {
     if (isLocked) return
 
-    const { data: valid, error: rpcError } = await supabase!.rpc("verify_user_password", {
+    if (!supabase) return
+
+    const { data: valid, error: rpcError } = await supabase.rpc("verify_user_password", {
       p_password: data.currentPassword,
     })
 
@@ -81,7 +83,7 @@ export function ChangePasswordDialog() {
       return
     }
 
-    const { error } = await supabase!.auth.updateUser({ password: data.newPassword })
+    const { error } = await supabase.auth.updateUser({ password: data.newPassword })
 
     if (error) {
       toast.error(error.message)

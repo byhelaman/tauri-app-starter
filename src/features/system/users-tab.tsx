@@ -194,15 +194,6 @@ function ViewProfileDialog({ user, onOpenChange, onUpdateEmail }: ViewProfileDia
                   </div>
                 </div>
               </Field>
-              {/* <div className="flex items-center gap-3">
-                <Avatar className="size-12 shrink-0">
-                  <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
-                </Avatar>
-                <div className="min-w-0">
-                  <p className="font-medium truncate">{user.name}</p>
-                  <p className="text-sm text-muted-foreground truncate">{user.email}</p>
-                </div>
-              </div> */}
               <Field>
                 <FieldLabel>Full name</FieldLabel>
                 <Input value={user.name} disabled />

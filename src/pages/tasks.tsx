@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { Copy, Trash2Icon } from "lucide-react"
 import { createColumns, type Task } from "@/features/tasks/columns"
@@ -35,11 +35,11 @@ export function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS)
   const [bulkDeleteTarget, setBulkDeleteTarget] = useState<{ selected: Task[], clearSelection: () => void } | null>(null)
 
-  const handleDelete = (id: string) => {
+  const handleDelete = useCallback((id: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== id))
-  }
+  }, [])
 
-  const columns = useMemo(() => createColumns(handleDelete), [])
+  const columns = useMemo(() => createColumns(handleDelete), [handleDelete])
 
   return (
     <main className="h-full overflow-hidden flex flex-col p-6 gap-6">

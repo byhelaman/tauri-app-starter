@@ -1,5 +1,7 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { getVersion, getTauriVersion } from "@tauri-apps/api/app"
 import { useUpdaterContext } from "@/components/updater-context"
+import { STORAGE_KEY_URL, STORAGE_KEY_ANON } from "@/lib/supabase"
 import {
   Dialog,
   DialogContent,
@@ -62,6 +64,13 @@ function SettingRow({
 
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const { checkForUpdates, isChecking, simulateUpdate } = useUpdaterContext()
+  const [appVersion, setAppVersion] = useState("")
+  const [tauriVersion, setTauriVersion] = useState("")
+
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => { })
+    getTauriVersion().then(setTauriVersion).catch(() => { })
+  }, [])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -184,7 +193,14 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => { localStorage.clear(); window.location.reload() }}>
+                          <AlertDialogAction onClick={() => {
+                            const supabaseUrl = localStorage.getItem(STORAGE_KEY_URL)
+                            const supabaseAnon = localStorage.getItem(STORAGE_KEY_ANON)
+                            localStorage.clear()
+                            if (supabaseUrl) localStorage.setItem(STORAGE_KEY_URL, supabaseUrl)
+                            if (supabaseAnon) localStorage.setItem(STORAGE_KEY_ANON, supabaseAnon)
+                            window.location.reload()
+                          }}>
                             Reset
                           </AlertDialogAction>
                         </AlertDialogFooter>
@@ -199,10 +215,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   <div className="flex flex-col gap-0.5">
                     <p className="text-sm font-medium">About</p>
                     <div className="flex flex-col gap-1 text-sm text-muted-foreground">
-                      <span>Version v0.3.4</span>
-                      <span>Environment: Production</span>
-                      <span>Build: 2026-03-27</span>
-                      <span>Tauri v2.10.1</span>
+                      {appVersion && <span>Version v{appVersion}</span>}
+                      {tauriVersion && <span>Tauri v{tauriVersion}</span>}
                     </div>
                   </div>
                   <div className="flex flex-col gap-0.5">

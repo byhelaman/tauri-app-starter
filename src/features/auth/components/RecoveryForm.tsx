@@ -1,4 +1,4 @@
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { toast } from "sonner"
 import { useNavigate } from "react-router-dom"
 import { Controller, useForm } from "react-hook-form"
@@ -65,6 +65,12 @@ export function RecoveryForm({
 
   const emailValue = step1.watch("email")
 
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [])
+
   const startCooldown = () => {
     setCooldown(COOLDOWN_SECONDS)
     intervalRef.current = setInterval(() => {
@@ -79,7 +85,8 @@ export function RecoveryForm({
   }
 
   const handleSendCode = async () => {
-    const { error } = await supabase!.auth.resetPasswordForEmail(emailValue)
+    if (!supabase) return
+    const { error } = await supabase.auth.resetPasswordForEmail(emailValue)
     if (error) {
       toast.error(error.message)
       return
@@ -89,7 +96,8 @@ export function RecoveryForm({
   }
 
   const onStep1Submit = async (data: Step1Values) => {
-    const { error } = await supabase!.auth.verifyOtp({
+    if (!supabase) return
+    const { error } = await supabase.auth.verifyOtp({
       email: data.email,
       token: data.code,
       type: "recovery",
@@ -102,7 +110,8 @@ export function RecoveryForm({
   }
 
   const onStep2Submit = async (data: Step2Values) => {
-    const { error } = await supabase!.auth.updateUser({ password: data.password })
+    if (!supabase) return
+    const { error } = await supabase.auth.updateUser({ password: data.password })
     if (error) {
       toast.error(error.message)
       return
@@ -127,7 +136,7 @@ export function RecoveryForm({
       </CardHeader>
       <CardContent>
         {step === 1 && (
-          <form onSubmit={step1.handleSubmit(onStep1Submit)}>
+          <form id="recovery-step1-form" onSubmit={step1.handleSubmit(onStep1Submit)}>
             <FieldGroup>
               <Controller
                 name="email"
@@ -183,7 +192,7 @@ export function RecoveryForm({
         )}
 
         {step === 2 && (
-          <form onSubmit={step2.handleSubmit(onStep2Submit)}>
+          <form id="recovery-step2-form" onSubmit={step2.handleSubmit(onStep2Submit)}>
             <FieldGroup>
               <Controller
                 name="password"
@@ -208,12 +217,12 @@ export function RecoveryForm({
       </CardContent>
       <CardFooter>
         {step === 1 && (
-          <Button type="submit" disabled={step1.formState.isSubmitting} onClick={step1.handleSubmit(onStep1Submit)} className="w-full">
+          <Button type="submit" form="recovery-step1-form" disabled={step1.formState.isSubmitting} className="w-full">
             {step1.formState.isSubmitting ? "Verifying..." : "Continue"}
           </Button>
         )}
         {step === 2 && (
-          <Button type="submit" disabled={step2.formState.isSubmitting} onClick={step2.handleSubmit(onStep2Submit)} className="w-full">
+          <Button type="submit" form="recovery-step2-form" disabled={step2.formState.isSubmitting} className="w-full">
             {step2.formState.isSubmitting ? "Resetting..." : "Reset password"}
           </Button>
         )}

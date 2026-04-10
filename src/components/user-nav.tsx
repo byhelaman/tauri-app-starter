@@ -37,7 +37,7 @@ export function UserNav({ onOpenProfile, onOpenSettings, onOpenNotifications, on
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon">
+        <Button variant="ghost" size="icon" aria-label="User menu">
           <Avatar>
             <AvatarFallback>{getInitials(user?.email ?? "?")}</AvatarFallback>
           </Avatar>
