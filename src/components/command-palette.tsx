@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react"
-import { LayoutDashboard, Users, BarChart2, FolderKanban, Settings, Bell, User, LogOut } from "lucide-react"
+import { LayoutDashboard, Users, BarChart2, FolderKanban, Settings, Bell, User, LogOut, KeyboardIcon } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
-import { Kbd, KbdGroup } from "@/components/ui/kbd"
 import {
   Command,
   CommandDialog,
@@ -13,16 +12,16 @@ import {
   CommandItem,
   CommandList,
   CommandSeparator,
-  CommandShortcut,
 } from "@/components/ui/command"
 
 interface CommandPaletteProps {
   onOpenProfile?: () => void
   onOpenSettings?: () => void
   onOpenNotifications?: () => void
+  onOpenShortcuts?: () => void
 }
 
-export function CommandPalette({ onOpenProfile, onOpenSettings, onOpenNotifications }: CommandPaletteProps) {
+export function CommandPalette({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenShortcuts }: CommandPaletteProps) {
   const { signOut } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
@@ -51,9 +50,6 @@ export function CommandPalette({ onOpenProfile, onOpenSettings, onOpenNotificati
         className="h-8 w-48 justify-between px-3 text-muted-foreground font-normal text-sm"
       >
         <span>Search...</span>
-        <KbdGroup className="hidden sm:flex">
-          <Kbd>⌘K</Kbd>
-        </KbdGroup>
       </Button>
 
       <CommandDialog open={open} onOpenChange={setOpen}>
@@ -87,16 +83,18 @@ export function CommandPalette({ onOpenProfile, onOpenSettings, onOpenNotificati
               <CommandItem onSelect={() => run(onOpenProfile)}>
                 <User />
                 Profile
-                <CommandShortcut>⇧⌘P</CommandShortcut>
               </CommandItem>
               <CommandItem onSelect={() => run(onOpenSettings)}>
                 <Settings />
                 Settings
-                <CommandShortcut>⌘,</CommandShortcut>
               </CommandItem>
               <CommandItem onSelect={() => run(onOpenNotifications)}>
                 <Bell />
                 Notifications
+              </CommandItem>
+              <CommandItem onSelect={() => run(onOpenShortcuts)}>
+                <KeyboardIcon />
+                Keyboard shortcuts
               </CommandItem>
               <CommandItem onSelect={() => run(signOut)}>
                 <LogOut />

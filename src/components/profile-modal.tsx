@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { useTheme } from "next-themes"
 import { toast } from "sonner"
 import { useAuth } from "@/contexts/auth-context"
@@ -55,8 +56,31 @@ function getInitials(email: string) {
 }
 
 export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
-  const { user, signOut } = useAuth()
+  const { user, session, signOut } = useAuth()
   const { theme, setTheme } = useTheme()
+
+  const [displayName, setDisplayName] = useState(() => user?.email?.split("@")[0] ?? "")
+  const [bio, setBio] = useState("")
+  const [language, setLanguage] = useState("en")
+  const [twoFactor, setTwoFactor] = useState(false)
+  const [activeSessions, setActiveSessions] = useState(true)
+
+  // Read role from JWT claims (injected by custom_access_token_hook)
+  const userRole = (session?.access_token
+    ? (() => { try { return JSON.parse(atob(session.access_token.split(".")[1])) } catch { return {} } })()
+    : {}
+  ).user_role ?? "member"
+
+  function handleSave() {
+    toast.success("Profile updated")
+    onOpenChange(false)
+  }
+
+  function handleRestoreDefaults() {
+    setTheme("system")
+    setLanguage("en")
+    toast.success("Preferences restored to defaults")
+  }
 
   async function handleDeleteAccount() {
     if (!supabase) return
@@ -96,7 +120,7 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
                       <AvatarFallback className="text-lg">{getInitials(user?.email ?? "?")}</AvatarFallback>
                     </Avatar>
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm">Upload photo</Button>
+                      <Button variant="outline" size="sm" onClick={() => toast.info("Photo upload coming soon")}>Upload photo</Button>
                     </div>
                   </div>
                 </Field>
@@ -105,7 +129,8 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
                   <FieldLabel htmlFor="display-name">Display name</FieldLabel>
                   <Input
                     id="display-name"
-                    defaultValue={user?.email?.split("@")[0]}
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Your display name"
                   />
                 </Field>
@@ -125,19 +150,15 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
                   <FieldLabel htmlFor="bio">Bio</FieldLabel>
                   <Input
                     id="bio"
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
                     placeholder="Tell us a little about yourself"
                   />
                 </Field>
                 <Field orientation="horizontal">
                   <FieldContent>
                     <FieldLabel>Role</FieldLabel>
-                    <FieldDescription>Member</FieldDescription>
-                  </FieldContent>
-                </Field>
-                <Field orientation="horizontal">
-                  <FieldContent>
-                    <FieldLabel>Permissions</FieldLabel>
-                    <FieldDescription>View content, create tasks, export data.</FieldDescription>
+                    <FieldDescription className="capitalize">{userRole}</FieldDescription>
                   </FieldContent>
                 </Field>
               </FieldGroup>
@@ -163,7 +184,7 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
                 </Field>
                 <Field>
                   <FieldLabel>Language</FieldLabel>
-                  <Select defaultValue="en">
+                  <Select value={language} onValueChange={setLanguage}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -196,7 +217,7 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction>Restore defaults</AlertDialogAction>
+                        <AlertDialogAction onClick={handleRestoreDefaults}>Restore defaults</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
@@ -214,7 +235,14 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
                       Add an extra layer of security to your account.
                     </FieldDescription>
                   </FieldContent>
-                  <Switch id="2fa" />
+                  <Switch
+                    id="2fa"
+                    checked={twoFactor}
+                    onCheckedChange={(v) => {
+                      setTwoFactor(v)
+                      toast.success(v ? "Two-factor authentication enabled" : "Two-factor authentication disabled")
+                    }}
+                  />
                 </Field>
 
                 <Field orientation="horizontal">
@@ -224,7 +252,7 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
                       Automatically sign out from inactive sessions.
                     </FieldDescription>
                   </FieldContent>
-                  <Switch id="sessions" defaultChecked />
+                  <Switch id="sessions" checked={activeSessions} onCheckedChange={setActiveSessions} />
                 </Field>
 
                 <Separator />
@@ -270,7 +298,7 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
         </Tabs>
 
         <DialogFooter showCloseButton>
-          <Button>Save changes</Button>
+          <Button onClick={handleSave}>Save changes</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,3 +1,4 @@
+import { toast } from "sonner"
 import { Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -23,7 +24,7 @@ export function TeamPage() {
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
-          <Button>Invite member</Button>
+          <Button onClick={() => toast.info("Team management coming soon")}>Invite member</Button>
         </EmptyContent>
       </Empty>
     </main>

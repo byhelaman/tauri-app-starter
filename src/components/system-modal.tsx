@@ -37,6 +37,11 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
     setUsers((prev) => prev.filter((u) => u.id !== userId))
   }
 
+  function inviteUser(name: string, email: string) {
+    const newId = Math.max(0, ...users.map((u) => u.id)) + 1
+    setUsers((prev) => [...prev, { id: newId, name, email, role: "guest", status: "active" as const }])
+  }
+
   function addRole(role: RoleDefinition) {
     setRoles((prev) => [...prev, role].sort((a, b) => b.level - a.level))
   }
@@ -83,7 +88,7 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
 
           <DialogBody className="mt-1 p-1">
             <TabsContent value="users">
-              <UsersTab users={users} roles={roles} onUpdateRole={updateUserRole} onUpdateEmail={updateUserEmail} onRemoveUser={removeUser} />
+              <UsersTab users={users} roles={roles} onUpdateRole={updateUserRole} onUpdateEmail={updateUserEmail} onRemoveUser={removeUser} onInviteUser={inviteUser} />
             </TabsContent>
 
             <TabsContent value="roles">

@@ -92,7 +92,7 @@ export const DEMO_NOTIFICATIONS: Notification[] = [
     id: 8,
     icon: UserPlusIcon,
     title: "Role updated",
-    body: "Your role has been changed to Admin by a super admin.",
+    body: "Your role has been changed to Admin by an owner.",
     time: "2 days ago",
     read: true,
   },

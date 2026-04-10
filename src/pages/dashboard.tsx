@@ -2,6 +2,13 @@ import { useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/page-header"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 
 function ThrowError(): never {
   throw new Error(
@@ -20,13 +27,6 @@ function ThrowError(): never {
     "Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries."
   )
 }
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 
 const ACTIVITY = [
   { user: "alex@company.com", action: "pushed to", target: "main", time: "2m ago" },

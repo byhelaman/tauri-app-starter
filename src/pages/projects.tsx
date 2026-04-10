@@ -1,3 +1,4 @@
+import { toast } from "sonner"
 import { FolderCode } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -23,7 +24,7 @@ export function ProjectsPage() {
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent className="flex-row justify-center gap-2">
-          <Button>Create Project</Button>
+          <Button onClick={() => toast.info("Projects coming soon")}>Create Project</Button>
         </EmptyContent>
       </Empty>
     </main>

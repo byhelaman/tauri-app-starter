@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import {
   type ColumnDef,
@@ -44,7 +44,7 @@ interface DataTableProps<TData, TValue> {
   filterColumn?: string
   filterPlaceholder?: string
   className?: string
-  bulkActions?: (selectedRows: TData[], clearSelection: () => void) => React.ReactNode
+  bulkActions?: (selectedRows: TData[], clearSelection: () => void) => ReactNode
 }
 
 export function DataTable<TData, TValue>({
@@ -73,7 +73,7 @@ export function DataTable<TData, TValue>({
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
-    initialState: { pagination: { pageSize: 100 } },
+    initialState: { pagination: { pageSize: 10 } },
     state: { sorting, columnFilters, columnVisibility, rowSelection },
   })
 
@@ -167,7 +167,7 @@ export function DataTable<TData, TValue>({
               </SelectTrigger>
               <SelectContent side="top">
                 <SelectGroup>
-                  {[100, 200, 300, 500].map((size) => (
+                  {[10, 25, 50, 100].map((size) => (
                     <SelectItem key={size} value={`${size}`}>{size}</SelectItem>
                   ))}
                 </SelectGroup>

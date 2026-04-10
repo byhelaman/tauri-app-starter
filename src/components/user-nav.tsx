@@ -1,5 +1,6 @@
 import { useTheme } from "next-themes"
-import { BellIcon, FileText, HelpCircle, LogOutIcon, MonitorIcon, MoonIcon, Palette, SettingsIcon, ShieldIcon, SunIcon, User } from "lucide-react"
+import { toast } from "sonner"
+import { BellIcon, FileText, HelpCircle, KeyboardIcon, LogOutIcon, MonitorIcon, MoonIcon, Palette, SettingsIcon, ShieldIcon, SunIcon, User } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -12,7 +13,6 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
-  DropdownMenuShortcut,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -28,9 +28,10 @@ interface UserNavProps {
   onOpenSettings?: () => void
   onOpenNotifications?: () => void
   onOpenSystem?: () => void
+  onOpenShortcuts?: () => void
 }
 
-export function UserNav({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenSystem }: UserNavProps) {
+export function UserNav({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenSystem, onOpenShortcuts }: UserNavProps) {
   const { user, signOut } = useAuth()
   const { theme, setTheme } = useTheme()
 
@@ -48,7 +49,6 @@ export function UserNav({ onOpenProfile, onOpenSettings, onOpenNotifications, on
           <DropdownMenuItem onSelect={onOpenProfile}>
             <User />
             Profile
-            <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={onOpenSettings}>
             <SettingsIcon />
@@ -57,7 +57,6 @@ export function UserNav({ onOpenProfile, onOpenSettings, onOpenNotifications, on
           <DropdownMenuItem onSelect={onOpenSystem}>
             <ShieldIcon />
             System
-            <DropdownMenuShortcut>⇧⌘S</DropdownMenuShortcut>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={onOpenNotifications}>
             <BellIcon />
@@ -93,13 +92,17 @@ export function UserNav({ onOpenProfile, onOpenSettings, onOpenNotifications, on
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => toast.info("Help center coming soon")}>
             <HelpCircle />
             Help & Support
           </DropdownMenuItem>
-          <DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => toast.info("Documentation coming soon")}>
             <FileText />
             Documentation
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onOpenShortcuts}>
+            <KeyboardIcon />
+            Shortcuts
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

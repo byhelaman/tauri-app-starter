@@ -51,9 +51,7 @@ import {
   CollapsibleContent,
 } from "@/components/ui/collapsible"
 import {
-  Field as PermField,
-  FieldLabel as PermLabel,
-  FieldDescription as PermDescription,
+  FieldDescription,
   FieldContent,
 } from "@/components/ui/field"
 import { cn } from "@/lib/utils"
@@ -325,7 +323,7 @@ export function RolesTab({ roles, matrix, onMatrixChange, onAddRole, onEditRole,
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              onClick={() => { onRemoveRole(removeTarget!.name); setRemoveTarget(null) }}
+              onClick={() => { if (removeTarget) { onRemoveRole(removeTarget.name); setRemoveTarget(null) } }}
             >
               Remove
             </AlertDialogAction>
@@ -420,17 +418,17 @@ export function RolesTab({ roles, matrix, onMatrixChange, onAddRole, onEditRole,
                     const isLocked = role.name === "owner"
                     const checked = isLocked ? true : (matrix[role.name]?.[perm.key] ?? false)
                     return (
-                      <PermField key={perm.key} orientation="horizontal">
+                      <Field key={perm.key} orientation="horizontal">
                         <Checkbox
                           checked={checked}
                           disabled={isLocked}
                           onCheckedChange={() => togglePermission(role.name, perm.key)}
                         />
                         <FieldContent>
-                          <PermLabel className="text-sm">{perm.label}</PermLabel>
-                          <PermDescription>{perm.description}</PermDescription>
+                          <FieldLabel className="text-sm">{perm.label}</FieldLabel>
+                          <FieldDescription>{perm.description}</FieldDescription>
                         </FieldContent>
-                      </PermField>
+                      </Field>
                     )
                   })}
                 </div>

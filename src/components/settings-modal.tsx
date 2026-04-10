@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { getVersion, getTauriVersion } from "@tauri-apps/api/app"
 import { useUpdaterContext } from "@/components/updater-context"
 import { STORAGE_KEY_URL, STORAGE_KEY_ANON } from "@/lib/supabase"
+import type { AppSettings } from "@/components/app-layout"
 import {
   Dialog,
   DialogContent,
@@ -37,32 +38,35 @@ import {
 interface SettingsModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  settings: AppSettings
+  onSettingsChange: (settings: AppSettings) => void
 }
 
 function SettingRow({
   id,
   label,
   description,
-  defaultChecked = false,
+  checked,
+  onCheckedChange,
 }: {
   id: string
   label: string
   description?: string
-  defaultChecked?: boolean
+  checked: boolean
+  onCheckedChange: (checked: boolean) => void
 }) {
-  const [checked, setChecked] = useState(defaultChecked)
   return (
     <Field orientation="horizontal">
       <FieldContent>
         <FieldLabel htmlFor={id}>{label}</FieldLabel>
         {description && <FieldDescription>{description}</FieldDescription>}
       </FieldContent>
-      <Switch id={id} checked={checked} onCheckedChange={setChecked} />
+      <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
     </Field>
   )
 }
 
-export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
+export function SettingsModal({ open, onOpenChange, settings, onSettingsChange }: SettingsModalProps) {
   const { checkForUpdates, isChecking, simulateUpdate } = useUpdaterContext()
   const [appVersion, setAppVersion] = useState("")
   const [tauriVersion, setTauriVersion] = useState("")
@@ -71,6 +75,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     getVersion().then(setAppVersion).catch(() => { })
     getTauriVersion().then(setTauriVersion).catch(() => { })
   }, [])
+
+  function toggle(key: keyof AppSettings) {
+    onSettingsChange({ ...settings, [key]: !settings[key] })
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -95,17 +103,22 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   id="launch-at-login"
                   label="Launch at login"
                   description="Start the app automatically when you sign in to Windows"
+                  checked={settings.launchAtLogin}
+                  onCheckedChange={() => toggle("launchAtLogin")}
                 />
                 <SettingRow
                   id="start-minimized"
                   label="Start minimized"
                   description="Launch in the background without showing the window"
+                  checked={settings.startMinimized}
+                  onCheckedChange={() => toggle("startMinimized")}
                 />
                 <SettingRow
                   id="close-to-tray"
                   label="Close to system tray"
                   description="Keep the app running in the background when closed"
-                  defaultChecked
+                  checked={settings.closeToTray}
+                  onCheckedChange={() => toggle("closeToTray")}
                 />
               </FieldGroup>
             </TabsContent>
@@ -116,18 +129,22 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   id="email-notif"
                   label="Email notifications"
                   description="Receive updates via email"
-                  defaultChecked
+                  checked={settings.emailNotifications}
+                  onCheckedChange={() => toggle("emailNotifications")}
                 />
                 <SettingRow
                   id="push-notif"
                   label="Push notifications"
                   description="Notify me about activity"
+                  checked={settings.pushNotifications}
+                  onCheckedChange={() => toggle("pushNotifications")}
                 />
                 <SettingRow
                   id="digest"
                   label="Weekly digest"
                   description="Summary of activity every Monday"
-                  defaultChecked
+                  checked={settings.weeklyDigest}
+                  onCheckedChange={() => toggle("weeklyDigest")}
                 />
               </FieldGroup>
             </TabsContent>
@@ -138,13 +155,15 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   id="online-status"
                   label="Show online status"
                   description="Let others see when you're active"
-                  defaultChecked
+                  checked={settings.showOnlineStatus}
+                  onCheckedChange={() => toggle("showOnlineStatus")}
                 />
                 <SettingRow
                   id="analytics"
                   label="Usage analytics"
                   description="Help improve the app with anonymous data"
-                  defaultChecked
+                  checked={settings.usageAnalytics}
+                  onCheckedChange={() => toggle("usageAnalytics")}
                 />
               </FieldGroup>
             </TabsContent>
@@ -157,7 +176,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       <FieldLabel>Auto-update</FieldLabel>
                       <FieldDescription>Download and install updates automatically</FieldDescription>
                     </FieldContent>
-                    <Switch id="auto-update" defaultChecked />
+                    <Switch id="auto-update" checked={settings.autoUpdate} onCheckedChange={() => toggle("autoUpdate")} />
                   </Field>
                   <Field orientation="horizontal">
                     <FieldContent>

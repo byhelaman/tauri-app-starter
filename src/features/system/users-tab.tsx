@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import { toast } from "sonner"
 import { MoreHorizontalIcon, SearchIcon } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -83,9 +84,10 @@ type ResetPasswordValues = z.infer<typeof resetPasswordSchema>
 interface InviteUserDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onInviteUser: (name: string, email: string) => void
 }
 
-function InviteUserDialog({ open, onOpenChange }: InviteUserDialogProps) {
+function InviteUserDialog({ open, onOpenChange, onInviteUser }: InviteUserDialogProps) {
   const { control, handleSubmit, reset } = useForm<InviteValues>({
     resolver: zodResolver(inviteSchema),
     defaultValues: { name: "", email: "" },
@@ -96,8 +98,9 @@ function InviteUserDialog({ open, onOpenChange }: InviteUserDialogProps) {
     if (!v) reset()
   }
 
-  function onSubmit(_values: InviteValues) {
-    // TODO: wire to backend
+  function onSubmit(values: InviteValues) {
+    onInviteUser(values.name, values.email)
+    toast.success(`Invitation sent to ${values.email}`)
     handleClose(false)
   }
 
@@ -187,10 +190,10 @@ function ViewProfileDialog({ user, onOpenChange, onUpdateEmail }: ViewProfileDia
                 <FieldLabel>Avatar</FieldLabel>
                 <div className="flex items-center gap-4">
                   <Avatar className="size-18">
-                    <AvatarFallback className="text-lg">{getInitials(user?.email ?? "?")}</AvatarFallback>
+                    <AvatarFallback className="text-lg">{getInitials(user.name)}</AvatarFallback>
                   </Avatar>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm">Upload photo</Button>
+                    <Button variant="outline" size="sm" onClick={() => toast.info("Photo upload coming soon")}>Upload photo</Button>
                   </div>
                 </div>
               </Field>
@@ -249,7 +252,7 @@ function ResetPasswordDialog({ user, onOpenChange }: ResetPasswordDialogProps) {
   }
 
   function onSubmit(_values: ResetPasswordValues) {
-    // TODO: wire to backend
+    toast.success(`Password reset for ${user?.name}`)
     handleClose(false)
   }
 
@@ -336,9 +339,10 @@ interface UsersTabProps {
   onUpdateRole: (userId: number, role: string) => void
   onUpdateEmail: (userId: number, email: string) => void
   onRemoveUser: (userId: number) => void
+  onInviteUser: (name: string, email: string) => void
 }
 
-export function UsersTab({ users, roles, onUpdateRole, onUpdateEmail, onRemoveUser }: UsersTabProps) {
+export function UsersTab({ users, roles, onUpdateRole, onUpdateEmail, onRemoveUser, onInviteUser }: UsersTabProps) {
   const [search, setSearch] = useState("")
   const [showInvite, setShowInvite] = useState(false)
   const [profileUser, setProfileUser] = useState<SystemUser | null>(null)
@@ -353,7 +357,7 @@ export function UsersTab({ users, roles, onUpdateRole, onUpdateEmail, onRemoveUs
 
   return (
     <div className="flex flex-col gap-3">
-      <InviteUserDialog open={showInvite} onOpenChange={setShowInvite} />
+      <InviteUserDialog open={showInvite} onOpenChange={setShowInvite} onInviteUser={onInviteUser} />
       <ViewProfileDialog user={profileUser} onOpenChange={(open) => { if (!open) setProfileUser(null) }} onUpdateEmail={onUpdateEmail} />
       <ResetPasswordDialog user={resetUser} onOpenChange={(open) => { if (!open) setResetUser(null) }} />
       <RemoveUserAlert
