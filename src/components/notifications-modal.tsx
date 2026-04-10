@@ -138,14 +138,14 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
               </DialogDescription>
             </div>
             {unreadCount > 0 && (
-              <Button variant="ghost" size="sm" className="text-xs" onClick={markAllRead}>
+              <Button variant="ghost" size="sm" onClick={markAllRead}>
                 Mark all read
               </Button>
             )}
           </div>
         </DialogHeader>
 
-        <DialogBody>
+        <DialogBody className="mt-1 p-1">
           {notifications.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
               No notifications.
@@ -157,7 +157,7 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
                 return (
                   <Item
                     key={n.id}
-                    size="xs"
+                    size="sm"
                     variant={n.read ? "default" : "muted"}
                     className={cn("cursor-pointer", !n.read && "hover:bg-muted/70")}
                     onClick={() => markRead(n.id)}

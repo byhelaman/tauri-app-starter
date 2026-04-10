@@ -30,12 +30,12 @@ CREATE TABLE public.roles (
 -- Seed de roles
 -- Ajusta los niveles de jerarquía y agrega/elimina roles según tu app.
 -- Reglas:
---   super_admin (100) : control total, no se puede eliminar
+--   owner (100) : control total, no se puede eliminar
 --   admin       (80)  : gestionar usuarios y configuración
 --   member      (10)  : usuario autenticado estándar
 --   guest       (0)   : no verificado / sin acceso a datos (asignado al registrarse)
 INSERT INTO public.roles (name, description, hierarchy_level) VALUES
-    ('super_admin', 'Control total del sistema',              100),
+    ('owner', 'Control total del sistema',              100),
     ('admin',       'Gestionar usuarios y configuración',      80),
     ('member',      'Usuario autenticado estándar',            10),
     ('guest',       'Usuario no verificado, sin acceso',        0);
@@ -72,7 +72,7 @@ CREATE TABLE public.role_permissions (
 CREATE INDEX idx_role_permissions_role       ON public.role_permissions(role);
 CREATE INDEX idx_role_permissions_permission ON public.role_permissions(permission);
 
--- super_admin NO se inserta aquí — recibe todos los permisos dinámicamente
+-- owner NO se inserta aquí — recibe todos los permisos dinámicamente
 -- a través de custom_access_token_hook (rama hierarchy_level >= 100).
 -- guest NO se inserta — no tiene permisos por diseño.
 INSERT INTO public.role_permissions (role, permission) VALUES
@@ -172,7 +172,7 @@ BEGIN
     claims := event -> 'claims';
 
     IF user_role IS NOT NULL THEN
-        -- super_admin recibe todos los permisos automáticamente
+        -- owner recibe todos los permisos automáticamente
         IF user_hierarchy >= 100 THEN
             SELECT array_agg(p.name)
             INTO user_permissions
@@ -231,7 +231,7 @@ $$;
 
 -- Devuelve el perfil propio (lee de DB, no del JWT).
 -- La lógica de permisos espeja exactamente custom_access_token_hook:
---   super_admin (hierarchy >= 100) → todos los permisos dinámicamente
+--   owner (hierarchy >= 100) → todos los permisos dinámicamente
 --   todos los demás               → entradas explícitas de role_permissions
 CREATE OR REPLACE FUNCTION public.get_my_profile()
 RETURNS JSON
@@ -485,7 +485,7 @@ BEGIN
     WHERE p.id = target_user_id;
 
     IF target_level IS NULL THEN RAISE EXCEPTION 'Usuario no encontrado'; END IF;
-    IF target_level >= 100 THEN RAISE EXCEPTION 'No puedes eliminar a otro super_admin'; END IF;
+    IF target_level >= 100 THEN RAISE EXCEPTION 'No puedes eliminar a otro owner'; END IF;
     IF target_level >= caller_level THEN
         RAISE EXCEPTION 'No puedes eliminar un usuario con igual o mayor privilegio';
     END IF;
@@ -575,7 +575,7 @@ END;
 $$;
 
 -- Elimina la propia cuenta.
--- Bloqueado si el usuario es el único super_admin del sistema.
+-- Bloqueado si el usuario es el único owner del sistema.
 CREATE OR REPLACE FUNCTION public.delete_own_account()
 RETURNS void
 LANGUAGE plpgsql
@@ -591,12 +591,12 @@ BEGIN
 
     SELECT role INTO _user_role FROM public.profiles WHERE id = _uid;
 
-    IF _user_role = 'super_admin' THEN
+    IF _user_role = 'owner' THEN
         SELECT COUNT(*) INTO _super_count
-        FROM public.profiles WHERE role = 'super_admin';
+        FROM public.profiles WHERE role = 'owner';
 
         IF _super_count <= 1 THEN
-            RAISE EXCEPTION 'No puedes eliminar tu cuenta: eres el único super_admin del sistema';
+            RAISE EXCEPTION 'No puedes eliminar tu cuenta: eres el único owner del sistema';
         END IF;
     END IF;
 
@@ -624,7 +624,7 @@ BEGIN
     caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
 
     IF caller_level < 100 THEN
-        RAISE EXCEPTION 'Permiso denegado: requiere privilegios de super_admin';
+        RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
     END IF;
     IF role_level >= caller_level THEN
         RAISE EXCEPTION 'Permiso denegado: no puedes crear un rol con igual o mayor nivel que el tuyo';
@@ -656,7 +656,7 @@ BEGIN
     caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
 
     IF caller_level < 100 THEN
-        RAISE EXCEPTION 'Permiso denegado: requiere privilegios de super_admin';
+        RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
     END IF;
 
     SELECT hierarchy_level INTO target_role_level
@@ -672,7 +672,7 @@ BEGIN
 END;
 $$;
 
--- 'super_admin' y 'guest' son roles del sistema y no se pueden eliminar
+-- 'owner' y 'guest' son roles del sistema y no se pueden eliminar
 CREATE OR REPLACE FUNCTION public.delete_role(role_name TEXT)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -687,9 +687,9 @@ BEGIN
     caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
 
     IF caller_level < 100 THEN
-        RAISE EXCEPTION 'Permiso denegado: requiere privilegios de super_admin';
+        RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
     END IF;
-    IF role_name IN ('super_admin', 'guest') THEN
+    IF role_name IN ('owner', 'guest') THEN
         RAISE EXCEPTION 'No se puede eliminar el rol del sistema: %', role_name;
     END IF;
 
@@ -724,7 +724,7 @@ AS $$
     ORDER BY rp.permission;
 $$;
 
--- Los permisos de 'super_admin' y 'guest' son inmutables
+-- Los permisos de 'owner' y 'guest' son inmutables
 CREATE OR REPLACE FUNCTION public.assign_role_permission(
     target_role     TEXT,
     permission_name TEXT
@@ -741,14 +741,14 @@ BEGIN
     caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
 
     IF caller_level < 100 THEN
-        RAISE EXCEPTION 'Permiso denegado: requiere privilegios de super_admin';
+        RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
     END IF;
 
     SELECT hierarchy_level INTO target_role_level
     FROM public.roles WHERE name = target_role;
 
     IF target_role_level IS NULL THEN RAISE EXCEPTION 'Rol no encontrado: %', target_role; END IF;
-    IF target_role IN ('super_admin', 'guest') THEN
+    IF target_role IN ('owner', 'guest') THEN
         RAISE EXCEPTION 'No se pueden modificar los permisos del rol del sistema: %', target_role;
     END IF;
     IF target_role_level >= caller_level THEN
@@ -766,7 +766,7 @@ BEGIN
 END;
 $$;
 
--- Los permisos de 'super_admin' y 'guest' son inmutables
+-- Los permisos de 'owner' y 'guest' son inmutables
 CREATE OR REPLACE FUNCTION public.remove_role_permission(
     target_role     TEXT,
     permission_name TEXT
@@ -783,14 +783,14 @@ BEGIN
     caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
 
     IF caller_level < 100 THEN
-        RAISE EXCEPTION 'Permiso denegado: requiere privilegios de super_admin';
+        RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
     END IF;
 
     SELECT hierarchy_level INTO target_role_level
     FROM public.roles WHERE name = target_role;
 
     IF target_role_level IS NULL THEN RAISE EXCEPTION 'Rol no encontrado: %', target_role; END IF;
-    IF target_role IN ('super_admin', 'guest') THEN
+    IF target_role IN ('owner', 'guest') THEN
         RAISE EXCEPTION 'No se pueden modificar los permisos del rol del sistema: %', target_role;
     END IF;
     IF target_role_level >= caller_level THEN
@@ -846,7 +846,7 @@ CREATE POLICY "profiles_update" ON public.profiles
         OR COALESCE(((SELECT auth.jwt()) ->> 'hierarchy_level')::int, 0) >= 80
     );
 
--- Solo super_admin puede eliminar perfiles (se propaga desde auth.users delete)
+-- Solo owner puede eliminar perfiles (se propaga desde auth.users delete)
 CREATE POLICY "profiles_delete" ON public.profiles
     FOR DELETE USING (
         COALESCE(((SELECT auth.jwt()) ->> 'hierarchy_level')::int, 0) >= 100
@@ -951,7 +951,7 @@ GRANT EXECUTE ON FUNCTION public.set_new_user_role(uuid, text)    TO authenticat
 REVOKE ALL ON FUNCTION public.delete_own_account() FROM anon, public;
 GRANT EXECUTE ON FUNCTION public.delete_own_account()             TO authenticated;
 
--- RPCs de gestión de roles (solo super_admin — verificado dentro de cada función)
+-- RPCs de gestión de roles (solo owner — verificado dentro de cada función)
 GRANT EXECUTE ON FUNCTION public.create_role(text, text, int)     TO authenticated;
 GRANT EXECUTE ON FUNCTION public.update_role(text, text)          TO authenticated;
 GRANT EXECUTE ON FUNCTION public.delete_role(text)                TO authenticated;

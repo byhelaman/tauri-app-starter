@@ -105,7 +105,9 @@ function InviteUserDialog({ open, onOpenChange }: InviteUserDialogProps) {
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Invite user</DialogTitle>
+          <DialogTitle>
+            Invite user
+          </DialogTitle>
           <DialogDescription>Send an invitation to a new team member.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
@@ -182,6 +184,26 @@ function ViewProfileDialog({ user, onOpenChange, onUpdateEmail }: ViewProfileDia
           <form onSubmit={handleSubmit(onSubmit)}>
             <FieldGroup>
               <Field>
+                <FieldLabel>Avatar</FieldLabel>
+                <div className="flex items-center gap-4">
+                  <Avatar className="size-18">
+                    <AvatarFallback className="text-lg">{getInitials(user?.email ?? "?")}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm">Upload photo</Button>
+                  </div>
+                </div>
+              </Field>
+              {/* <div className="flex items-center gap-3">
+                <Avatar className="size-12 shrink-0">
+                  <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="font-medium truncate">{user.name}</p>
+                  <p className="text-sm text-muted-foreground truncate">{user.email}</p>
+                </div>
+              </div> */}
+              <Field>
                 <FieldLabel>Full name</FieldLabel>
                 <Input value={user.name} disabled />
               </Field>
@@ -246,7 +268,7 @@ function ResetPasswordDialog({ user, onOpenChange }: ResetPasswordDialogProps) {
         <DialogHeader>
           <DialogTitle>Reset password</DialogTitle>
           <DialogDescription>
-            Set a new password for <strong>{user?.name}</strong>.
+            Set a new password for <span className="font-medium">{user?.name}</span>.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
@@ -298,7 +320,7 @@ function RemoveUserAlert({ user, onOpenChange, onConfirm }: RemoveUserAlertProps
         <AlertDialogHeader>
           <AlertDialogTitle>Remove user?</AlertDialogTitle>
           <AlertDialogDescription>
-            <strong>{user?.name}</strong> will be removed from the workspace. This action cannot be undone.
+            <span className="font-medium">{user?.name}</span> will be removed from the workspace. This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -363,18 +385,17 @@ export function UsersTab({ users, roles, onUpdateRole, onUpdateEmail, onRemoveUs
             <InputGroupAddon align="inline-end">{filtered.length} results</InputGroupAddon>
           )}
         </InputGroup>
-        <Button variant="outline" size="sm" onClick={() => setShowInvite(true)}>Invite user</Button>
+        <Button variant="outline" size="sm" onClick={() => setShowInvite(true)}>
+          Invite user
+        </Button>
       </div>
 
       <div className="rounded-lg border divide-y text-sm">
         {filtered.map((user) => (
           <div key={user.id} className="flex items-center gap-3 px-3 py-2.5">
-            <Avatar className="size-8 shrink-0">
-              <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
-            </Avatar>
             <div className="flex-1 min-w-0">
               <p className="font-medium truncate">{user.name}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground truncate">{user.email}</p>
+              <p className="mt-0.5 text-sm text-muted-foreground truncate">{user.email}</p>
             </div>
             <Badge
               variant={user.status === "active" ? "outline" : "secondary"}
@@ -383,7 +404,7 @@ export function UsersTab({ users, roles, onUpdateRole, onUpdateEmail, onRemoveUs
               {user.status}
             </Badge>
             <Select value={user.role} onValueChange={(v) => onUpdateRole(user.id, v)}>
-              <SelectTrigger className="w-34" size="sm">
+              <SelectTrigger className="w-28" size="sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

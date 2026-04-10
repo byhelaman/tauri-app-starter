@@ -1,7 +1,7 @@
 import type { AuditAction, AuditEntry, PermissionMatrix, RoleDefinition, SystemUser } from "./types"
 
 export const DEMO_USERS: SystemUser[] = [
-  { id: 1, name: "Alex Thompson", email: "alex@company.com", role: "super_admin", status: "active" },
+  { id: 1, name: "Alex Thompson", email: "alex@company.com", role: "owner", status: "active" },
   { id: 2, name: "Maria Garcia", email: "maria@company.com", role: "admin", status: "active" },
   { id: 3, name: "John Smith", email: "john@company.com", role: "member", status: "active" },
   { id: 4, name: "Sarah Lee", email: "sarah@company.com", role: "member", status: "inactive" },
@@ -9,7 +9,7 @@ export const DEMO_USERS: SystemUser[] = [
 ]
 
 export const INITIAL_ROLES: RoleDefinition[] = [
-  { name: "super_admin", level: 100, description: "Full access to all resources and settings", builtin: true },
+  { name: "owner", level: 100, description: "Full access to all resources and settings", builtin: true },
   { name: "admin", level: 80, description: "Manage users, content and configurations", builtin: false },
   { name: "member", level: 10, description: "Create and manage own content", builtin: false },
   { name: "guest", level: 0, description: "Read-only access to content", builtin: true },
@@ -26,7 +26,7 @@ export const PERMISSIONS = [
 ]
 
 export const INITIAL_PERMISSION_MATRIX: PermissionMatrix = {
-  super_admin: { view_content: true, create_content: true, edit_content: true, delete_content: true, manage_users: true, manage_roles: true, system_config: true },
+  owner: { view_content: true, create_content: true, edit_content: true, delete_content: true, manage_users: true, manage_roles: true, system_config: true },
   admin: { view_content: true, create_content: true, edit_content: true, delete_content: true, manage_users: true, manage_roles: false, system_config: false },
   member: { view_content: true, create_content: true, edit_content: true, delete_content: false, manage_users: false, manage_roles: false, system_config: false },
   guest: { view_content: true, create_content: false, edit_content: false, delete_content: false, manage_users: false, manage_roles: false, system_config: false },

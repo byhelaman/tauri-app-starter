@@ -65,22 +65,22 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-md!">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>Manage your preferences.</DialogDescription>
         </DialogHeader>
 
-        <DialogBody>
-          <Tabs defaultValue="general">
-            <TabsList className="w-full">
-              <TabsTrigger value="general">General</TabsTrigger>
-              <TabsTrigger value="notifications">Notifications</TabsTrigger>
-              <TabsTrigger value="privacy">Privacy</TabsTrigger>
-              <TabsTrigger value="application">Application</TabsTrigger>
-            </TabsList>
+        <Tabs defaultValue="general" className="flex flex-col min-h-0 flex-1">
+          <TabsList className="w-full">
+            <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="notifications">Notifications</TabsTrigger>
+            <TabsTrigger value="privacy">Privacy</TabsTrigger>
+            <TabsTrigger value="application">Application</TabsTrigger>
+          </TabsList>
 
-            <TabsContent value="general" className="mt-4">
+          <DialogBody className="mt-1 p-1">
+            <TabsContent value="general">
               <FieldGroup>
                 <SettingRow
                   id="launch-at-login"
@@ -101,7 +101,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               </FieldGroup>
             </TabsContent>
 
-            <TabsContent value="notifications" className="mt-4">
+            <TabsContent value="notifications">
               <FieldGroup>
                 <SettingRow
                   id="email-notif"
@@ -123,7 +123,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               </FieldGroup>
             </TabsContent>
 
-            <TabsContent value="privacy" className="mt-4">
+            <TabsContent value="privacy">
               <FieldGroup>
                 <SettingRow
                   id="online-status"
@@ -140,7 +140,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               </FieldGroup>
             </TabsContent>
 
-            <TabsContent value="application" className="mt-4">
+            <TabsContent value="application">
               <div className="flex flex-col gap-4">
                 <FieldGroup>
                   <Field orientation="horizontal">
@@ -223,8 +223,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 <p className="text-sm text-muted-foreground">© 2026 Your Company. All rights reserved.</p>
               </div>
             </TabsContent>
-          </Tabs>
-        </DialogBody>
+          </DialogBody>
+        </Tabs>
 
         <DialogFooter showCloseButton />
       </DialogContent>

@@ -53,10 +53,10 @@ Abre el archivo `supabase/migrations/001_foundation.sql`, copia todo el contenid
 | `get_all_users` | RPC para listar usuarios (requiere `users.view`) |
 | `update_user_role` | RPC para cambiar el rol de un usuario (requiere `users.manage`) |
 | `delete_user` | RPC para eliminar un usuario (requiere `users.manage`) |
-| `delete_own_account` | RPC para que el usuario elimine su propia cuenta (bloqueada si es el único `super_admin`) |
+| `delete_own_account` | RPC para que el usuario elimine su propia cuenta (bloqueada si es el único `owner`) |
 | `verify_user_password` | RPC para verificar la contraseña actual |
 | `check_email_exists` | RPC para verificar si un email existe — solo disponible para admins (`hierarchy >= 80`) |
-| `create_role` / `delete_role` | RPCs de gestión dinámica de roles (solo `super_admin`) |
+| `create_role` / `delete_role` | RPCs de gestión dinámica de roles (solo `owner`) |
 | Políticas RLS | Acceso controlado en todas las tablas |
 | Triggers de seguridad | Bloquean cambios de email y auto-escalada de roles |
 
@@ -90,7 +90,7 @@ El resultado debe incluir `user_role`, `hierarchy_level` y `permissions`.
 
 ---
 
-## 5. Asignar el primer super_admin
+## 5. Asignar el primer owner
 
 Los usuarios se registran como `guest` por defecto. Debes promoverte manualmente desde el SQL Editor la primera vez.
 
@@ -98,7 +98,7 @@ Los usuarios se registran como `guest` por defecto. Debes promoverte manualmente
 
 ```sql
 UPDATE public.profiles
-SET role = 'super_admin'
+SET role = 'owner'
 WHERE email = 'tu@email.com';
 ```
 
@@ -173,7 +173,7 @@ Todos deben mostrar `rowsecurity = true`.
 | `guest` | 0 | Sí, al registrarse |
 | `member` | 10 | No, requiere admin |
 | `admin` | 80 | No, requiere admin |
-| `super_admin` | 100 | No, requiere SQL directo |
+| `owner` | 100 | No, requiere SQL directo |
 
 ### Permisos por defecto
 
@@ -184,9 +184,9 @@ Todos deben mostrar `rowsecurity = true`.
 | `users.view` | 80 | admin |
 | `users.manage` | 80 | admin |
 | `system.view` | 80 | admin |
-| `system.manage` | 100 | super_admin (dinámico) |
+| `system.manage` | 100 | owner (dinámico) |
 
-> `super_admin` recibe **todos** los permisos dinámicamente — no requiere entradas en `role_permissions`.
+> `owner` recibe **todos** los permisos dinámicamente — no requiere entradas en `role_permissions`.
 
 ### Añadir roles o permisos propios
 

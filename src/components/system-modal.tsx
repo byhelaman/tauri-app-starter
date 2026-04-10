@@ -74,19 +74,19 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
           <DialogDescription>Manage users, roles, permissions and audit logs.</DialogDescription>
         </DialogHeader>
 
-        <DialogBody>
-          <Tabs defaultValue="users">
-            <TabsList className="w-full">
-              <TabsTrigger value="users">Users</TabsTrigger>
-              <TabsTrigger value="roles">Roles & Perms</TabsTrigger>
-              <TabsTrigger value="audit">Audit Log</TabsTrigger>
-            </TabsList>
+        <Tabs defaultValue="users" className="flex flex-col min-h-0 flex-1">
+          <TabsList className="w-full">
+            <TabsTrigger value="users">Users</TabsTrigger>
+            <TabsTrigger value="roles">Roles & Perms</TabsTrigger>
+            <TabsTrigger value="audit">Audit Log</TabsTrigger>
+          </TabsList>
 
-            <TabsContent value="users" className="mt-4">
+          <DialogBody className="mt-1 p-1">
+            <TabsContent value="users">
               <UsersTab users={users} roles={roles} onUpdateRole={updateUserRole} onUpdateEmail={updateUserEmail} onRemoveUser={removeUser} />
             </TabsContent>
 
-            <TabsContent value="roles" className="mt-4">
+            <TabsContent value="roles">
               <RolesTab
                 roles={roles}
                 matrix={matrix}
@@ -97,11 +97,11 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
               />
             </TabsContent>
 
-            <TabsContent value="audit" className="mt-4">
+            <TabsContent value="audit">
               <AuditTab />
             </TabsContent>
-          </Tabs>
-        </DialogBody>
+          </DialogBody>
+        </Tabs>
 
         <DialogFooter showCloseButton />
       </DialogContent>

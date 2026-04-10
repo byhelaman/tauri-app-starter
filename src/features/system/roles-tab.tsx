@@ -318,7 +318,7 @@ export function RolesTab({ roles, matrix, onMatrixChange, onAddRole, onEditRole,
           <AlertDialogHeader>
             <AlertDialogTitle>Remove role?</AlertDialogTitle>
             <AlertDialogDescription>
-              The role <strong>{removeTarget?.name}</strong> will be permanently deleted. Users assigned to it will need a new role.
+              The role <span className="font-medium">{removeTarget?.name}</span> will be permanently deleted. Users assigned to it will need a new role.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -372,7 +372,7 @@ export function RolesTab({ roles, matrix, onMatrixChange, onAddRole, onEditRole,
                   )} />
                   <div className="min-w-0">
                     <p className="font-medium">{role.name}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground truncate">{role.description || "—"}</p>
+                    <p className="mt-0.5 text-sm text-muted-foreground truncate">{role.description || "—"}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -414,10 +414,10 @@ export function RolesTab({ roles, matrix, onMatrixChange, onAddRole, onEditRole,
 
             <CollapsibleContent>
               <div className="border-t bg-muted/20 px-4 py-3 flex flex-col gap-3">
-                <p className="text-xs font-medium text-muted-foreground">Permissions</p>
+                <p className="text-sm font-medium text-muted-foreground">Permissions</p>
                 <div className="grid grid-cols-2 gap-4 pb-2">
                   {PERMISSIONS.map((perm) => {
-                    const isLocked = role.name === "super_admin"
+                    const isLocked = role.name === "owner"
                     const checked = isLocked ? true : (matrix[role.name]?.[perm.key] ?? false)
                     return (
                       <PermField key={perm.key} orientation="horizontal">
@@ -428,7 +428,7 @@ export function RolesTab({ roles, matrix, onMatrixChange, onAddRole, onEditRole,
                         />
                         <FieldContent>
                           <PermLabel className="text-sm">{perm.label}</PermLabel>
-                          <PermDescription className="text-xs">{perm.description}</PermDescription>
+                          <PermDescription>{perm.description}</PermDescription>
                         </FieldContent>
                       </PermField>
                     )

@@ -1,4 +1,4 @@
-export type Role = "super_admin" | "admin" | "member" | "guest" | (string & {})
+export type Role = "owner" | "admin" | "member" | "guest" | (string & {})
 export type UserStatus = "active" | "inactive"
 export type AuditAction = "role_change" | "login" | "permission_update" | "user_created" | "user_removed"
 

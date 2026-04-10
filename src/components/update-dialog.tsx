@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { DownloadIcon } from "lucide-react"
+import { Download, DownloadIcon, Package } from "lucide-react"
 import { useUpdaterContext } from "@/components/updater-context"
 import {
   AlertDialog,
@@ -60,13 +60,13 @@ export function UpdateDialog() {
         {isDownloading && (
           <div className="flex flex-col gap-2 py-1">
             <Progress value={progressPercent ?? 0} className="h-2" />
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
               {isDone ? (
-                <span className="text-foreground font-medium">Download complete — installing…</span>
+                <span className="text-foreground">Download complete — installing…</span>
               ) : progressPercent !== null ? (
                 <>
                   <span className="flex items-center gap-1.5">
-                    <DownloadIcon className="size-3" />
+                    <Download className="size-4" />
                     Downloading…
                   </span>
                   <span>

@@ -48,7 +48,7 @@ export function AuditTab() {
           {filtered.map((entry) => {
             const { icon: Icon } = AUDIT_ACTION_META[entry.action]
             return (
-              <Item key={entry.id} size="xs">
+              <Item key={entry.id} size="sm">
                 <ItemMedia variant="icon">
                   <Icon />
                 </ItemMedia>

@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge"
 const RECENT_ACTIVITY = [
   { description: "User john@example.com role updated to admin", time: "2m ago" },
   { description: "New user sara@example.com registered", time: "1h ago" },
-  { description: "Permission matrix updated by super_admin", time: "3h ago" },
+  { description: "Permission matrix updated by owner", time: "3h ago" },
   { description: "Database backup completed successfully", time: "6h ago" },
 ]
 
@@ -66,7 +66,7 @@ export function SystemPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <div className="flex flex-wrap gap-2">
-              {["super_admin", "admin", "member", "guest"].map((role) => (
+              {["owner", "admin", "member", "guest"].map((role) => (
                 <Badge key={role} variant="secondary" className="font-mono">{role}</Badge>
               ))}
             </div>
