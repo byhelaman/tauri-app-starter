@@ -74,7 +74,7 @@ function RowActions({ task, onDelete }: RowActionsProps) {
           }}>
             Copy ID
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => toast.info("Task editing coming soon")}>Edit</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => toast.info("Task editing coming soon")}>Edit task</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive"
             onClick={() => setConfirmOpen(true)}

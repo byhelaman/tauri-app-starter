@@ -8,6 +8,7 @@ import { ProfileModal } from "@/components/profile-modal"
 import { SettingsModal } from "@/components/settings-modal"
 import { SystemModal } from "@/components/system-modal"
 import { ShortcutsModal } from "@/components/shortcuts-modal"
+import { WindowControls } from "@/components/window-controls"
 import { Button } from "@/components/ui/button"
 
 const NAV_ITEMS = [
@@ -112,8 +113,8 @@ export function AppLayout() {
 
   return (
     <div className="flex flex-col h-svh">
-      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur px-4 py-2 flex items-center gap-6">
-        <nav className="flex items-center gap-1 flex-1">
+      <header data-tauri-drag-region className="sticky top-0 z-10 bg-background/80 backdrop-blur px-4 py-2 flex items-center gap-6 justify-between">
+        <nav className="flex items-center gap-1">
           {NAV_ITEMS.map(({ label, to }) => {
             const isActive = to === "/" ? pathname === "/" : pathname.startsWith(to)
             return (
@@ -155,6 +156,7 @@ export function AppLayout() {
             onOpenSystem={() => setModal("system")}
             onOpenShortcuts={() => setModal("shortcuts")}
           />
+          <WindowControls />
         </div>
       </header>
 

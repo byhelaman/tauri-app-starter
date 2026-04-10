@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react"
 import { AlertTriangleIcon } from "lucide-react"
+import { WindowControls } from "@/components/window-controls"
 import { Button } from "@/components/ui/button"
 import {
   Empty,
@@ -37,6 +38,7 @@ export class ErrorBoundary extends Component<Props, State> {
     if (error) {
       return (
         <div className="flex min-h-svh items-center justify-center p-6">
+          <WindowControls variant="floating" />
           <Empty>
             <EmptyHeader>
               <EmptyMedia variant="icon">

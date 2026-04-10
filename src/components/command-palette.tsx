@@ -47,7 +47,7 @@ export function CommandPalette({ onOpenProfile, onOpenSettings, onOpenNotificati
       <Button
         variant="outline"
         onClick={() => setOpen(true)}
-        className="h-8 w-48 justify-between px-3 text-muted-foreground font-normal text-sm"
+        className="w-100 justify-between px-3 text-muted-foreground font-normal text-sm"
       >
         <span>Search...</span>
       </Button>
