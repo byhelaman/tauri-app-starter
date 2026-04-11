@@ -12,7 +12,8 @@ import {
   XCircle,
 } from "lucide-react"
 import { createColumns, type Status, type Task } from "@/features/tasks/columns"
-import { DataTable, type FacetedFilterOption } from "@/features/tasks/data-table"
+import { DataTable } from "@/features/tasks/data-table"
+import type { FacetedFilterOption } from "@/features/tasks/data-table-types"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import {
@@ -27,18 +28,18 @@ import {
 } from "@/components/ui/alert-dialog"
 
 const INITIAL_TASKS: Task[] = [
-  { id: "TASK-001", title: "Set up CI/CD pipeline", status: "done", priority: "high", assignee: "Alex Turner", date: "2026-04-01", time: "09:00 - 11:30", amount: 1500.00 },
-  { id: "TASK-002", title: "Design onboarding flow", status: "in progress", priority: "high", assignee: "Sara Chen", date: "2026-04-02", time: "10:00 - 12:00", amount: 3200.00 },
-  { id: "TASK-003", title: "Fix login redirect bug", status: "todo", priority: "medium", assignee: "Alex Turner", date: "2026-04-03", time: "14:00 - 15:30", amount: 450.00 },
-  { id: "TASK-004", title: "Write API documentation", status: "backlog", priority: "low", assignee: "John Rivera", date: "2026-04-04", time: "08:00 - 10:00", amount: 800.50 },
-  { id: "TASK-005", title: "Add dark mode support", status: "done", priority: "medium", assignee: "Sara Chen", date: "2026-04-05", time: "13:00 - 14:30", amount: 975.00 },
-  { id: "TASK-006", title: "Optimize database queries", status: "in progress", priority: "high", assignee: "John Rivera", date: "2026-04-06", time: "17:15 - 18:00", amount: 2100.00 },
-  { id: "TASK-007", title: "Implement push notifications", status: "backlog", priority: "medium", assignee: "Alex Turner", date: "2026-04-07", time: "11:00 - 12:30", amount: 4500.00 },
-  { id: "TASK-008", title: "Audit accessibility (a11y)", status: "todo", priority: "high", assignee: "Sara Chen", date: "2026-04-08", time: "09:30 - 11:00", amount: 1250.00 },
-  { id: "TASK-009", title: "Update dependencies", status: "cancelled", priority: "low", assignee: "John Rivera", date: "2026-04-09", time: "15:00 - 16:00", amount: 300.00 },
-  { id: "TASK-010", title: "Add rate limiting to API", status: "todo", priority: "high", assignee: "Alex Turner", date: "2026-04-10", time: "10:30 - 12:00", amount: 1800.75 },
-  { id: "TASK-011", title: "Migrate to Supabase Storage", status: "backlog", priority: "medium", assignee: "Sara Chen", date: "2026-04-11", time: "14:00 - 16:30", amount: 2750.00 },
-  { id: "TASK-012", title: "Set up error monitoring", status: "in progress", priority: "medium", assignee: "John Rivera", date: "2026-04-12", time: "16:00 - 17:30", amount: 650.00 },
+  { id: "TASK-001", title: "Set up CI/CD pipeline with GitHub Actions for automated deploys", status: "done", priority: "high", assignee: "Alex Turner", date: "2026-04-01", time: "09:00 - 11:30", amount: 1500.00 },
+  { id: "TASK-002", title: "Design and prototype the new user onboarding flow", status: "in progress", priority: "high", assignee: "Sara Chen", date: "2026-04-02", time: "10:00 - 12:00", amount: 3200.00 },
+  { id: "TASK-003", title: "Fix redirect loop after login when session is expired", status: "todo", priority: "medium", assignee: "Alex Turner", date: "2026-04-03", time: "14:00 - 15:30", amount: 450.00 },
+  { id: "TASK-004", title: "Write comprehensive API documentation for public endpoints", status: "backlog", priority: "low", assignee: "John Rivera", date: "2026-04-04", time: "08:00 - 10:00", amount: 800.50 },
+  { id: "TASK-005", title: "Add dark mode support with system preference detection", status: "done", priority: "medium", assignee: "Sara Chen", date: "2026-04-05", time: "13:00 - 14:30", amount: 975.00 },
+  { id: "TASK-006", title: "Optimize slow database queries on the analytics dashboard", status: "in progress", priority: "high", assignee: "John Rivera", date: "2026-04-06", time: "17:15 - 18:00", amount: 2100.00 },
+  { id: "TASK-007", title: "Implement push notifications for desktop and mobile clients", status: "backlog", priority: "medium", assignee: "Alex Turner", date: "2026-04-07", time: "11:00 - 12:30", amount: 4500.00 },
+  { id: "TASK-008", title: "Run full accessibility audit and fix WCAG 2.1 AA violations", status: "todo", priority: "high", assignee: "Sara Chen", date: "2026-04-08", time: "09:30 - 11:00", amount: 1250.00 },
+  { id: "TASK-009", title: "Update outdated dependencies and resolve breaking changes", status: "cancelled", priority: "low", assignee: "John Rivera", date: "2026-04-09", time: "15:00 - 16:00", amount: 300.00 },
+  { id: "TASK-010", title: "Add rate limiting and request throttling to REST API", status: "todo", priority: "high", assignee: "Alex Turner", date: "2026-04-10", time: "10:30 - 12:00", amount: 1800.75 },
+  { id: "TASK-011", title: "Migrate file uploads from local disk to Supabase Storage", status: "backlog", priority: "medium", assignee: "Sara Chen", date: "2026-04-11", time: "14:00 - 16:30", amount: 2750.00 },
+  { id: "TASK-012", title: "Set up error monitoring and alerting with Sentry integration", status: "in progress", priority: "medium", assignee: "John Rivera", date: "2026-04-12", time: "16:00 - 17:30", amount: 650.00 },
 ]
 
 const STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
@@ -76,7 +77,7 @@ export function TasksPage() {
         columns={columns}
         data={tasks}
         filterColumn="title"
-        filterPlaceholder="Filter tasks..."
+        filterPlaceholder="Search..."
         facetedFilters={[
           { columnId: "status", title: "Status", options: STATUS_FILTER_OPTIONS },
           { columnId: "priority", title: "Priority", options: PRIORITY_FILTER_OPTIONS },
@@ -91,7 +92,7 @@ export function TasksPage() {
                 toast.success(`${selected.length} IDs copied`)
               }}
             >
-              <Copy />
+              <Copy data-icon="inline-start" />
               Copy IDs
             </Button>
             <Button
@@ -99,7 +100,7 @@ export function TasksPage() {
               size="sm"
               onClick={() => setBulkDeleteTarget({ selected, clearSelection })}
             >
-              <Trash2Icon />
+              <Trash2Icon data-icon="inline-start" />
               Delete
             </Button>
           </>

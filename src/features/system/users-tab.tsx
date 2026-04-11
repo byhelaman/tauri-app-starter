@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
 import { MoreHorizontalIcon, SearchIcon } from "lucide-react"
+import { getInitials } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -50,15 +51,10 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { RoleDefinition, SystemUser } from "./types"
-
-function getInitials(name: string) {
-  return name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
-}
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
 
@@ -417,7 +413,7 @@ export function UsersTab({ users, roles, onUpdateRole, onUpdateEmail, onRemoveUs
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                {/* <DropdownMenuLabel>Actions</DropdownMenuLabel> */}
                 <DropdownMenuGroup>
                   <DropdownMenuItem onClick={() => setProfileUser(user)}>View profile</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setResetUser(user)}>Reset password</DropdownMenuItem>

@@ -29,7 +29,6 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -382,7 +381,7 @@ export function RolesTab({ roles, matrix, onMatrixChange, onAddRole, onEditRole,
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                      {/* <DropdownMenuLabel>Actions</DropdownMenuLabel> */}
                       <DropdownMenuGroup>
                         <DropdownMenuItem onClick={() => navigator.clipboard.writeText(role.name)}>
                           Copy name

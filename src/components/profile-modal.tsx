@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useTheme } from "next-themes"
 import { toast } from "sonner"
+import { getInitials } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
 import { supabase } from "@/lib/supabase"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -49,10 +50,6 @@ import { Switch } from "@/components/ui/switch"
 interface ProfileModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-}
-
-function getInitials(email: string) {
-  return email.slice(0, 2).toUpperCase()
 }
 
 export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {

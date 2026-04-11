@@ -79,26 +79,13 @@ export function AppLayout() {
         setModal("shortcuts")
       }
 
-      // Navigation
-      if (mod && key === "1") {
-        e.preventDefault()
-        navigate("/")
-      }
-      if (mod && key === "2") {
-        e.preventDefault()
-        navigate("/projects")
-      }
-      if (mod && key === "3") {
-        e.preventDefault()
-        navigate("/team")
-      }
-      if (mod && key === "4") {
-        e.preventDefault()
-        navigate("/analytics")
-      }
-      if (mod && key === "5") {
-        e.preventDefault()
-        navigate("/tasks")
+      // Navigation (Ctrl/Cmd + 1…N)
+      if (mod && !e.shiftKey && !e.altKey) {
+        const idx = parseInt(key, 10) - 1
+        if (idx >= 0 && idx < NAV_ITEMS.length) {
+          e.preventDefault()
+          navigate(NAV_ITEMS[idx].to)
+        }
       }
 
       // Close modal
@@ -109,6 +96,7 @@ export function AppLayout() {
     document.addEventListener("keydown", handleKey)
     return () => document.removeEventListener("keydown", handleKey)
   }, [navigate])
+
   const [unreadCount, setUnreadCount] = useState(() =>
     DEMO_NOTIFICATIONS.filter((n) => !n.read).length
   )
@@ -148,47 +136,42 @@ export function AppLayout() {
           </div>
         </nav>
 
-
-
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-4">
-            <CommandPalette
+          <CommandPalette
+            onOpenProfile={() => setModal("profile")}
+            onOpenSettings={() => setModal("settings")}
+            onOpenNotifications={() => setModal("notifications")}
+            onOpenSystem={() => setModal("system")}
+            onOpenShortcuts={() => setModal("shortcuts")}
+          />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative"
+              aria-label="Notifications"
+              onClick={() => setModal("notifications")}
+            >
+              <BellIcon aria-hidden="true" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-amber-400" />
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative"
+              aria-label="Settings"
+              onClick={() => setModal("settings")}
+            >
+              <Settings aria-hidden="true" />
+            </Button>
+            <UserNav
               onOpenProfile={() => setModal("profile")}
               onOpenSettings={() => setModal("settings")}
-              onOpenNotifications={() => setModal("notifications")}
               onOpenSystem={() => setModal("system")}
               onOpenShortcuts={() => setModal("shortcuts")}
             />
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="relative"
-                aria-label="Notifications"
-                onClick={() => setModal("notifications")}
-              >
-                <BellIcon aria-hidden="true" />
-                {unreadCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-amber-400" />
-                )}
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="relative"
-                aria-label="Settings"
-                onClick={() => setModal("settings")}
-              >
-                <Settings aria-hidden="true" />
-              </Button>
-              <UserNav
-                onOpenProfile={() => setModal("profile")}
-                onOpenSettings={() => setModal("settings")}
-                onOpenNotifications={() => setModal("notifications")}
-                onOpenSystem={() => setModal("system")}
-                onOpenShortcuts={() => setModal("shortcuts")}
-              />
-            </div>
           </div>
         </div>
       </Titlebar>

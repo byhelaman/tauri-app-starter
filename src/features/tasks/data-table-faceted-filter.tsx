@@ -1,5 +1,5 @@
 import type { Column } from "@tanstack/react-table"
-import { ChevronDownIcon, PlusCircle } from "lucide-react"
+import { PlusCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -79,17 +79,9 @@ export function DataTableFacetedFilter<TData, TValue>({
                             </div>
                         </>
                     )}
-                    {/* {selectedValues.size > 0 && (
-                        <>
-                            <Separator orientation="vertical" className="mx-1 h-8" />
-                            <Badge variant="secondary" className="rounded-sm px-1 font-normal">
-                                {selectedValues.size}
-                            </Badge>
-                        </>
-                    )} */}
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
+            <DropdownMenuContent align="start" className="w-40">
                 {options.map((option) => (
                     <DropdownMenuCheckboxItem
                         key={option.value}
@@ -97,7 +89,7 @@ export function DataTableFacetedFilter<TData, TValue>({
                         checked={selectedValues.has(option.value)}
                         onCheckedChange={() => toggle(option.value)}
                     >
-                        {/* {option.icon && <option.icon className="size-4 text-muted-foreground" />} */}
+                        {option.icon && <option.icon />}
                         {option.label}
                     </DropdownMenuCheckboxItem>
                 ))}

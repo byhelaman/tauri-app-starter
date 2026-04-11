@@ -43,7 +43,7 @@ export function DashboardPage() {
   if (crash) return <ThrowError />
 
   return (
-    <main className="flex-1 p-6 w-full space-y-6">
+    <main className="flex flex-col flex-1 p-6 w-full gap-6">
       <PageHeader title="Welcome back!" description={`Signed in as ${user?.email}`} />
       <Card>
         <CardHeader>
@@ -65,7 +65,7 @@ export function DashboardPage() {
           <CardTitle>Activity</CardTitle>
           <CardDescription>Latest team actions</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="flex flex-col gap-4">
           {ACTIVITY.map((a, i) => (
             <div key={i} className="flex gap-3 text-sm">
               <div className="mt-1.5 size-1.5 rounded-full bg-muted-foreground shrink-0" />

@@ -1,6 +1,7 @@
 import { useTheme } from "next-themes"
 import { toast } from "sonner"
 import { FileText, HelpCircle, KeyboardIcon, LogOutIcon, MonitorIcon, MoonIcon, Palette, SettingsIcon, ShieldIcon, SunIcon, User } from "lucide-react"
+import { getInitials } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -19,14 +20,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-function getInitials(email: string) {
-  return email.slice(0, 2).toUpperCase()
-}
-
 interface UserNavProps {
   onOpenProfile?: () => void
   onOpenSettings?: () => void
-  onOpenNotifications?: () => void
   onOpenSystem?: () => void
   onOpenShortcuts?: () => void
 }
@@ -58,10 +54,6 @@ export function UserNav({ onOpenProfile, onOpenSettings, onOpenSystem, onOpenSho
             <ShieldIcon />
             System
           </DropdownMenuItem>
-          {/* <DropdownMenuItem onSelect={onOpenNotifications}>
-            <BellIcon />
-            Notifications
-          </DropdownMenuItem> */}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>

@@ -66,7 +66,7 @@ export function UpdateDialog() {
               ) : progressPercent !== null ? (
                 <>
                   <span className="flex items-center gap-1.5">
-                    <Download className="size-4" />
+                    <Download data-icon="inline-start" />
                     Downloading…
                   </span>
                   <span>

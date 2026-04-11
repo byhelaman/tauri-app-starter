@@ -1,3 +1,5 @@
+import type { LucideIcon } from "lucide-react"
+import { KeyRoundIcon, LogInIcon, ShieldIcon, UserMinusIcon, UserPlusIcon } from "lucide-react"
 import type { AuditAction, AuditEntry, PermissionMatrix, RoleDefinition, SystemUser } from "./types"
 
 export const DEMO_USERS: SystemUser[] = [
@@ -44,9 +46,6 @@ export const AUDIT_LOG: AuditEntry[] = [
   { id: 9, action: "user_created", description: "New user contractor@company.com invited", actor: "maria@company.com", time: "4 days ago" },
   { id: 10, action: "role_change", description: "Changed contractor@company.com role to guest", actor: "maria@company.com", time: "4 days ago" },
 ]
-
-import type { LucideIcon } from "lucide-react"
-import { KeyRoundIcon, LogInIcon, ShieldIcon, UserMinusIcon, UserPlusIcon } from "lucide-react"
 
 export const AUDIT_ACTION_META: Record<AuditAction, { icon: LucideIcon }> = {
   role_change:        { icon: ShieldIcon    },
