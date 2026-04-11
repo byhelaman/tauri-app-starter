@@ -351,7 +351,7 @@ export function RolesTab({ roles, matrix, onMatrixChange, onAddRole, onEditRole,
         </Button>
       </div>
 
-      <div className="rounded-lg border divide-y text-sm">
+      <div className="divide-y text-sm">
         {filtered.map((role) => (
           <Collapsible
             key={role.name}
@@ -360,7 +360,7 @@ export function RolesTab({ roles, matrix, onMatrixChange, onAddRole, onEditRole,
           >
             <CollapsibleTrigger asChild>
               <div className={cn(
-                "flex items-center justify-between px-3 py-2.5 cursor-pointer hover:bg-muted/40 transition-colors select-none",
+                "flex items-center justify-between px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors select-none",
                 openRole === role.name && "bg-muted/40"
               )}>
                 <div className="flex items-center gap-2 min-w-0">

@@ -1,3 +1,4 @@
+import { type ReactNode } from "react"
 import { Minus, X } from "lucide-react"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { cn } from "@/lib/utils"
@@ -5,27 +6,51 @@ import { Button } from "@/components/ui/button"
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
 
-interface WindowControlsProps {
-  variant?: "inline" | "floating"
+interface TitlebarProps {
+  children?: ReactNode
+  className?: string
 }
 
-export function WindowControls({ variant = "inline" }: WindowControlsProps) {
-  if (!isTauri) return null
-
-  const appWindow = getCurrentWindow()
-
+export function Titlebar({ children, className }: TitlebarProps) {
   return (
     <div
       data-tauri-drag-region
       className={cn(
-        "flex items-center gap-0.5",
-        variant === "inline" && "ml-2",
-        variant === "floating" && "fixed top-0 left-0 right-0 z-50 flex justify-end p-2 px-4 h-12",
+        "z-50 flex shrink-0 items-center justify-between backdrop-blur p-2 gap-4",
+        className,
       )}
     >
+      <div data-tauri-drag-region className="flex-1 flex items-center min-w-0 justify-between">
+        {children}
+      </div>
+      {isTauri && <WindowControls />}
+    </div>
+  )
+}
+
+interface ShellProps {
+  children: ReactNode
+}
+
+export function Shell({ children }: ShellProps) {
+  return (
+    <div className="flex flex-col h-svh">
+      <Titlebar />
+      <div className="flex-1 overflow-y-auto min-h-0">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function WindowControls() {
+  const appWindow = getCurrentWindow()
+
+  return (
+    <div className="flex items-center gap-0.5 ml-2 shrink-0">
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="icon"
         aria-label="Minimize"
         onClick={() => appWindow.minimize()}
       >
@@ -33,7 +58,7 @@ export function WindowControls({ variant = "inline" }: WindowControlsProps) {
       </Button>
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="icon"
         aria-label="Close"
         className="hover:bg-destructive/10 hover:text-destructive"
         onClick={() => appWindow.close()}

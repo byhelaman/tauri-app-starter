@@ -385,9 +385,9 @@ export function UsersTab({ users, roles, onUpdateRole, onUpdateEmail, onRemoveUs
         </Button>
       </div>
 
-      <div className="rounded-lg border divide-y text-sm">
+      <div className="divide-y text-sm">
         {filtered.map((user) => (
-          <div key={user.id} className="flex items-center gap-3 px-3 py-2.5">
+          <div key={user.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-accent/50 transition-colors">
             <div className="flex-1 min-w-0">
               <p className="font-medium truncate">{user.name}</p>
               <p className="mt-0.5 text-sm text-muted-foreground truncate">{user.email}</p>

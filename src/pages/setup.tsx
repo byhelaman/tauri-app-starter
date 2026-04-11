@@ -22,8 +22,6 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { WindowControls } from "@/components/window-controls"
-
 const setupSchema = z.object({
   url: z
     .string()
@@ -51,8 +49,7 @@ export function SetupPage() {
   }
 
   return (
-    <div className="flex min-h-svh bg-muted items-center justify-center p-6 md:p-10">
-      <WindowControls variant="floating" />
+    <div className="flex min-h-full items-center justify-center p-6 md:p-10">
       <div className="flex w-full max-w-sm flex-col gap-6">
         {showInfo ? (
           <SetupInfoCard onBack={() => setShowInfo(false)} />

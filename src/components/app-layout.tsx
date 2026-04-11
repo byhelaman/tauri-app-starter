@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Outlet, useLocation, useNavigate } from "react-router-dom"
-import { BellIcon } from "lucide-react"
+import { BellIcon, ChevronDown, Settings } from "lucide-react"
 import { UserNav } from "@/components/user-nav"
 import { CommandPalette } from "@/components/command-palette"
 import { NotificationsModal, DEMO_NOTIFICATIONS } from "@/components/notifications-modal"
@@ -8,8 +8,9 @@ import { ProfileModal } from "@/components/profile-modal"
 import { SettingsModal } from "@/components/settings-modal"
 import { SystemModal } from "@/components/system-modal"
 import { ShortcutsModal } from "@/components/shortcuts-modal"
-import { WindowControls } from "@/components/window-controls"
+import { Titlebar } from "@/components/window-controls"
 import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 const NAV_ITEMS = [
   { label: "Dashboard", to: "/" },
@@ -54,21 +55,22 @@ export function AppLayout() {
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       const mod = e.metaKey || e.ctrlKey
+      const key = e.key.toLowerCase()
 
       // Modals
-      if (mod && e.shiftKey && e.key === "P") {
+      if (mod && e.shiftKey && e.code === "KeyP") {
         e.preventDefault()
         setModal("profile")
       }
-      if (mod && e.key === ",") {
+      if (e.altKey && !mod && !e.shiftKey && e.code === "KeyS") {
         e.preventDefault()
         setModal("settings")
       }
-      if (mod && e.shiftKey && e.key === "S") {
+      if (e.shiftKey && !mod && !e.altKey && e.code === "KeyS") {
         e.preventDefault()
         setModal("system")
       }
-      if (mod && e.key === "n") {
+      if (mod && key === "n") {
         e.preventDefault()
         setModal("notifications")
       }
@@ -78,23 +80,23 @@ export function AppLayout() {
       }
 
       // Navigation
-      if (mod && e.key === "1") {
+      if (mod && key === "1") {
         e.preventDefault()
         navigate("/")
       }
-      if (mod && e.key === "2") {
+      if (mod && key === "2") {
         e.preventDefault()
         navigate("/projects")
       }
-      if (mod && e.key === "3") {
+      if (mod && key === "3") {
         e.preventDefault()
         navigate("/team")
       }
-      if (mod && e.key === "4") {
+      if (mod && key === "4") {
         e.preventDefault()
         navigate("/analytics")
       }
-      if (mod && e.key === "5") {
+      if (mod && key === "5") {
         e.preventDefault()
         navigate("/tasks")
       }
@@ -113,52 +115,83 @@ export function AppLayout() {
 
   return (
     <div className="flex flex-col h-svh">
-      <header data-tauri-drag-region className="sticky top-0 z-10 bg-background/80 backdrop-blur px-4 py-2 flex items-center gap-6 justify-between">
-        <nav className="flex items-center gap-1">
-          {NAV_ITEMS.map(({ label, to }) => {
-            const isActive = to === "/" ? pathname === "/" : pathname.startsWith(to)
-            return (
-              <Button
-                key={to}
-                variant={isActive ? "secondary" : "ghost"}
-                onClick={() => navigate(to)}
-              >
-                {label}
+      <Titlebar>
+        <nav className="flex items-center">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open navigation menu">
+                <ChevronDown aria-hidden="true" />
               </Button>
-            )
-          })}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="lg:hidden">
+              {NAV_ITEMS.map(({ label, to }) => (
+                <DropdownMenuItem key={to} onSelect={() => navigate(to)}>
+                  {label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <div className="hidden lg:flex md:items-center md:gap-1">
+            {NAV_ITEMS.map(({ label, to }) => {
+              const isActive = to === "/" ? pathname === "/" : pathname.startsWith(to)
+              return (
+                <Button
+                  key={to}
+                  variant={isActive ? "secondary" : "ghost"}
+                  onClick={() => navigate(to)}
+                >
+                  {label}
+                </Button>
+              )
+            })}
+          </div>
         </nav>
 
-        <CommandPalette
-          onOpenProfile={() => setModal("profile")}
-          onOpenSettings={() => setModal("settings")}
-          onOpenNotifications={() => setModal("notifications")}
-          onOpenShortcuts={() => setModal("shortcuts")}
-        />
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative"
-            aria-label="Notifications"
-            onClick={() => setModal("notifications")}
-          >
-            <BellIcon aria-hidden="true" />
-            {unreadCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-amber-400" />
-            )}
-          </Button>
-          <UserNav
-            onOpenProfile={() => setModal("profile")}
-            onOpenSettings={() => setModal("settings")}
-            onOpenNotifications={() => setModal("notifications")}
-            onOpenSystem={() => setModal("system")}
-            onOpenShortcuts={() => setModal("shortcuts")}
-          />
-          <WindowControls />
+
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4">
+            <CommandPalette
+              onOpenProfile={() => setModal("profile")}
+              onOpenSettings={() => setModal("settings")}
+              onOpenNotifications={() => setModal("notifications")}
+              onOpenSystem={() => setModal("system")}
+              onOpenShortcuts={() => setModal("shortcuts")}
+            />
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative"
+                aria-label="Notifications"
+                onClick={() => setModal("notifications")}
+              >
+                <BellIcon aria-hidden="true" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-amber-400" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative"
+                aria-label="Settings"
+                onClick={() => setModal("settings")}
+              >
+                <Settings aria-hidden="true" />
+              </Button>
+              <UserNav
+                onOpenProfile={() => setModal("profile")}
+                onOpenSettings={() => setModal("settings")}
+                onOpenNotifications={() => setModal("notifications")}
+                onOpenSystem={() => setModal("system")}
+                onOpenShortcuts={() => setModal("shortcuts")}
+              />
+            </div>
+          </div>
         </div>
-      </header>
+      </Titlebar>
 
       <div className="flex-1 overflow-y-auto min-h-0">
         <Outlet />

@@ -21,7 +21,7 @@ const SHORTCUT_GROUPS: { heading: string; items: Shortcut[] }[] = [
     heading: "General",
     items: [
       { label: "Command palette", mac: "⌘K", win: "Ctrl + K" },
-      { label: "Settings", mac: "⌘,", win: "Ctrl + ," },
+      { label: "Settings", mac: "⌥S", win: "Alt + S" },
       { label: "Notifications", mac: "⌘N", win: "Ctrl + N" },
       { label: "Keyboard shortcuts", mac: "⌘/", win: "Ctrl + /" },
       { label: "Close dialog", mac: "Esc", win: "Esc" },
@@ -31,17 +31,13 @@ const SHORTCUT_GROUPS: { heading: string; items: Shortcut[] }[] = [
     heading: "Panels",
     items: [
       { label: "Profile", mac: "⇧⌘P", win: "Ctrl + Shift + P" },
-      { label: "System", mac: "⇧⌘S", win: "Ctrl + Shift + S" },
+      { label: "System", mac: "⇧S", win: "Shift + S" },
     ],
   },
   {
     heading: "Navigation",
     items: [
-      { label: "Dashboard", mac: "⌘1", win: "Ctrl + 1" },
-      { label: "Projects", mac: "⌘2", win: "Ctrl + 2" },
-      { label: "Team", mac: "⌘3", win: "Ctrl + 3" },
-      { label: "Analytics", mac: "⌘4", win: "Ctrl + 4" },
-      { label: "Tasks", mac: "⌘5", win: "Ctrl + 5" },
+      { label: "Go to pages", mac: "⌘1...9", win: "Ctrl + 1...9" },
     ],
   },
 ]

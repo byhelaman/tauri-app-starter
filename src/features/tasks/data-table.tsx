@@ -1,18 +1,21 @@
 import { useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import {
+  type Column,
   type ColumnDef,
   type ColumnFiltersState,
   type SortingState,
   type VisibilityState,
   flexRender,
+  getFacetedRowModel,
+  getFacetedUniqueValues,
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import { ChevronDownIcon, X } from "lucide-react"
+import { ChevronDownIcon, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -37,12 +40,27 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { DataTableFacetedFilter } from "./data-table-faceted-filter"
+
+export interface FacetedFilterOption {
+  label: string
+  value: string
+  icon?: React.ComponentType<{ className?: string }>
+}
+
+interface FacetedFilterConfig<TData, TValue = unknown> {
+  columnId: string
+  title: string
+  options: FacetedFilterOption[]
+  column?: Column<TData, TValue>
+}
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   filterColumn?: string
   filterPlaceholder?: string
+  facetedFilters?: Omit<FacetedFilterConfig<TData>, "column">[]
   className?: string
   bulkActions?: (selectedRows: TData[], clearSelection: () => void) => ReactNode
 }
@@ -52,6 +70,7 @@ export function DataTable<TData, TValue>({
   data,
   filterColumn = "title",
   filterPlaceholder = "Filter...",
+  facetedFilters,
   className,
   bulkActions,
 }: DataTableProps<TData, TValue>) {
@@ -71,21 +90,52 @@ export function DataTable<TData, TValue>({
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    getFacetedRowModel: getFacetedRowModel(),
+    getFacetedUniqueValues: getFacetedUniqueValues(),
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
     initialState: { pagination: { pageSize: 10 } },
     state: { sorting, columnFilters, columnVisibility, rowSelection },
   })
 
+  const isFiltered = table.getState().columnFilters.length > 0
+
   return (
     <div className={cn("relative flex flex-col gap-4", className)}>
       <div className="flex items-center gap-2">
-        <Input
-          placeholder={filterPlaceholder}
-          value={(table.getColumn(filterColumn)?.getFilterValue() as string) ?? ""}
-          onChange={(e) => table.getColumn(filterColumn)?.setFilterValue(e.target.value)}
-          className="max-w-xs"
-        />
+        {table.getColumn(filterColumn) && (
+          <Input
+            placeholder={filterPlaceholder}
+            value={(table.getColumn(filterColumn)?.getFilterValue() as string) ?? ""}
+            onChange={(e) => table.getColumn(filterColumn)?.setFilterValue(e.target.value)}
+            className="max-w-xs"
+          />
+        )}
+
+        {facetedFilters?.map((filter) => {
+          const column = table.getColumn(filter.columnId)
+          if (!column) return null
+
+          return (
+            <DataTableFacetedFilter
+              key={filter.columnId}
+              column={column}
+              title={filter.title}
+              options={filter.options}
+            />
+          )
+        })}
+
+        {isFiltered && (
+          <Button
+            variant="ghost"
+            onClick={() => table.resetColumnFilters()}
+          >
+            Reset
+            <X />
+          </Button>
+        )}
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="ml-auto">
@@ -111,9 +161,8 @@ export function DataTable<TData, TValue>({
         </DropdownMenu>
       </div>
 
-      <div className="overflow-auto max-h-[calc(100svh-17rem)] scrollbar">
-        <div className="rounded-md border">
-          <Table>
+      <div className="overflow-auto max-h-[calc(100svh-17rem)] rounded-md border scrollbar">
+          <Table containerClassName="overflow-visible">
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
@@ -147,7 +196,6 @@ export function DataTable<TData, TValue>({
               )}
             </TableBody>
           </Table>
-        </div>
       </div>
 
       <div className="flex items-center justify-between">
@@ -157,12 +205,12 @@ export function DataTable<TData, TValue>({
         </p>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <p className="text-sm text-muted-foreground">Rows per page</p>
+            <p className="w-25 text-sm text-muted-foreground">Rows per page</p>
             <Select
               value={`${table.getState().pagination.pageSize}`}
               onValueChange={(value) => table.setPageSize(Number(value))}
             >
-              <SelectTrigger className="w-fit" size="sm">
+              <SelectTrigger className="w-fit">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent side="top">
@@ -175,21 +223,45 @@ export function DataTable<TData, TValue>({
             </Select>
           </div>
           <div className="flex items-center gap-2">
+            <div className="flex w-25 items-center justify-center text-sm text-muted-foreground">
+              Page {table.getState().pagination.pageIndex + 1} of{" "}
+              {table.getPageCount()}
+            </div>
             <Button
               variant="outline"
-              size="sm"
-              onClick={() => table.previousPage()}
+              size="icon"
+              onClick={() => table.setPageIndex(0)}
               disabled={!table.getCanPreviousPage()}
             >
-              Previous
+              {/* Previous */}
+              <ChevronsLeft />
             </Button>
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+            >
+              {/* Previous */}
+              <ChevronLeft />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
             >
-              Next
+              {/* Next */}
+              <ChevronRight />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+              disabled={!table.getCanNextPage()}
+            >
+              {/* Next */}
+              <ChevronsRight />
             </Button>
           </div>
         </div>

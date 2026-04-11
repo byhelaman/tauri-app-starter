@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { LayoutDashboard, Users, BarChart2, FolderKanban, Settings, Bell, User, LogOut, KeyboardIcon } from "lucide-react"
+import { LayoutDashboard, Users, BarChart2, FolderKanban, Settings, Bell, User, LogOut, KeyboardIcon, ShieldIcon, ListTodo } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
@@ -13,15 +13,17 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command"
+import { Kbd, KbdGroup } from "@/components/ui/kbd"
 
 interface CommandPaletteProps {
   onOpenProfile?: () => void
   onOpenSettings?: () => void
   onOpenNotifications?: () => void
+  onOpenSystem?: () => void
   onOpenShortcuts?: () => void
 }
 
-export function CommandPalette({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenShortcuts }: CommandPaletteProps) {
+export function CommandPalette({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenSystem, onOpenShortcuts }: CommandPaletteProps) {
   const { signOut } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
@@ -47,12 +49,12 @@ export function CommandPalette({ onOpenProfile, onOpenSettings, onOpenNotificati
       <Button
         variant="outline"
         onClick={() => setOpen(true)}
-        className="w-100 justify-between px-3 text-muted-foreground font-normal text-sm"
+        className="w-60 lg:w-80 justify-between px-3 text-muted-foreground font-normal text-sm"
       >
         <span>Search...</span>
       </Button>
 
-      <CommandDialog open={open} onOpenChange={setOpen}>
+      <CommandDialog open={open} onOpenChange={setOpen} className="gap-0">
         <Command>
           <CommandInput placeholder="Type a command or search..." />
           <CommandList>
@@ -75,6 +77,10 @@ export function CommandPalette({ onOpenProfile, onOpenSettings, onOpenNotificati
                 <BarChart2 />
                 Analytics
               </CommandItem>
+              <CommandItem onSelect={() => run(() => navigate("/tasks"))}>
+                <ListTodo />
+                Tasks
+              </CommandItem>
             </CommandGroup>
 
             <CommandSeparator />
@@ -96,6 +102,10 @@ export function CommandPalette({ onOpenProfile, onOpenSettings, onOpenNotificati
                 <KeyboardIcon />
                 Keyboard shortcuts
               </CommandItem>
+              <CommandItem onSelect={() => run(onOpenSystem)}>
+                <ShieldIcon />
+                System
+              </CommandItem>
               <CommandItem onSelect={() => run(signOut)}>
                 <LogOut />
                 Sign out
@@ -103,6 +113,12 @@ export function CommandPalette({ onOpenProfile, onOpenSettings, onOpenNotificati
             </CommandGroup>
           </CommandList>
         </Command>
+        <div className="p-2 px-3 bg-muted text-sm flex flex-wrap items-center gap-1.5">
+          <KbdGroup>
+            <Kbd className="bg-background">↑/↓</Kbd>
+          </KbdGroup>
+          <span>to navigate.</span>
+        </div>
       </CommandDialog>
     </>
   )

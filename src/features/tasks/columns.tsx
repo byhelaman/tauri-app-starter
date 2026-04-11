@@ -1,9 +1,17 @@
 import { useState } from "react"
-import type { ColumnDef } from "@tanstack/react-table"
+import type { ColumnDef, FilterFn } from "@tanstack/react-table"
 import { ChevronsUpDown, MoreHorizontalIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,15 +41,12 @@ export interface Task {
   status: Status
   priority: Priority
   assignee: string
+  date: string
+  time: string
+  amount: number
 }
 
-const STATUS_VARIANT: Record<Status, "default" | "secondary" | "outline" | "destructive"> = {
-  backlog: "outline",
-  todo: "secondary",
-  "in progress": "default",
-  done: "secondary",
-  cancelled: "destructive",
-}
+const STATUSES: Status[] = ["backlog", "todo", "in progress", "done", "cancelled"]
 
 const PRIORITY_VARIANT: Record<Priority, "default" | "secondary" | "outline" | "destructive"> = {
   low: "outline",
@@ -54,6 +59,11 @@ interface RowActionsProps {
   onDelete: (id: string) => void
 }
 
+const multiValueFilter: FilterFn<Task> = (row, columnId, filterValue) => {
+  if (!Array.isArray(filterValue) || filterValue.length === 0) return true
+  return filterValue.includes(row.getValue(columnId))
+}
+
 function RowActions({ task, onDelete }: RowActionsProps) {
   const [confirmOpen, setConfirmOpen] = useState(false)
 
@@ -61,7 +71,7 @@ function RowActions({ task, onDelete }: RowActionsProps) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-xs">
+          <Button variant="ghost" size="icon-sm">
             <MoreHorizontalIcon />
             <span className="sr-only">Open menu</span>
           </Button>
@@ -109,7 +119,7 @@ function RowActions({ task, onDelete }: RowActionsProps) {
   )
 }
 
-export function createColumns(onDelete: (id: string) => void): ColumnDef<Task>[] {
+export function createColumns(onDelete: (id: string) => void, onStatusChange: (id: string, status: Status) => void): ColumnDef<Task>[] {
   return [
     {
       id: "select",
@@ -131,10 +141,24 @@ export function createColumns(onDelete: (id: string) => void): ColumnDef<Task>[]
       enableHiding: false,
     },
     {
-      accessorKey: "id",
-      header: "ID",
+      accessorKey: "date",
+      header: () => <div className="text-center">Date</div>,
       cell: ({ row }) => (
-        <span className="font-mono text-muted-foreground">{row.getValue("id")}</span>
+        <div className="text-center text-muted-foreground">{row.getValue("date")}</div>
+      ),
+    },
+    {
+      accessorKey: "time",
+      header: () => <div className="text-center">Time</div>,
+      cell: ({ row }) => (
+        <div className="text-center font-mono">{row.getValue("time")}</div>
+      ),
+    },
+    {
+      accessorKey: "id",
+      header: () => <div className="text-center">ID</div>,
+      cell: ({ row }) => (
+        <div className="text-center font-mono text-muted-foreground">{row.getValue("id")}</div>
       ),
     },
     {
@@ -152,14 +176,6 @@ export function createColumns(onDelete: (id: string) => void): ColumnDef<Task>[]
       cell: ({ row }) => <span>{row.getValue("title")}</span>,
     },
     {
-      accessorKey: "status",
-      header: "Status",
-      cell: ({ row }) => {
-        const status = row.getValue("status") as Status
-        return <Badge variant={STATUS_VARIANT[status]} className="capitalize">{status}</Badge>
-      },
-    },
-    {
       accessorKey: "priority",
       header: ({ column }) => (
         <Button
@@ -171,15 +187,56 @@ export function createColumns(onDelete: (id: string) => void): ColumnDef<Task>[]
           <ChevronsUpDown />
         </Button>
       ),
+      filterFn: multiValueFilter,
       cell: ({ row }) => {
         const priority = row.getValue("priority") as Priority
         return <Badge variant={PRIORITY_VARIANT[priority]} className="capitalize">{priority}</Badge>
       },
     },
     {
+      accessorKey: "status",
+      header: "Status",
+      filterFn: multiValueFilter,
+      cell: ({ row }) => (
+        <Select
+          value={row.getValue("status") as string}
+          onValueChange={(value) => onStatusChange(row.original.id, value as Status)}
+        >
+          <SelectTrigger size="sm" className="w-32 capitalize">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {STATUSES.map((s) => (
+                <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      ),
+    },
+    {
       accessorKey: "assignee",
       header: "Assignee",
       cell: ({ row }) => <span className="capitalize">{row.getValue("assignee")}</span>,
+    },
+    {
+      accessorKey: "amount",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          className="-ml-3"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Amount
+          <ChevronsUpDown />
+        </Button>
+      ),
+      cell: ({ row }) => {
+        const value = row.getValue("amount") as number
+        const formatted = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
+        return <span className="font-mono">{formatted}</span>
+      },
     },
     {
       id: "actions",

@@ -16,12 +16,15 @@ import { AnalyticsPage } from "@/pages/analytics"
 import { TasksPage } from "@/pages/tasks"
 import { AppLayout } from "@/components/app-layout"
 import { SetupPage } from "@/pages/setup"
+import { Shell } from "@/components/window-controls"
 
 function App() {
   if (!isSupabaseConfigured) {
     return (
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-        <SetupPage />
+        <Shell>
+          <SetupPage />
+        </Shell>
         <Toaster />
       </ThemeProvider>
     )
@@ -34,7 +37,7 @@ function App() {
       <BrowserRouter>
         <AuthProvider>
           <Routes>
-            <Route path="/login" element={<SignInPage />} />
+            <Route path="/login" element={<Shell><SignInPage /></Shell>} />
             <Route element={<AuthGuard />}>
               <Route element={<AppLayout />}>
                 <Route path="/" element={<DashboardPage />} />
