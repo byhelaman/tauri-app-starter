@@ -19,14 +19,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import type { Task } from "./columns"
+import type { Order } from "./columns"
 
 interface DataTableRowActionsProps {
-  task: Task
-  onDelete: (id: string) => void
+  order: Order
+  onDelete: (code: string) => void
 }
 
-export function DataTableRowActions({ task, onDelete }: DataTableRowActionsProps) {
+export function DataTableRowActions({ order, onDelete }: DataTableRowActionsProps) {
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   return (
@@ -39,14 +39,13 @@ export function DataTableRowActions({ task, onDelete }: DataTableRowActionsProps
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          {/* <DropdownMenuLabel>Actions</DropdownMenuLabel> */}
           <DropdownMenuItem onClick={() => {
-            navigator.clipboard.writeText(task.id)
-            toast.success("Task ID copied")
+            navigator.clipboard.writeText(order.code)
+            toast.success("Order code copied")
           }}>
-            Copy ID
+            Copy code
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => toast.info("Task editing coming soon")}>Edit task</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => toast.info("Order editing coming soon")}>Edit order</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive"
             onClick={() => setConfirmOpen(true)}
@@ -59,17 +58,17 @@ export function DataTableRowActions({ task, onDelete }: DataTableRowActionsProps
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete task?</AlertDialogTitle>
+            <AlertDialogTitle>Delete order?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete <span className="font-medium text-foreground">{task.id}</span>. This action cannot be undone.
+              This will permanently delete <span className="font-medium text-foreground">{order.code}</span>. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction variant="destructive"
               onClick={() => {
-                onDelete(task.id)
-                toast.success("Task deleted")
+                onDelete(order.code)
+                toast.success("Order deleted")
               }}
             >
               Delete

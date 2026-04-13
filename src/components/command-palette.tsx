@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { LayoutDashboard, Users, BarChart2, FolderKanban, Settings, Bell, User, LogOut, KeyboardIcon, ShieldIcon, ListTodo } from "lucide-react"
+import { LayoutDashboard, Users, BarChart2, FolderKanban, Settings, Bell, User, LogOut, KeyboardIcon, ShieldIcon, ShoppingCart } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
@@ -77,9 +77,9 @@ export function CommandPalette({ onOpenProfile, onOpenSettings, onOpenNotificati
                 <BarChart2 />
                 Analytics
               </CommandItem>
-              <CommandItem onSelect={() => run(() => navigate("/tasks"))}>
-                <ListTodo />
-                Tasks
+              <CommandItem onSelect={() => run(() => navigate("/orders"))}>
+                <ShoppingCart />
+                Orders
               </CommandItem>
             </CommandGroup>
 

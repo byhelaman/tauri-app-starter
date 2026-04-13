@@ -8,38 +8,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
 import { DataTableColumnHeader } from "./data-table-column-header"
 import { DataTableRowActions } from "./data-table-row-actions"
 
-export type Status = "backlog" | "todo" | "in progress" | "done" | "cancelled"
-export type Priority = "low" | "medium" | "high"
+export type Status = "pending" | "processing" | "shipped" | "delivered" | "cancelled"
 
-export interface Task {
-  id: string
-  title: string
-  status: Status
-  priority: Priority
-  assignee: string
+export interface Order {
   date: string
+  customer: string
+  product: string
+  category: string
   time: string
+  code: string
+  status: Status
+  channel: string
+  quantity: number
   amount: number
 }
 
-const STATUSES: Status[] = ["backlog", "todo", "in progress", "done", "cancelled"]
+const STATUSES: Status[] = ["pending", "processing", "shipped", "delivered", "cancelled"]
 
-const PRIORITY_VARIANT: Record<Priority, "default" | "secondary" | "outline" | "destructive"> = {
-  low: "outline",
-  medium: "secondary",
-  high: "destructive",
-}
-
-const multiValueFilter: FilterFn<Task> = (row, columnId, filterValue) => {
+const multiValueFilter: FilterFn<Order> = (row, columnId, filterValue) => {
   if (!Array.isArray(filterValue) || filterValue.length === 0) return true
   return filterValue.includes(row.getValue(columnId))
 }
 
-export function createColumns(onDelete: (id: string) => void, onStatusChange: (id: string, status: Status) => void): ColumnDef<Task>[] {
+export function createColumns(
+  onDelete: (code: string) => void,
+  onStatusChange: (code: string, status: Status) => void,
+): ColumnDef<Order>[] {
   return [
     {
       id: "select",
@@ -64,8 +61,24 @@ export function createColumns(onDelete: (id: string) => void, onStatusChange: (i
       accessorKey: "date",
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Date" className="justify-center" />,
       cell: ({ row }) => (
-        <div className="text-center text-muted-foreground">{row.getValue("date")}</div>
+        <div className="text-center font-mono text-muted-foreground">{row.getValue("date")}</div>
       ),
+    },
+    {
+      accessorKey: "customer",
+      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Customer" />,
+      cell: ({ row }) => <span className="min-w-32">{row.getValue("customer")}</span>,
+    },
+    {
+      accessorKey: "product",
+      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Product" />,
+      cell: ({ row }) => <span>{row.getValue("product")}</span>,
+    },
+    {
+      accessorKey: "category",
+      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Category" />,
+      filterFn: multiValueFilter,
+      cell: ({ row }) => <span>{row.getValue("category")}</span>,
     },
     {
       accessorKey: "time",
@@ -75,25 +88,11 @@ export function createColumns(onDelete: (id: string) => void, onStatusChange: (i
       ),
     },
     {
-      accessorKey: "id",
-      header: () => <div className="text-center">ID</div>,
+      accessorKey: "code",
+      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Code" className="justify-center" />,
       cell: ({ row }) => (
-        <div className="text-center font-mono text-muted-foreground">{row.getValue("id")}</div>
+        <div className="text-center font-mono text-muted-foreground">{row.getValue("code")}</div>
       ),
-    },
-    {
-      accessorKey: "title",
-      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Title" />,
-      cell: ({ row }) => <span>{row.getValue("title")}</span>,
-    },
-    {
-      accessorKey: "priority",
-      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Priority" />,
-      filterFn: multiValueFilter,
-      cell: ({ row }) => {
-        const priority = row.getValue("priority") as Priority
-        return <Badge variant={PRIORITY_VARIANT[priority]} className="capitalize">{priority}</Badge>
-      },
     },
     {
       accessorKey: "status",
@@ -102,7 +101,7 @@ export function createColumns(onDelete: (id: string) => void, onStatusChange: (i
       cell: ({ row }) => (
         <Select
           value={row.getValue("status") as string}
-          onValueChange={(value) => onStatusChange(row.original.id, value as Status)}
+          onValueChange={(value) => onStatusChange(row.original.code, value as Status)}
         >
           <SelectTrigger className="w-32 capitalize">
             <SelectValue />
@@ -118,24 +117,32 @@ export function createColumns(onDelete: (id: string) => void, onStatusChange: (i
       ),
     },
     {
-      accessorKey: "assignee",
-      header: "Assignee",
-      cell: ({ row }) => <span className="capitalize">{row.getValue("assignee")}</span>,
+      accessorKey: "channel",
+      header: "Channel",
+      filterFn: multiValueFilter,
+      cell: ({ row }) => <span>{row.getValue("channel")}</span>,
+    },
+    {
+      accessorKey: "quantity",
+      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Qty" className="justify-end" />,
+      cell: ({ row }) => (
+        <div className="text-right font-mono">{row.getValue("quantity")}</div>
+      ),
     },
     {
       accessorKey: "amount",
-      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Amount" />,
+      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Amount" className="justify-end" />,
       cell: ({ row }) => {
         const value = row.getValue("amount") as number
         const formatted = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
-        return <span className="font-mono">{formatted}</span>
+        return <div className="text-right font-mono">{formatted}</div>
       },
     },
     {
       id: "actions",
       enableHiding: false,
       cell: ({ row }) => (
-        <DataTableRowActions task={row.original} onDelete={onDelete} />
+        <DataTableRowActions order={row.original} onDelete={onDelete} />
       ),
     },
   ]

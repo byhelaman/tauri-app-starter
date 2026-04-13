@@ -17,7 +17,7 @@ const NAV_ITEMS = [
   { label: "Projects", to: "/projects" },
   { label: "Team", to: "/team" },
   { label: "Analytics", to: "/analytics" },
-  { label: "Tasks", to: "/tasks" },
+  { label: "Orders", to: "/orders" },
 ]
 
 type ModalType = "profile" | "settings" | "notifications" | "system" | "shortcuts" | null
