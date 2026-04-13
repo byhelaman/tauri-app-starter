@@ -21,16 +21,18 @@ export function DataTableColumnHeader<TData, TValue>({
   }
 
   const sorted = column.getIsSorted()
-  const sortIndex = column.getSortIndex()
 
   function handleSort() {
     table.setSorting((prev) => {
       const existing = prev.find((s) => s.id === column.id)
       const others = prev.filter((s) => s.id !== column.id)
-      if (existing) {
-        return [{ ...existing, desc: !existing.desc }, ...others]
+      if (!existing) {
+        return [{ id: column.id, desc: false }, ...others]
       }
-      return [{ id: column.id, desc: false }, ...others]
+      if (!existing.desc) {
+        return [{ id: column.id, desc: true }, ...others]
+      }
+      return others
     })
   }
 
