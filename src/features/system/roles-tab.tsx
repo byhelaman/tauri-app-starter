@@ -411,7 +411,7 @@ export function RolesTab({ roles, matrix, onMatrixChange, onAddRole, onEditRole,
 
             <CollapsibleContent>
               <div className="border-t bg-muted/20 px-4 py-3 flex flex-col gap-3">
-                <p className="text-sm font-medium text-muted-foreground">Permissions</p>
+                <p className="text-sm text-muted-foreground">Permissions</p>
                 <div className="grid grid-cols-2 gap-4 pb-2">
                   {PERMISSIONS.map((perm) => {
                     const isLocked = role.name === "owner"
