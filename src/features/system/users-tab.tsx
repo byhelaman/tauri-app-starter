@@ -54,6 +54,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
 import type { RoleDefinition, SystemUser } from "./types"
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
@@ -383,7 +390,9 @@ export function UsersTab({ users, roles, onUpdateRole, onUpdateEmail, onRemoveUs
 
       <div className="divide-y text-sm">
         {filtered.map((user) => (
-          <div key={user.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-accent/50 transition-colors">
+          <ContextMenu key={user.id}>
+            <ContextMenuTrigger asChild>
+          <div className="flex items-center gap-3 px-3 py-2.5 hover:bg-accent/50 transition-colors">
             <div className="flex-1 min-w-0">
               <p className="font-medium truncate">{user.name}</p>
               <p className="mt-0.5 text-sm text-muted-foreground truncate">{user.email}</p>
@@ -427,6 +436,16 @@ export function UsersTab({ users, roles, onUpdateRole, onUpdateEmail, onRemoveUs
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+            </ContextMenuTrigger>
+            <ContextMenuContent>
+              <ContextMenuItem onSelect={() => setProfileUser(user)}>View profile</ContextMenuItem>
+              <ContextMenuItem onSelect={() => setResetUser(user)}>Reset password</ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem variant="destructive" onSelect={() => setRemoveUser(user)}>
+                Remove user
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
         ))}
         {filtered.length === 0 && (
           <p className="px-3 py-6 text-center text-sm text-muted-foreground">No users found.</p>

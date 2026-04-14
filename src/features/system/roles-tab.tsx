@@ -33,6 +33,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
+import {
   Field,
   FieldLabel,
   FieldGroup,
@@ -357,6 +364,8 @@ export function RolesTab({ roles, matrix, onMatrixChange, onAddRole, onEditRole,
             open={openRole === role.name}
             onOpenChange={(open) => setOpenRole(open ? role.name : null)}
           >
+            <ContextMenu>
+              <ContextMenuTrigger asChild>
             <CollapsibleTrigger asChild>
               <div className={cn(
                 "flex items-center justify-between px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors select-none",
@@ -408,6 +417,23 @@ export function RolesTab({ roles, matrix, onMatrixChange, onAddRole, onEditRole,
                 </div>
               </div>
             </CollapsibleTrigger>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem onSelect={() => navigator.clipboard.writeText(role.name)}>
+                  Copy name
+                </ContextMenuItem>
+                <ContextMenuItem onSelect={() => setEditTarget(role)}>Edit role</ContextMenuItem>
+                <ContextMenuItem onSelect={() => handleDuplicateRole(role)}>Duplicate role</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem
+                  variant="destructive"
+                  disabled={role.builtin}
+                  onSelect={() => setRemoveTarget(role)}
+                >
+                  Remove role
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
 
             <CollapsibleContent>
               <div className="border-t bg-muted/20 px-4 py-3 flex flex-col gap-3">
