@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { LayoutDashboard, Users, BarChart2, FolderKanban, Settings, Bell, User, LogOut, KeyboardIcon, ShieldIcon, ShoppingCart } from "lucide-react"
+import { LayoutDashboard, Users, BarChart2, FolderKanban, Settings, Bell, User, LogOut, KeyboardIcon, ShieldIcon, ShoppingCart, SearchIcon } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
@@ -49,8 +49,9 @@ export function CommandPalette({ onOpenProfile, onOpenSettings, onOpenNotificati
       <Button
         variant="outline"
         onClick={() => setOpen(true)}
-        className="w-60 lg:w-80 justify-between px-3 text-muted-foreground font-normal text-sm"
+        className="w-60 lg:w-80 text-muted-foreground font-normal text-sm justify-start"
       >
+        <SearchIcon />
         <span>Search...</span>
       </Button>
 
