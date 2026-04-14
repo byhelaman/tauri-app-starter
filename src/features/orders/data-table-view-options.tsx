@@ -14,6 +14,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
@@ -21,25 +24,51 @@ interface DataTableViewOptionsProps<TData> {
   table: Table<TData>
 }
 
-function exportToCsv<TData>(table: Table<TData>) {
-  const visibleColumns = table.getVisibleFlatColumns().filter((col) => col.id !== "select" && col.id !== "actions")
-  const headers = visibleColumns.map((col) => col.id)
-  const rows = table.getFilteredRowModel().rows.map((row) =>
-    visibleColumns.map((col) => {
-      const value = row.getValue(col.id)
-      const str = String(value ?? "")
-      return str.includes(",") || str.includes('"') ? `"${str.replace(/"/g, '""')}"` : str
-    })
-  )
-  const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n")
-  const blob = new Blob([csv], { type: "text/csv" })
+function downloadFile(content: string, filename: string, mime: string) {
+  const blob = new Blob([content], { type: mime })
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
-  a.download = "table-export.csv"
+  a.download = filename
   a.click()
   URL.revokeObjectURL(url)
-  toast.success(`Exported ${rows.length} rows`)
+}
+
+function getExportData<TData>(table: Table<TData>) {
+  const visibleColumns = table.getVisibleFlatColumns().filter((col) => col.id !== "select" && col.id !== "actions")
+  const headers = visibleColumns.map((col) => col.id)
+  const rows = table.getFilteredRowModel().rows
+  return { visibleColumns, headers, rows }
+}
+
+function exportToCsv<TData>(table: Table<TData>) {
+  const { visibleColumns, headers, rows } = getExportData(table)
+  const body = rows.map((row) =>
+    visibleColumns.map((col) => {
+      const str = String(row.getValue(col.id) ?? "")
+      return str.includes(",") || str.includes('"') || str.includes("\n") ? `"${str.replace(/"/g, '""')}"` : str
+    }).join(",")
+  )
+  downloadFile([headers.join(","), ...body].join("\n"), "table-export.csv", "text/csv")
+  toast.success(`Exported ${rows.length} rows as CSV`)
+}
+
+function exportToTsv<TData>(table: Table<TData>) {
+  const { visibleColumns, headers, rows } = getExportData(table)
+  const body = rows.map((row) =>
+    visibleColumns.map((col) => String(row.getValue(col.id) ?? "").replace(/\t/g, " ")).join("\t")
+  )
+  downloadFile([headers.join("\t"), ...body].join("\n"), "table-export.tsv", "text/tab-separated-values")
+  toast.success(`Exported ${rows.length} rows as TSV`)
+}
+
+function exportToJson<TData>(table: Table<TData>) {
+  const { visibleColumns, rows } = getExportData(table)
+  const data = rows.map((row) =>
+    Object.fromEntries(visibleColumns.map((col) => [col.id, row.getValue(col.id)]))
+  )
+  downloadFile(JSON.stringify(data, null, 2), "table-export.json", "application/json")
+  toast.success(`Exported ${rows.length} rows as JSON`)
 }
 
 function copyToClipboard<TData>(table: Table<TData>) {
@@ -89,14 +118,21 @@ export function DataTableViewOptions<TData>({
             <ChevronDownIcon />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuItem onClick={() => exportToCsv(table)}>
-            <DownloadIcon />
-            Export CSV
-          </DropdownMenuItem>
+        <DropdownMenuContent align="end" className="w-32">
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <DownloadIcon />
+              Export
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem onClick={() => exportToCsv(table)}>CSV (.csv)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportToTsv(table)}>TSV (.tsv)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportToJson(table)}>JSON (.json)</DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
           <DropdownMenuItem onClick={() => copyToClipboard(table)}>
             <ClipboardCopyIcon />
-            Copy to clipboard
+            Copy
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => window.print()}>
             <PrinterIcon />
