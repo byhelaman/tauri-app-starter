@@ -18,6 +18,10 @@ import { createColumns, type Order, type Status } from "@/features/orders/column
 import { DataTable } from "@/features/orders/data-table"
 import type { FacetedFilterOption } from "@/features/orders/data-table-types"
 import { ImportDialog } from "@/features/orders/import-dialog"
+import {
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from "@/components/ui/context-menu"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import {
@@ -76,14 +80,24 @@ const CHANNEL_FILTER_OPTIONS: FacetedFilterOption[] = [
 export function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS)
   const [bulkDeleteTarget, setBulkDeleteTarget] = useState<{ selected: Order[], clearSelection: () => void } | null>(null)
+  const [rowDeleteTarget, setRowDeleteTarget] = useState<Order | null>(null)
   const [importOpen, setImportOpen] = useState(false)
 
-  const handleDelete = useCallback((code: string) => {
-    setOrders((prev) => prev.filter((o) => o.code !== code))
+  const handleDeleteRequest = useCallback((order: Order) => {
+    setRowDeleteTarget(order)
   }, [])
 
   const handleStatusChange = useCallback((code: string, status: Status) => {
     setOrders((prev) => prev.map((o) => o.code === code ? { ...o, status } : o))
+  }, [])
+
+  const copyCode = useCallback((order: Order) => {
+    navigator.clipboard.writeText(order.code)
+    toast.success("Order code copied")
+  }, [])
+
+  const handleDelete = useCallback((code: string) => {
+    setOrders((prev) => prev.filter((o) => o.code !== code))
   }, [])
 
   const columns = useMemo(() => createColumns(handleDelete, handleStatusChange), [handleDelete, handleStatusChange])
@@ -110,6 +124,16 @@ export function OrdersPage() {
           { columnId: "status", title: "Status", options: STATUS_FILTER_OPTIONS },
           { columnId: "channel", title: "Channel", options: CHANNEL_FILTER_OPTIONS },
         ]}
+        rowContextMenu={(order) => (
+          <>
+            <ContextMenuItem onSelect={() => copyCode(order)}>Copy code</ContextMenuItem>
+            <ContextMenuItem onSelect={() => toast.info("Order editing coming soon")}>Edit order</ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem variant="destructive" onSelect={() => handleDeleteRequest(order)}>
+              Delete
+            </ContextMenuItem>
+          </>
+        )}
         bulkActions={(selected, clearSelection) => (
           <>
             <Button
@@ -134,6 +158,34 @@ export function OrdersPage() {
           </>
         )}
       />
+
+      <AlertDialog
+        open={!!rowDeleteTarget}
+        onOpenChange={(open) => { if (!open) setRowDeleteTarget(null) }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <span className="font-medium text-foreground">{rowDeleteTarget?.code}</span>. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (!rowDeleteTarget) return
+                setOrders((prev) => prev.filter((o) => o.code !== rowDeleteTarget.code))
+                toast.success("Order deleted")
+                setRowDeleteTarget(null)
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={!!bulkDeleteTarget}

@@ -1,5 +1,5 @@
 import type { Table } from "@tanstack/react-table"
-import { ArrowUpDown, SearchIcon, X } from "lucide-react"
+import { SearchIcon, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   InputGroup,
@@ -38,9 +38,9 @@ export function DataTableToolbar<TData>({
             value={(table.getColumn(filterColumn)?.getFilterValue() as string) ?? ""}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => table.getColumn(filterColumn)?.setFilterValue(e.target.value)}
           />
-          {/* {isFiltered && (
+          {isFiltered && (
             <InputGroupAddon align="inline-end">{table.getFilteredRowModel().rows.length} results</InputGroupAddon>
-          )} */}
+          )}
         </InputGroup>
       )}
 
