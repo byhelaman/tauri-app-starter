@@ -65,10 +65,6 @@ export function OrdersPage() {
     setOrders((prev) => prev.map((o) => o.code === code ? { ...o, status } : o))
   }, [])
 
-  const handleProductChange = useCallback((code: string, product: string) => {
-    setOrders((prev) => prev.map((o) => o.code === code ? { ...o, product } : o))
-  }, [])
-
   const copyCode = useCallback((order: Order) => {
     navigator.clipboard.writeText(order.code)
     toast.success("Order code copied")
@@ -78,7 +74,7 @@ export function OrdersPage() {
     setOrders((prev) => prev.filter((o) => o.code !== code))
   }, [])
 
-  const columns = useMemo(() => createColumns(handleDelete, handleStatusChange, handleProductChange), [handleDelete, handleStatusChange, handleProductChange])
+  const columns = useMemo(() => createColumns(handleDelete, handleStatusChange), [handleDelete, handleStatusChange])
 
   return (
     <main className="h-full overflow-hidden flex flex-col p-6 gap-6">
@@ -126,6 +122,7 @@ export function OrdersPage() {
             <BulkCopySettings />
           </BulkCopyProvider>
         )}
+        defaultPageSize={25}
       />
 
       <AlertDialog

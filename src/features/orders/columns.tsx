@@ -1,4 +1,5 @@
 import type { ColumnDef, FilterFn } from "@tanstack/react-table"
+import { cn } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import {
@@ -29,6 +30,12 @@ export interface Order {
 
 const STATUSES: Status[] = ["pending", "processing", "shipped", "delivered", "cancelled"]
 
+const cellInputClass = "border-transparent bg-transparent shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30 w-fit"
+
+function ReadOnlyCell({ value, className }: { value: string | number; className?: string }) {
+  return <Input readOnly defaultValue={value} className={cn(cellInputClass, className)} />
+}
+
 const multiValueFilter: FilterFn<Order> = (row, columnId, filterValue) => {
   if (!Array.isArray(filterValue) || filterValue.length === 0) return true
   return filterValue.includes(row.getValue(columnId))
@@ -37,7 +44,6 @@ const multiValueFilter: FilterFn<Order> = (row, columnId, filterValue) => {
 export function createColumns(
   onDelete: (code: string) => void,
   onStatusChange: (code: string, status: Status) => void,
-  onProductChange: (code: string, product: string) => void,
 ): ColumnDef<Order>[] {
   return [
     {
@@ -62,48 +68,33 @@ export function createColumns(
     {
       accessorKey: "date",
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Date" className="justify-center" />,
-      cell: ({ row }) => (
-        <div className="text-center font-mono text-muted-foreground">{row.getValue("date")}</div>
-      ),
+      cell: ({ row }) => <ReadOnlyCell value={row.getValue("date") as string} className="font-mono text-muted-foreground w-30" />,
     },
     {
       accessorKey: "customer",
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Customer" />,
-      cell: ({ row }) => <span className="min-w-32">{row.getValue("customer")}</span>,
+      cell: ({ row }) => <ReadOnlyCell value={row.getValue("customer") as string} className="w-40" />,
     },
     {
       accessorKey: "product",
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Product" />,
-      cell: ({ row }) => (
-        <Input
-          defaultValue={row.getValue("product") as string}
-          onBlur={(e) => {
-            const next = e.target.value
-            if (next !== row.original.product) onProductChange(row.original.code, next)
-          }}
-          className="border-transparent bg-transparent shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30"
-        />
-      ),
+      cell: ({ row }) => <ReadOnlyCell value={row.getValue("product") as string} />,
     },
     {
       accessorKey: "category",
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Category" />,
       filterFn: multiValueFilter,
-      cell: ({ row }) => <span>{row.getValue("category")}</span>,
+      cell: ({ row }) => <ReadOnlyCell value={row.getValue("category") as string} className="w-30" />,
     },
     {
       accessorKey: "time",
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Time" className="justify-center" />,
-      cell: ({ row }) => (
-        <div className="text-center font-mono">{row.getValue("time")}</div>
-      ),
+      cell: ({ row }) => <ReadOnlyCell value={row.getValue("time") as string} className="font-mono w-35" />,
     },
     {
       accessorKey: "code",
-      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Code" className="justify-center" />,
-      cell: ({ row }) => (
-        <div className="text-center font-mono text-muted-foreground">{row.getValue("code")}</div>
-      ),
+      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Code" />,
+      cell: ({ row }) => <ReadOnlyCell value={row.getValue("code") as string} className="font-mono text-muted-foreground w-30" />,
     },
     {
       accessorKey: "status",
@@ -131,14 +122,12 @@ export function createColumns(
       accessorKey: "channel",
       header: "Channel",
       filterFn: multiValueFilter,
-      cell: ({ row }) => <span>{row.getValue("channel")}</span>,
+      cell: ({ row }) => <ReadOnlyCell value={row.getValue("channel") as string} className="w-30" />,
     },
     {
       accessorKey: "quantity",
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Qty" className="justify-end" />,
-      cell: ({ row }) => (
-        <div className="text-right font-mono">{row.getValue("quantity")}</div>
-      ),
+      cell: ({ row }) => <ReadOnlyCell value={row.getValue("quantity") as number} className="text-right font-mono w-15" />,
     },
     {
       accessorKey: "amount",
@@ -146,7 +135,7 @@ export function createColumns(
       cell: ({ row }) => {
         const value = row.getValue("amount") as number
         const formatted = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
-        return <div className="text-right font-mono">{formatted}</div>
+        return <ReadOnlyCell value={formatted} className="text-right font-mono" />
       },
     },
     {

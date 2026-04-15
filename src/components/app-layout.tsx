@@ -32,6 +32,7 @@ export interface AppSettings {
   showOnlineStatus: boolean
   usageAnalytics: boolean
   autoUpdate: boolean
+  askExportLocation: boolean
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -44,13 +45,30 @@ const DEFAULT_SETTINGS: AppSettings = {
   showOnlineStatus: true,
   usageAnalytics: true,
   autoUpdate: true,
+  askExportLocation: true,
+}
+
+const SETTINGS_STORAGE_KEY = "app-settings"
+
+function loadSettings(): AppSettings {
+  try {
+    const raw = localStorage.getItem(SETTINGS_STORAGE_KEY)
+    if (!raw) return DEFAULT_SETTINGS
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) }
+  } catch {
+    return DEFAULT_SETTINGS
+  }
 }
 
 export function AppLayout() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const [modal, setModal] = useState<ModalType>(null)
-  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
+  const [settings, setSettings] = useState<AppSettings>(loadSettings)
+
+  useEffect(() => {
+    try { localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings)) } catch { /* noop */ }
+  }, [settings])
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {

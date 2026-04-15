@@ -38,6 +38,8 @@ interface DataTableProps<TData, TValue> {
   className?: string
   bulkActions?: (selectedRows: TData[], clearSelection: () => void) => ReactNode
   rowContextMenu?: (row: TData) => ReactNode
+  defaultPageSize?: number
+  pageSizeOptions?: number[]
 }
 
 export function DataTable<TData, TValue>({
@@ -49,6 +51,8 @@ export function DataTable<TData, TValue>({
   className,
   bulkActions,
   rowContextMenu,
+  defaultPageSize = 10,
+  pageSizeOptions,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -73,7 +77,7 @@ export function DataTable<TData, TValue>({
     getFacetedUniqueValues: getFacetedUniqueValues(),
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
-    initialState: { pagination: { pageSize: 10 } },
+    initialState: { pagination: { pageSize: defaultPageSize } },
     state: { sorting, columnFilters, columnVisibility, rowSelection },
   })
 
@@ -132,7 +136,7 @@ export function DataTable<TData, TValue>({
         </Table>
       </div>
 
-      <DataTablePagination table={table} />
+      <DataTablePagination table={table} pageSizeOptions={pageSizeOptions} />
 
       {bulkActions && table.getFilteredSelectedRowModel().rows.length > 0 && (
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10">
