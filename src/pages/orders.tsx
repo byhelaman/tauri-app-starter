@@ -3,7 +3,6 @@ import { toast } from "sonner"
 import {
   CheckCircle2,
   Clock,
-  Copy,
   Globe,
   Handshake,
   LoaderCircle,
@@ -18,6 +17,7 @@ import { createColumns, type Order, type Status } from "@/features/orders/column
 import { DataTable } from "@/features/orders/data-table"
 import type { FacetedFilterOption } from "@/features/orders/data-table-types"
 import { ImportDialog } from "@/features/orders/import-dialog"
+import { BulkCopyProvider, BulkCopyButton, BulkCopySettings } from "@/features/orders/bulk-copy-actions"
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -91,6 +91,10 @@ export function OrdersPage() {
     setOrders((prev) => prev.map((o) => o.code === code ? { ...o, status } : o))
   }, [])
 
+  const handleProductChange = useCallback((code: string, product: string) => {
+    setOrders((prev) => prev.map((o) => o.code === code ? { ...o, product } : o))
+  }, [])
+
   const copyCode = useCallback((order: Order) => {
     navigator.clipboard.writeText(order.code)
     toast.success("Order code copied")
@@ -100,7 +104,7 @@ export function OrdersPage() {
     setOrders((prev) => prev.filter((o) => o.code !== code))
   }, [])
 
-  const columns = useMemo(() => createColumns(handleDelete, handleStatusChange), [handleDelete, handleStatusChange])
+  const columns = useMemo(() => createColumns(handleDelete, handleStatusChange, handleProductChange), [handleDelete, handleStatusChange, handleProductChange])
 
   return (
     <main className="h-full overflow-hidden flex flex-col p-6 gap-6">
@@ -135,27 +139,18 @@ export function OrdersPage() {
           </>
         )}
         bulkActions={(selected, clearSelection) => (
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                navigator.clipboard.writeText(selected.map((o) => o.code).join(", "))
-                toast.success(`${selected.length} codes copied`)
-              }}
-            >
-              <Copy data-icon="inline-start" />
-              Copy codes
-            </Button>
+          <BulkCopyProvider selected={selected}>
+            <BulkCopyButton />
             <Button
               variant="destructive"
-              size="sm"
+              size="icon-sm"
+              aria-label="Delete"
               onClick={() => setBulkDeleteTarget({ selected, clearSelection })}
             >
-              <Trash2Icon data-icon="inline-start" />
-              Delete
+              <Trash2Icon />
             </Button>
-          </>
+            <BulkCopySettings />
+          </BulkCopyProvider>
         )}
       />
 

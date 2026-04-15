@@ -1,5 +1,7 @@
 import { useState } from "react"
+import { CalendarDaysIcon, PackageCheckIcon, PackageIcon, TruckIcon, XCircleIcon, DollarSignIcon } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/page-header"
 import {
@@ -9,6 +11,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item"
 
 function ThrowError(): never {
   throw new Error(
@@ -29,11 +40,19 @@ function ThrowError(): never {
 }
 
 const ACTIVITY = [
-  { user: "alex@company.com", action: "pushed to", target: "main", time: "2m ago" },
-  { user: "sara@company.com", action: "opened PR in", target: "mobile-app", time: "18m ago" },
-  { user: "john@company.com", action: "closed issue in", target: "api", time: "1h ago" },
-  { user: "alex@company.com", action: "commented on", target: "design-system", time: "3h ago" },
-  { user: "sara@company.com", action: "merged PR in", target: "website", time: "5h ago" },
+  { user: "Alex Rivera", action: "created order", target: "ORD-X1G03", time: "2m ago", icon: PackageIcon },
+  { user: "Sara Chen", action: "marked shipped", target: "ORD-U6D90", time: "18m ago", icon: TruckIcon },
+  { user: "John Doe", action: "delivered", target: "ORD-T0C34", time: "1h ago", icon: PackageCheckIcon },
+  { user: "Alex Rivera", action: "received payment for", target: "ORD-P7Y44", time: "3h ago", icon: DollarSignIcon },
+  { user: "Sara Chen", action: "cancelled", target: "ORD-Q3Z81", time: "5h ago", icon: XCircleIcon },
+]
+
+const UPCOMING = [
+  { title: "ORD-G8P17 ship date", description: "Hooli · Team Plan License", when: "Today, 3:00 PM", tag: "Shipment" },
+  { title: "ORD-M2V58 follow-up", description: "Massive Dynamic · Enterprise Plan", when: "Tomorrow", tag: "Follow-up" },
+  { title: "ORD-J0S72 payment due", description: "Oscorp · API Rate Tier", when: "Thu, 10:00 AM", tag: "Payment" },
+  { title: "ORD-V9E12 kickoff", description: "Vandelay · Data Migration", when: "Apr 22", tag: "Service" },
+  { title: "ORD-O1X96 audit call", description: "Black Mesa · Security Review", when: "Apr 28", tag: "Service" },
 ]
 
 export function DashboardPage() {
@@ -60,27 +79,66 @@ export function DashboardPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Activity</CardTitle>
-          <CardDescription>Latest team actions</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {ACTIVITY.map((a, i) => (
-            <div key={i} className="flex gap-3 text-sm">
-              <div className="mt-1.5 size-1.5 rounded-full bg-muted-foreground shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="leading-snug">
-                  <span className="font-medium">{a.user.split("@")[0]}</span>
-                  <span className="text-muted-foreground"> {a.action} </span>
-                  <span className="font-medium">{a.target}</span>
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">{a.time}</p>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Activity</CardTitle>
+            <CardDescription>Latest team actions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ItemGroup>
+              {ACTIVITY.map((a, i) => {
+                const Icon = a.icon
+                return (
+                  <Item key={i} size="sm">
+                    <ItemMedia>
+                      <div className="flex size-8 items-center justify-center rounded-md bg-muted">
+                        <Icon className="size-4 text-muted-foreground" />
+                      </div>
+                    </ItemMedia>
+                    <ItemContent>
+                      <ItemTitle className="text-sm font-normal">
+                        <span className="font-medium">{a.user}</span>
+                        <span className="text-muted-foreground"> {a.action} </span>
+                        <span className="font-medium">{a.target}</span>
+                      </ItemTitle>
+                      <ItemDescription>{a.time}</ItemDescription>
+                    </ItemContent>
+                  </Item>
+                )
+              })}
+            </ItemGroup>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Upcoming</CardTitle>
+            <CardDescription>Scheduled events and deadlines</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ItemGroup>
+              {UPCOMING.map((u, i) => (
+                <Item key={i} size="sm">
+                  <ItemMedia>
+                    <div className="flex size-8 items-center justify-center rounded-md bg-muted">
+                      <CalendarDaysIcon className="size-4 text-muted-foreground" />
+                    </div>
+                  </ItemMedia>
+                  <ItemContent>
+                    <ItemTitle>{u.title}</ItemTitle>
+                    <ItemDescription>{u.description}</ItemDescription>
+                  </ItemContent>
+                  <ItemActions className="flex-col items-end gap-1">
+                    <Badge variant="outline">{u.tag}</Badge>
+                    <span className="text-xs text-muted-foreground">{u.when}</span>
+                  </ItemActions>
+                </Item>
+              ))}
+            </ItemGroup>
+          </CardContent>
+        </Card>
+      </div>
     </main>
   )
 }

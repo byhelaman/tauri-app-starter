@@ -4,6 +4,10 @@ import "./index.css";
 
 import App from "./App";
 
+if (import.meta.env.PROD) {
+  window.addEventListener("contextmenu", (e) => e.preventDefault());
+}
+
 createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>
     <App />

@@ -445,12 +445,13 @@ export function RolesTab({ roles, matrix, onMatrixChange, onAddRole, onEditRole,
                     return (
                       <Field key={perm.key} orientation="horizontal">
                         <Checkbox
+                          id={`perm-${role.name}-${perm.key}`}
                           checked={checked}
                           disabled={isLocked}
                           onCheckedChange={() => togglePermission(role.name, perm.key)}
                         />
                         <FieldContent>
-                          <FieldLabel className="text-sm">{perm.label}</FieldLabel>
+                          <FieldLabel htmlFor={`perm-${role.name}-${perm.key}`} className="text-sm">{perm.label}</FieldLabel>
                           <FieldDescription>{perm.description}</FieldDescription>
                         </FieldContent>
                       </Field>

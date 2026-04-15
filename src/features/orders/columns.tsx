@@ -1,5 +1,6 @@
 import type { ColumnDef, FilterFn } from "@tanstack/react-table"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
@@ -36,6 +37,7 @@ const multiValueFilter: FilterFn<Order> = (row, columnId, filterValue) => {
 export function createColumns(
   onDelete: (code: string) => void,
   onStatusChange: (code: string, status: Status) => void,
+  onProductChange: (code: string, product: string) => void,
 ): ColumnDef<Order>[] {
   return [
     {
@@ -72,7 +74,16 @@ export function createColumns(
     {
       accessorKey: "product",
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Product" />,
-      cell: ({ row }) => <span>{row.getValue("product")}</span>,
+      cell: ({ row }) => (
+        <Input
+          defaultValue={row.getValue("product") as string}
+          onBlur={(e) => {
+            const next = e.target.value
+            if (next !== row.original.product) onProductChange(row.original.code, next)
+          }}
+          className="border-transparent bg-transparent shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30"
+        />
+      ),
     },
     {
       accessorKey: "category",

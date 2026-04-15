@@ -1,5 +1,5 @@
-import { type ReactNode } from "react"
-import { Minus, X } from "lucide-react"
+import { useEffect, useState, type ReactNode } from "react"
+import { Minus, X, Maximize, Minimize } from "lucide-react"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -45,6 +45,15 @@ export function Shell({ children }: ShellProps) {
 
 function WindowControls() {
   const appWindow = getCurrentWindow()
+  const [maximized, setMaximized] = useState(false)
+
+  useEffect(() => {
+    appWindow.isMaximized().then(setMaximized)
+    const unlisten = appWindow.onResized(() => {
+      appWindow.isMaximized().then(setMaximized)
+    })
+    return () => { unlisten.then((fn) => fn()) }
+  }, [appWindow])
 
   return (
     <div className="flex items-center gap-0.5 ml-2 shrink-0">
@@ -52,6 +61,7 @@ function WindowControls() {
         variant="ghost"
         size="icon"
         aria-label="Minimize"
+        className="text-muted-foreground"
         onClick={() => appWindow.minimize()}
       >
         <Minus />
@@ -59,8 +69,17 @@ function WindowControls() {
       <Button
         variant="ghost"
         size="icon"
+        aria-label={maximized ? "Restore" : "Maximize"}
+        className="text-muted-foreground"
+        onClick={() => appWindow.toggleMaximize()}
+      >
+        {maximized ? <Minimize /> : <Maximize />}
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
         aria-label="Close"
-        className="hover:bg-destructive/10 hover:text-destructive"
+        className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
         onClick={() => appWindow.close()}
       >
         <X />
