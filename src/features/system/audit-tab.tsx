@@ -14,7 +14,8 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@/components/ui/input-group"
-import { AUDIT_ACTION_META, AUDIT_LOG } from "./data"
+import { AUDIT_ACTION_META } from "./data"
+import { AUDIT_LOG } from "@/mocks/system"
 
 export function AuditTab() {
   const [search, setSearch] = useState("")

@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { UsersTab } from "@/features/system/users-tab"
 import { RolesTab } from "@/features/system/roles-tab"
 import { AuditTab } from "@/features/system/audit-tab"
-import { DEMO_USERS, INITIAL_ROLES, INITIAL_PERMISSION_MATRIX } from "@/features/system/data"
+import { DEMO_USERS, INITIAL_ROLES, INITIAL_PERMISSION_MATRIX } from "@/mocks/system"
 import type { PermissionMatrix, RoleDefinition, SystemUser } from "@/features/system/types"
 
 interface SystemModalProps {

@@ -45,30 +45,20 @@ export function useRateLimit({
   lockoutSeconds = 30,
   storageKey,
 }: UseRateLimitOptions = {}): UseRateLimitReturn {
-  function getInitialState(): { attempts: number; lockoutRemaining: number } {
-    if (!storageKey) return { attempts: 0, lockoutRemaining: 0 }
+  const [attempts, setAttempts] = useState(() => {
+    if (!storageKey) return 0
+    return readStorage(storageKey).attempts
+  })
+  const [lockoutRemaining, setLockoutRemaining] = useState(() => {
+    if (!storageKey) return 0
     const stored = readStorage(storageKey)
     if (stored.lockedUntil && stored.lockedUntil > Date.now()) {
-      return {
-        attempts: stored.attempts,
-        lockoutRemaining: Math.ceil((stored.lockedUntil - Date.now()) / 1000),
-      }
+      return Math.ceil((stored.lockedUntil - Date.now()) / 1000)
     }
-    // Lockout expired — clear storage
     if (stored.lockedUntil) clearStorage(storageKey)
-    return { attempts: stored.attempts, lockoutRemaining: 0 }
-  }
-
-  const initial = getInitialState()
-  const [attempts, setAttempts] = useState(initial.attempts)
-  const [lockoutRemaining, setLockoutRemaining] = useState(initial.lockoutRemaining)
+    return 0
+  })
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  // Resume countdown if app reloaded mid-lockout
-  useEffect(() => {
-    if (lockoutRemaining > 0) startCountdown()
-    return () => { if (timer.current) clearInterval(timer.current) }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function startCountdown() {
     if (timer.current) clearInterval(timer.current)
@@ -84,6 +74,13 @@ export function useRateLimit({
       })
     }, 1000)
   }
+
+  // Resume countdown if app reloaded mid-lockout
+  useEffect(() => {
+    if (lockoutRemaining > 0) startCountdown()
+    return () => { if (timer.current) clearInterval(timer.current) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function recordFailure() {
     setAttempts((prev) => {

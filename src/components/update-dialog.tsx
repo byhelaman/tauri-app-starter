@@ -31,11 +31,10 @@ export function UpdateDialog() {
 
   // Keep data visible during close animation
   const [lastKnownUpdate, setLastKnownUpdate] = useState<typeof update>(null)
-
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (update) setLastKnownUpdate(update)
   }, [update])
-
   const displayUpdate = update || lastKnownUpdate
   if (!displayUpdate) return null
 
