@@ -11,8 +11,6 @@ import { Toaster } from "@/components/ui/sonner"
 import { SignInPage } from "@/features/auth/components/SignInPage"
 import { DashboardPage } from "@/pages/dashboard"
 import { ProjectsPage } from "@/pages/projects"
-import { TeamPage } from "@/pages/team"
-import { AnalyticsPage } from "@/pages/analytics"
 import { OrdersPage } from "@/pages/orders"
 import { AppLayout } from "@/components/app-layout"
 import { SetupPage } from "@/pages/setup"
@@ -42,8 +40,6 @@ function App() {
               <Route element={<AppLayout />}>
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/projects" element={<ProjectsPage />} />
-                <Route path="/team" element={<TeamPage />} />
-                <Route path="/analytics" element={<AnalyticsPage />} />
                 <Route path="/orders" element={<OrdersPage />} />
               </Route>
             </Route>

@@ -199,11 +199,13 @@ export function SettingsModal({ open, onOpenChange, settings, onSettingsChange }
                   </Field>
                 </FieldGroup>
 
-                <Button variant="outline" className="w-full text-muted-foreground" onClick={simulateUpdate}>
-                  [Demo] Simulate update
-                </Button>
+                {import.meta.env.DEV && (
+                  <Button variant="outline" className="w-full text-muted-foreground" onClick={simulateUpdate}>
+                    [Demo] Simulate update
+                  </Button>
+                )}
 
-                <FieldGroup>
+<FieldGroup>
                   <Field orientation="horizontal">
                     <FieldContent>
                       <FieldLabel>Reset to defaults</FieldLabel>

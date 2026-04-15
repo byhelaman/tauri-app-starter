@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { LayoutDashboard, Users, BarChart2, FolderKanban, Settings, Bell, User, LogOut, KeyboardIcon, ShieldIcon, ShoppingCart, SearchIcon } from "lucide-react"
+import { LayoutDashboard, FolderKanban, Settings, Bell, User, LogOut, KeyboardIcon, ShieldIcon, ShoppingCart, SearchIcon } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
@@ -69,14 +69,6 @@ export function CommandPalette({ onOpenProfile, onOpenSettings, onOpenNotificati
               <CommandItem onSelect={() => run(() => navigate("/projects"))}>
                 <FolderKanban />
                 Projects
-              </CommandItem>
-              <CommandItem onSelect={() => run(() => navigate("/team"))}>
-                <Users />
-                Team
-              </CommandItem>
-              <CommandItem onSelect={() => run(() => navigate("/analytics"))}>
-                <BarChart2 />
-                Analytics
               </CommandItem>
               <CommandItem onSelect={() => run(() => navigate("/orders"))}>
                 <ShoppingCart />

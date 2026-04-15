@@ -18,7 +18,6 @@ import { INITIAL_ORDERS } from "@/mocks/orders"
 import { DataTable } from "@/features/orders/data-table"
 import type { FacetedFilterOption } from "@/features/orders/data-table-types"
 import { ImportDialog } from "@/features/orders/import-dialog"
-import { BulkCopyProvider, BulkCopyButton, BulkCopySettings } from "@/features/orders/bulk-copy-actions"
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -109,18 +108,14 @@ export function OrdersPage() {
           </>
         )}
         bulkActions={(selected, clearSelection) => (
-          <BulkCopyProvider selected={selected}>
-            <BulkCopyButton />
-            <Button
-              variant="destructive"
-              size="icon-sm"
-              aria-label="Delete"
-              onClick={() => setBulkDeleteTarget({ selected, clearSelection })}
-            >
-              <Trash2Icon />
-            </Button>
-            <BulkCopySettings />
-          </BulkCopyProvider>
+          <Button
+            variant="destructive"
+            size="icon-sm"
+            aria-label="Delete"
+            onClick={() => setBulkDeleteTarget({ selected, clearSelection })}
+          >
+            <Trash2Icon />
+          </Button>
         )}
         defaultPageSize={25}
       />
