@@ -12,6 +12,9 @@
     "process:allow-restart",
     "dialog:allow-save",
     "fs:allow-write-text-file",
+    "store:default",
+    "autostart:default",
+    "notification:default",
     {
       "identifier": "fs:scope",
       "allow": [{ "path": "**" }]

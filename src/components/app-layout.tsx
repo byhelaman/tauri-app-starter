@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom"
 import { BellIcon, ChevronDown, Settings } from "lucide-react"
 import { UserNav } from "@/components/user-nav"
 import { CommandPalette } from "@/components/command-palette"
-import { NotificationsModal, DEMO_NOTIFICATIONS } from "@/components/notifications-modal"
+import { NotificationsModal } from "@/components/notifications-modal"
 import { ProfileModal } from "@/components/profile-modal"
 import { SettingsModal } from "@/components/settings-modal"
 import { SystemModal } from "@/components/system-modal"
@@ -15,8 +15,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 const NAV_ITEMS = [
   { label: "Dashboard", to: "/" },
   { label: "Projects", to: "/projects" },
-  { label: "Team", to: "/team" },
-  { label: "Analytics", to: "/analytics" },
   { label: "Orders", to: "/orders" },
 ]
 
@@ -50,6 +48,8 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 const SETTINGS_STORAGE_KEY = "app-settings"
 
+const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
+
 function loadSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_STORAGE_KEY)
@@ -57,6 +57,24 @@ function loadSettings(): AppSettings {
     return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) }
   } catch {
     return DEFAULT_SETTINGS
+  }
+}
+
+async function syncGeneralSettings(settings: AppSettings) {
+  if (!isTauri) return
+  try {
+    const [{ load }, autostart] = await Promise.all([
+      import("@tauri-apps/plugin-store"),
+      import("@tauri-apps/plugin-autostart"),
+    ])
+    const store = await load("settings.json", { autoSave: true, defaults: {} })
+    await store.set("startMinimized", settings.startMinimized)
+    await store.set("closeToTray", settings.closeToTray)
+    const current = await autostart.isEnabled()
+    if (settings.launchAtLogin && !current) await autostart.enable()
+    else if (!settings.launchAtLogin && current) await autostart.disable()
+  } catch (err) {
+    console.error("Failed to sync general settings", err)
   }
 }
 
@@ -68,6 +86,7 @@ export function AppLayout() {
 
   useEffect(() => {
     try { localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings)) } catch { /* noop */ }
+    syncGeneralSettings(settings)
   }, [settings])
 
   useEffect(() => {
@@ -115,9 +134,7 @@ export function AppLayout() {
     return () => document.removeEventListener("keydown", handleKey)
   }, [navigate])
 
-  const [unreadCount, setUnreadCount] = useState(() =>
-    DEMO_NOTIFICATIONS.filter((n) => !n.read).length
-  )
+  const [unreadCount, setUnreadCount] = useState(0)
 
   return (
     <div className="flex flex-col h-svh">

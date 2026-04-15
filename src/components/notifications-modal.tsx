@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
-import { AlertTriangleIcon, CheckCheckIcon, FileTextIcon, RefreshCwIcon, ShieldCheckIcon, UserPlusIcon, XIcon, ZapIcon } from "lucide-react"
+import { toast } from "sonner"
+import { BellIcon, CheckCheckIcon, XIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -8,6 +9,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogBody,
+  DialogFooter,
 } from "@/components/ui/dialog"
 import {
   Item,
@@ -18,85 +20,42 @@ import {
   ItemActions,
   ItemGroup,
 } from "@/components/ui/item"
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
 import { cn } from "@/lib/utils"
-
-type NotificationIcon = typeof ShieldCheckIcon
 
 interface Notification {
   id: number
-  icon: NotificationIcon
   title: string
   body: string
   time: string
   read: boolean
 }
 
-export const DEMO_NOTIFICATIONS: Notification[] = [
-  {
-    id: 1,
-    icon: ShieldCheckIcon,
-    title: "Security update",
-    body: "A new version with security patches is available.",
-    time: "2m ago",
-    read: false,
-  },
-  {
-    id: 2,
-    icon: UserPlusIcon,
-    title: "New team member",
-    body: "alex@company.com joined the workspace.",
-    time: "1h ago",
-    read: false,
-  },
-  {
-    id: 3,
-    icon: AlertTriangleIcon,
-    title: "Login from new device",
-    body: "A sign-in was detected from Windows 11 in New York.",
-    time: "2h ago",
-    read: false,
-  },
-  {
-    id: 4,
-    icon: ZapIcon,
-    title: "Usage limit",
-    body: "You've used 80% of your monthly quota.",
-    time: "3h ago",
-    read: true,
-  },
-  {
-    id: 5,
-    icon: RefreshCwIcon,
-    title: "Sync completed",
-    body: "All data has been synced successfully.",
-    time: "5h ago",
-    read: true,
-  },
-  {
-    id: 6,
-    icon: FileTextIcon,
-    title: "Report ready",
-    body: "Your April usage report is ready to download.",
-    time: "Yesterday",
-    read: true,
-  },
-  {
-    id: 7,
-    icon: CheckCheckIcon,
-    title: "All tasks completed",
-    body: "Your scheduled tasks finished successfully.",
-    time: "Yesterday",
-    read: true,
-  },
-  {
-    id: 8,
-    icon: UserPlusIcon,
-    title: "Role updated",
-    body: "Your role has been changed to Admin by an owner.",
-    time: "2 days ago",
-    read: true,
-  },
-]
+const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
+
+async function sendOsNotification(title: string, body: string) {
+  if (!isTauri) {
+    toast.info(`${title} — ${body}`)
+    return
+  }
+  try {
+    const { isPermissionGranted, requestPermission, sendNotification } = await import(
+      "@tauri-apps/plugin-notification"
+    )
+    let granted = await isPermissionGranted()
+    if (!granted) granted = (await requestPermission()) === "granted"
+    if (granted) sendNotification({ title, body })
+    else toast.error("Notification permission denied")
+  } catch (err) {
+    console.error("Notification failed", err)
+  }
+}
 
 interface NotificationsModalProps {
   open: boolean
@@ -105,7 +64,7 @@ interface NotificationsModalProps {
 }
 
 export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: NotificationsModalProps) {
-  const [notifications, setNotifications] = useState(DEMO_NOTIFICATIONS)
+  const [notifications, setNotifications] = useState<Notification[]>([])
   const unreadCount = notifications.filter((n) => !n.read).length
 
   useEffect(() => {
@@ -117,13 +76,21 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
   }
 
   function markRead(id: number) {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    )
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
   }
 
   function dismiss(id: number) {
     setNotifications((prev) => prev.filter((n) => n.id !== id))
+  }
+
+  async function sendTest() {
+    const title = "Test notification"
+    const body = "This came from the OS notification system."
+    await sendOsNotification(title, body)
+    setNotifications((prev) => [
+      { id: Date.now(), title, body, time: "just now", read: false },
+      ...prev,
+    ])
   }
 
   return (
@@ -139,6 +106,7 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
             </div>
             {unreadCount > 0 && (
               <Button variant="ghost" size="sm" onClick={markAllRead}>
+                <CheckCheckIcon />
                 Mark all read
               </Button>
             )}
@@ -147,52 +115,61 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
 
         <DialogBody className="mt-1 p-1">
           {notifications.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              No notifications.
-            </p>
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <BellIcon />
+                </EmptyMedia>
+                <EmptyTitle>No notifications</EmptyTitle>
+                <EmptyDescription>
+                  You'll see updates here when something happens.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           ) : (
             <ItemGroup>
-              {notifications.map((n) => {
-                const Icon = n.icon
-                return (
-                  <Item
-                    key={n.id}
-                    size="sm"
-                    variant={n.read ? "default" : "muted"}
-                    className={cn("cursor-pointer", !n.read && "hover:bg-muted/70")}
-                    onClick={() => markRead(n.id)}
-                  >
-                    <ItemMedia variant="icon">
-                      <Icon />
-                    </ItemMedia>
-                    <ItemContent>
-                      <ItemTitle>
-                        {n.title}
-                        {!n.read && (
-                          <span className="size-1.5 rounded-full bg-amber-400" />
-                        )}
-                      </ItemTitle>
-                      <ItemDescription>{n.body}</ItemDescription>
-                    </ItemContent>
-                    <ItemActions>
-                      <span className="text-xs text-muted-foreground">{n.time}</span>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          dismiss(n.id)
-                        }}
-                      >
-                        <XIcon />
-                      </Button>
-                    </ItemActions>
-                  </Item>
-                )
-              })}
+              {notifications.map((n) => (
+                <Item
+                  key={n.id}
+                  size="sm"
+                  variant={n.read ? "default" : "muted"}
+                  className={cn("cursor-pointer", !n.read && "hover:bg-muted/70")}
+                  onClick={() => markRead(n.id)}
+                >
+                  <ItemMedia variant="icon">
+                    <BellIcon />
+                  </ItemMedia>
+                  <ItemContent>
+                    <ItemTitle>
+                      {n.title}
+                      {!n.read && <span className="size-1.5 rounded-full bg-amber-400" />}
+                    </ItemTitle>
+                    <ItemDescription>{n.body}</ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    <span className="text-xs text-muted-foreground">{n.time}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        dismiss(n.id)
+                      }}
+                    >
+                      <XIcon />
+                    </Button>
+                  </ItemActions>
+                </Item>
+              ))}
             </ItemGroup>
           )}
         </DialogBody>
+
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={sendTest}>
+            Send test notification
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
