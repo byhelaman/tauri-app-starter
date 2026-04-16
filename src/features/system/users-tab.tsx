@@ -75,15 +75,9 @@ const inviteSchema = z.object({
 })
 type InviteValues = z.infer<typeof inviteSchema>
 
-const resetPasswordSchema = z
-    .object({
-        newPassword: z.string().min(8, "Must be at least 8 characters"),
-        confirmPassword: z.string().min(1, "Required"),
-    })
-    .refine((d) => d.newPassword === d.confirmPassword, {
-        message: "Passwords don't match",
-        path: ["confirmPassword"],
-    })
+const resetPasswordSchema = z.object({
+    newPassword: z.string().min(8, "Must be at least 8 characters"),
+})
 type ResetPasswordValues = z.infer<typeof resetPasswordSchema>
 
 interface InviteUserDialogProps {
@@ -305,7 +299,7 @@ interface ResetPasswordAlertProps {
 function ResetPasswordAlert({ user, onOpenChange, onConfirm, busy }: ResetPasswordAlertProps) {
     const { control, handleSubmit, reset } = useForm<ResetPasswordValues>({
         resolver: zodResolver(resetPasswordSchema),
-        defaultValues: { newPassword: "", confirmPassword: "" },
+        defaultValues: { newPassword: "" },
     })
 
     function handleClose(v: boolean) {
@@ -341,20 +335,9 @@ function ResetPasswordAlert({ user, onOpenChange, onConfirm, busy }: ResetPasswo
                                 </Field>
                             )}
                         />
-                        <Controller
-                            name="confirmPassword"
-                            control={control}
-                            render={({ field, fieldState }) => (
-                                <Field data-invalid={fieldState.invalid}>
-                                    <FieldLabel>Confirm password</FieldLabel>
-                                    <Input {...field} type="password" aria-invalid={fieldState.invalid} disabled={busy} />
-                                    <FieldError errors={[fieldState.error]} />
-                                </Field>
-                            )}
-                        />
                     </FieldGroup>
                     <DialogFooter showCloseButton className="mt-4">
-                        <Button type="submit" disabled={busy}>Update password</Button>
+                        <Button type="submit" disabled={busy}>Save changes</Button>
                     </DialogFooter>
                 </form>
             </DialogContent>

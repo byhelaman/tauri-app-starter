@@ -183,8 +183,11 @@ Todos deben mostrar `rowsecurity = true`.
 Esta app incluye el endpoint seguro `admin-reset-user-password` para que un admin pueda restablecer una contraseña.
 
 ```bash
-supabase functions deploy admin-reset-user-password
+supabase functions deploy admin-reset-user-password --no-verify-jwt
 ```
+
+> **¿Por qué `--no-verify-jwt`?**
+> Supabase usa claves asimétricas (ES256) para firmar JWTs. La verificación built-in de Edge Functions no soporta ES256 y rechaza el request con `UNAUTHORIZED_UNSUPPORTED_TOKEN_ALGORITHM`. Al desactivarla, la función valida el token **manualmente** con `supabase.auth.getUser(accessToken)`, que sí soporta ES256.
 
 La función usa los secretos internos de Supabase Functions (`SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`) y valida jerarquía/permisos (`users.manage`) antes de aplicar el cambio.
 

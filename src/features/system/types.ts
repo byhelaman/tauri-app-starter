@@ -1,6 +1,16 @@
 export type Role = "owner" | "admin" | "member" | "guest" | (string & {})
 export type UserStatus = "active" | "inactive"
-export type AuditAction = "role_change" | "login" | "permission_update" | "user_created" | "user_removed"
+export type AuditAction =
+  | "role_change"
+  | "user_created"
+  | "user_removed"
+  | "account_deleted"
+  | "display_name_change"
+  | "permission_update"
+  | "role_created"
+  | "role_updated"
+  | "role_deleted"
+  | "password_reset"
 
 export interface SystemUser {
   id: string
@@ -30,8 +40,10 @@ export interface AuditEntry {
   id: number
   action: AuditAction
   description: string
-  actor: string
-  time: string
+  actorEmail: string
+  targetId: string | null
+  metadata: Record<string, unknown>
+  createdAt: string
 }
 
 export type PermissionMatrix = Record<string, Record<string, boolean>>

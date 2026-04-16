@@ -15,7 +15,7 @@ import { RolesTab } from "@/features/system/roles-tab"
 import { AuditTab } from "@/features/system/audit-tab"
 import { createIsolatedSupabaseClient, supabase } from "@/lib/supabase"
 import { useAuth } from "@/contexts/auth-context"
-import type { PermissionDefinition, PermissionMatrix, RoleDefinition, SystemUser } from "@/features/system/types"
+import type { AuditEntry, PermissionDefinition, PermissionMatrix, RoleDefinition, SystemUser } from "@/features/system/types"
 
 interface SystemModalProps {
     open: boolean
@@ -49,6 +49,16 @@ interface RpcRolePermissionMatrixRow {
     permission: string
 }
 
+interface RpcAuditEntry {
+    id: number
+    action: string
+    description: string
+    actor_email: string
+    target_id: string | null
+    metadata: Record<string, unknown>
+    created_at: string
+}
+
 function generateTempPassword(length = 24) {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*"
     const values = crypto.getRandomValues(new Uint32Array(length))
@@ -61,6 +71,7 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
     const [roles, setRoles] = useState<RoleDefinition[]>([])
     const [permissions, setPermissions] = useState<PermissionDefinition[]>([])
     const [matrix, setMatrix] = useState<PermissionMatrix>({})
+    const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([])
     const [loading, setLoading] = useState(false)
 
     const canManageUsers = hasPermission("users.manage")
@@ -78,17 +89,19 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
                 ? client.rpc("get_all_users")
                 : Promise.resolve({ data: [] as RpcUser[], error: null })
 
-            const [usersRes, rolesRes, permissionsRes, matrixRes] = await Promise.all([
+            const [usersRes, rolesRes, permissionsRes, matrixRes, auditRes] = await Promise.all([
                 usersPromise,
                 client.rpc("get_all_roles"),
                 client.rpc("get_all_permissions"),
                 client.rpc("get_role_permission_matrix"),
+                client.rpc("get_audit_log", { p_limit: 100, p_offset: 0 }),
             ])
 
             if (usersRes.error) throw usersRes.error
             if (rolesRes.error) throw rolesRes.error
             if (permissionsRes.error) throw permissionsRes.error
             if (matrixRes.error) throw matrixRes.error
+            if (auditRes.error) throw auditRes.error
 
             const nextRoles: RoleDefinition[] = ((rolesRes.data ?? []) as RpcRole[])
                 .map((role) => ({
@@ -134,10 +147,21 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
                 lastLoginAt: user.last_login_at,
             }))
 
+            const nextAudit: AuditEntry[] = ((auditRes.data ?? []) as RpcAuditEntry[]).map((e) => ({
+                id: e.id,
+                action: e.action as AuditEntry["action"],
+                description: e.description,
+                actorEmail: e.actor_email,
+                targetId: e.target_id,
+                metadata: e.metadata ?? {},
+                createdAt: e.created_at,
+            }))
+
             setRoles(nextRoles)
             setPermissions(nextPermissions)
             setMatrix(permissionMatrix)
             setUsers(nextUsers)
+            setAuditEntries(nextAudit)
         } catch (error) {
             const message = error instanceof Error ? error.message : "Could not load system data"
             toast.error(message)
@@ -169,6 +193,7 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
             .on("postgres_changes", { event: "*", schema: "public", table: "roles" }, scheduleRefresh)
             .on("postgres_changes", { event: "*", schema: "public", table: "permissions" }, scheduleRefresh)
             .on("postgres_changes", { event: "*", schema: "public", table: "role_permissions" }, scheduleRefresh)
+            .on("postgres_changes", { event: "*", schema: "public", table: "audit_log" }, scheduleRefresh)
 
         channel.subscribe((status) => {
             if (status === "CHANNEL_ERROR") {
@@ -433,7 +458,7 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
                             </TabsContent>
 
                             <TabsContent value="audit">
-                                <AuditTab />
+                                <AuditTab entries={auditEntries} loading={loading} />
                             </TabsContent>
                         </DialogBody>
                     </Tabs>

@@ -478,7 +478,15 @@ REVOKE ALL ON FUNCTION public.verify_user_password(text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.verify_user_password(text)    TO authenticated;
 
 -- ============================================================
--- 11. PASO MANUAL REQUERIDO
+-- 11. HABILITAR REALTIME
+-- ============================================================
+ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.roles;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.permissions;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.role_permissions;
+
+-- ============================================================
+-- 12. PASO MANUAL REQUERIDO
 -- ============================================================
 -- En el Dashboard de Supabase → Authentication → Hooks:
 --   "Customize Access Token (JWT) Claims"

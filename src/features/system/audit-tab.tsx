@@ -15,15 +15,41 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group"
 import { AUDIT_ACTION_META } from "./data"
-import { AUDIT_LOG } from "@/mocks/system"
+import type { AuditEntry } from "./types"
 
-export function AuditTab() {
+function formatRelativeTime(iso: string): string {
+  const now = Date.now()
+  const then = new Date(iso).getTime()
+  const diff = now - then
+
+  const seconds = Math.floor(diff / 1000)
+  if (seconds < 60) return "just now"
+
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+
+  const days = Math.floor(hours / 24)
+  if (days === 1) return "yesterday"
+  if (days < 7) return `${days}d ago`
+
+  return new Date(iso).toLocaleDateString()
+}
+
+interface AuditTabProps {
+  entries: AuditEntry[]
+  loading?: boolean
+}
+
+export function AuditTab({ entries, loading }: AuditTabProps) {
   const [search, setSearch] = useState("")
 
-  const filtered = AUDIT_LOG.filter(
+  const filtered = entries.filter(
     (e) =>
       e.description.toLowerCase().includes(search.toLowerCase()) ||
-      e.actor.toLowerCase().includes(search.toLowerCase())
+      e.actorEmail.toLowerCase().includes(search.toLowerCase())
   )
 
   return (
@@ -47,7 +73,8 @@ export function AuditTab() {
       ) : (
         <ItemGroup>
           {filtered.map((entry) => {
-            const { icon: Icon } = AUDIT_ACTION_META[entry.action]
+            const meta = AUDIT_ACTION_META[entry.action]
+            const Icon = meta?.icon ?? SearchIcon
             return (
               <Item key={entry.id} size="sm">
                 <ItemMedia variant="icon">
@@ -55,10 +82,10 @@ export function AuditTab() {
                 </ItemMedia>
                 <ItemContent>
                   <ItemTitle>{entry.description}</ItemTitle>
-                  <ItemDescription>{entry.actor}</ItemDescription>
+                  <ItemDescription>{entry.actorEmail}</ItemDescription>
                 </ItemContent>
                 <ItemActions>
-                  <span className="text-xs text-muted-foreground shrink-0">{entry.time}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">{formatRelativeTime(entry.createdAt)}</span>
                 </ItemActions>
               </Item>
             )

@@ -111,7 +111,7 @@ export function OrdersPage() {
         bulkActions={(selected, clearSelection) => (
           <>
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={async () => {
                 const content = buildBulkCopyText(selected as unknown as Record<string, unknown>[], "orders")
