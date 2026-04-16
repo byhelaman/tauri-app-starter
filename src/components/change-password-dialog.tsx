@@ -106,7 +106,7 @@ export function ChangePasswordDialog() {
             Enter your current password and choose a new one.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)}>
+        <form className="contents" onSubmit={handleSubmit(onSubmit)}>
           <FieldGroup>
             <Controller
               name="currentPassword"
@@ -145,7 +145,7 @@ export function ChangePasswordDialog() {
               )}
             />
           </FieldGroup>
-          <DialogFooter showCloseButton className="mt-4">
+          <DialogFooter showCloseButton>
             <Button type="submit" disabled={isSubmitting || isLocked}>
               {isLocked ? `Locked (${lockoutRemaining}s)` : "Update password"}
             </Button>

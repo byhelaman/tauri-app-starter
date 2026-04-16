@@ -87,8 +87,8 @@ export function SignInForm({
             <Button variant="link" onClick={onSignUp}>Sign Up</Button>
           </CardAction>
         </CardHeader>
-        <CardContent>
-          <form id="sign-in-form" onSubmit={form.handleSubmit(onSubmit)}>
+        <form className="contents" onSubmit={form.handleSubmit(onSubmit)}>
+          <CardContent>
             <FieldGroup>
               <Controller
                 name="email"
@@ -140,12 +140,10 @@ export function SignInForm({
               />
 
             </FieldGroup>
-          </form>
-        </CardContent>
-        <CardFooter>
-          <Button
-            type="submit"
-            form="sign-in-form"
+          </CardContent>
+          <CardFooter>
+            <Button
+              type="submit"
             disabled={form.formState.isSubmitting || isLocked}
             className="w-full"
           >
@@ -154,8 +152,9 @@ export function SignInForm({
               : form.formState.isSubmitting
                 ? "Signing in..."
                 : "Sign In"}
-          </Button>
-        </CardFooter>
+            </Button>
+          </CardFooter>
+        </form>
       </Card>
     </div>
   )

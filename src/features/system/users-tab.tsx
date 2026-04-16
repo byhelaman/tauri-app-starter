@@ -112,7 +112,7 @@ function InviteUserDialog({ open, onOpenChange, onInviteUser, roles, canManageUs
                     <DialogTitle>Invite user</DialogTitle>
                     <DialogDescription>Create the account and send an onboarding email.</DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmit(onSubmit)}>
+                <form className="contents" onSubmit={handleSubmit(onSubmit)}>
                     <FieldGroup>
                         <Controller
                             name="name"
@@ -159,7 +159,7 @@ function InviteUserDialog({ open, onOpenChange, onInviteUser, roles, canManageUs
                             )}
                         />
                     </FieldGroup>
-                    <DialogFooter showCloseButton className="mt-4">
+                    <DialogFooter showCloseButton>
                         <Button type="submit" disabled={!canManageUsers || busy}>Send invite</Button>
                     </DialogFooter>
                 </form>
@@ -200,7 +200,7 @@ function ViewProfileDialog({ user, onOpenChange, onUpdateDisplayName, canManageU
                     <DialogDescription>User details and account information.</DialogDescription>
                 </DialogHeader>
                 {user && (
-                    <form onSubmit={handleSubmit(onSubmit)}>
+                    <form className="contents" onSubmit={handleSubmit(onSubmit)}>
                         <FieldGroup>
                             <Field>
                                 <FieldLabel>Avatar</FieldLabel>
@@ -322,7 +322,7 @@ function ResetPasswordAlert({ user, onOpenChange, onConfirm, busy }: ResetPasswo
                         Set a new password for <span className="font-medium">{user?.email}</span>.
                     </DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmit(onSubmit)}>
+                <form className="contents" onSubmit={handleSubmit(onSubmit)}>
                     <FieldGroup>
                         <Controller
                             name="newPassword"
@@ -336,7 +336,7 @@ function ResetPasswordAlert({ user, onOpenChange, onConfirm, busy }: ResetPasswo
                             )}
                         />
                     </FieldGroup>
-                    <DialogFooter showCloseButton className="mt-4">
+                    <DialogFooter showCloseButton>
                         <Button type="submit" disabled={busy}>Save changes</Button>
                     </DialogFooter>
                 </form>

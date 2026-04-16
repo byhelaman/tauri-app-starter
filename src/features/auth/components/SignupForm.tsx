@@ -94,8 +94,8 @@ export function SignupForm({
           <Button variant="link" onClick={onSignIn}>Sign In</Button>
         </CardAction>
       </CardHeader>
-      <CardContent>
-        <form id="signup-form" onSubmit={form.handleSubmit(onSubmit)}>
+      <form className="contents" onSubmit={form.handleSubmit(onSubmit)}>
+        <CardContent>
           <FieldGroup>
             <Controller
               name="email"
@@ -164,15 +164,14 @@ export function SignupForm({
               )}
             />
 
-          </FieldGroup>
-        </form>
-      </CardContent>
-      <CardFooter>
-        <Button type="submit" form="signup-form" disabled={form.formState.isSubmitting}
-          className="w-full">
-          {form.formState.isSubmitting ? "Creating account..." : "Create account"}
-        </Button>
-      </CardFooter>
+            </FieldGroup>
+        </CardContent>
+        <CardFooter>
+          <Button type="submit" disabled={form.formState.isSubmitting} className="w-full">
+            {form.formState.isSubmitting ? "Creating account..." : "Create account"}
+          </Button>
+        </CardFooter>
+      </form>
     </Card>
   )
 }

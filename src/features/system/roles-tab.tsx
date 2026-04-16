@@ -108,7 +108,7 @@ function NewRoleDialog({ open, onOpenChange, onSubmit, disabled }: NewRoleDialog
                     <DialogTitle>New role</DialogTitle>
                     <DialogDescription>Define a name, level, and description for the new role.</DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmit(onSubmit)}>
+                <form className="contents" onSubmit={handleSubmit(onSubmit)}>
                     <FieldGroup>
                         <div className="flex gap-3">
                             <Controller
@@ -146,7 +146,7 @@ function NewRoleDialog({ open, onOpenChange, onSubmit, disabled }: NewRoleDialog
                             )}
                         />
                     </FieldGroup>
-                    <DialogFooter showCloseButton className="mt-4">
+                    <DialogFooter showCloseButton>
                         <Button type="submit" disabled={disabled}>Add role</Button>
                     </DialogFooter>
                 </form>
@@ -186,7 +186,7 @@ function EditRoleDialog({ role, onOpenChange, onSubmit, disabled }: EditRoleDial
                             : "Update the name, level, or description of this role."}
                     </DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmit((values) => role ? onSubmit(role.name, values) : Promise.resolve())}>
+                <form className="contents" onSubmit={handleSubmit((values) => role ? onSubmit(role.name, values) : Promise.resolve())}>
                     <FieldGroup>
                         <div className="flex gap-3">
                             <Controller
@@ -224,7 +224,7 @@ function EditRoleDialog({ role, onOpenChange, onSubmit, disabled }: EditRoleDial
                             )}
                         />
                     </FieldGroup>
-                    <DialogFooter showCloseButton className="mt-4">
+                    <DialogFooter showCloseButton>
                         <Button type="submit" disabled={disabled}>Save changes</Button>
                     </DialogFooter>
                 </form>

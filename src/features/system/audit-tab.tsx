@@ -40,10 +40,9 @@ function formatRelativeTime(iso: string): string {
 
 interface AuditTabProps {
   entries: AuditEntry[]
-  loading?: boolean
 }
 
-export function AuditTab({ entries, loading }: AuditTabProps) {
+export function AuditTab({ entries }: AuditTabProps) {
   const [search, setSearch] = useState("")
 
   const filtered = entries.filter(

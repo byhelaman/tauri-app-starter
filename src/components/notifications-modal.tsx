@@ -88,7 +88,6 @@ interface NotificationsModalProps {
 
 export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: NotificationsModalProps) {
   const [notifications, setNotifications] = useState<Notification[]>([])
-  const [loading, setLoading] = useState(false)
   const unreadCount = notifications.filter((n) => !n.read).length
 
   useEffect(() => {
@@ -97,7 +96,6 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
 
   const fetchNotifications = useCallback(async () => {
     if (!supabase) return
-    setLoading(true)
     try {
       const { data, error } = await supabase.rpc("get_my_notifications", { p_limit: 50 })
       if (error) throw error
@@ -113,8 +111,6 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
       )
     } catch (err) {
       console.error("Failed to fetch notifications", err)
-    } finally {
-      setLoading(false)
     }
   }, [])
 

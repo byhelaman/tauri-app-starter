@@ -134,9 +134,9 @@ export function RecoveryForm({
             : <Button variant="link" onClick={() => setStep(1)}>Back</Button>}
         </CardAction>
       </CardHeader>
-      <CardContent>
-        {step === 1 && (
-          <form id="recovery-step1-form" onSubmit={step1.handleSubmit(onStep1Submit)}>
+      <form className="contents" onSubmit={step === 1 ? step1.handleSubmit(onStep1Submit) : step2.handleSubmit(onStep2Submit)}>
+        <CardContent>
+          {step === 1 && (
             <FieldGroup>
               <Controller
                 name="email"
@@ -188,11 +188,9 @@ export function RecoveryForm({
               />
 
             </FieldGroup>
-          </form>
-        )}
+          )}
 
-        {step === 2 && (
-          <form id="recovery-step2-form" onSubmit={step2.handleSubmit(onStep2Submit)}>
+          {step === 2 && (
             <FieldGroup>
               <Controller
                 name="password"
@@ -212,21 +210,21 @@ export function RecoveryForm({
                 )}
               />
             </FieldGroup>
-          </form>
-        )}
-      </CardContent>
-      <CardFooter>
-        {step === 1 && (
-          <Button type="submit" form="recovery-step1-form" disabled={step1.formState.isSubmitting} className="w-full">
-            {step1.formState.isSubmitting ? "Verifying..." : "Continue"}
-          </Button>
-        )}
-        {step === 2 && (
-          <Button type="submit" form="recovery-step2-form" disabled={step2.formState.isSubmitting} className="w-full">
-            {step2.formState.isSubmitting ? "Resetting..." : "Reset password"}
-          </Button>
-        )}
-      </CardFooter>
+          )}
+        </CardContent>
+        <CardFooter>
+          {step === 1 && (
+            <Button type="submit" disabled={step1.formState.isSubmitting} className="w-full">
+              {step1.formState.isSubmitting ? "Verifying..." : "Continue"}
+            </Button>
+          )}
+          {step === 2 && (
+            <Button type="submit" disabled={step2.formState.isSubmitting} className="w-full">
+              {step2.formState.isSubmitting ? "Resetting..." : "Reset password"}
+            </Button>
+          )}
+        </CardFooter>
+      </form>
     </Card>
   )
 }

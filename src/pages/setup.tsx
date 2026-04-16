@@ -66,8 +66,8 @@ export function SetupPage() {
                 </Button>
               </CardAction>
             </CardHeader>
-            <CardContent>
-              <form id="setup-form" onSubmit={form.handleSubmit(onSubmit)}>
+            <form className="contents" onSubmit={form.handleSubmit(onSubmit)}>
+              <CardContent>
                 <FieldGroup>
                   <Controller
                     name="url"
@@ -106,19 +106,18 @@ export function SetupPage() {
                     )}
                   />
                 </FieldGroup>
-              </form>
-            </CardContent>
-            <CardFooter>
-              <Button
-                type="submit"
-                form="setup-form"
-                disabled={form.formState.isSubmitting}
+              </CardContent>
+              <CardFooter>
+                <Button
+                  type="submit"
+                  disabled={form.formState.isSubmitting}
                 className="w-full"
               >
                 Save and continue
               </Button>
             </CardFooter>
-          </Card>
+          </form>
+        </Card>
         )}
       </div>
     </div>

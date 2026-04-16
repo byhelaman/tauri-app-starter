@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { UsersTab } from "@/features/system/users-tab"
 import { RolesTab } from "@/features/system/roles-tab"
 import { AuditTab } from "@/features/system/audit-tab"
+import { IntegrationsTab } from "@/features/system/integrations-tab"
 import { createIsolatedSupabaseClient, supabase } from "@/lib/supabase"
 import { useAuth } from "@/contexts/auth-context"
 import type { AuditEntry, PermissionDefinition, PermissionMatrix, RoleDefinition, SystemUser } from "@/features/system/types"
@@ -423,6 +424,7 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
                         <TabsList className="w-full">
                             {canViewUsers && <TabsTrigger value="users">Users</TabsTrigger>}
                             <TabsTrigger value="roles">Roles & Perms</TabsTrigger>
+                            <TabsTrigger value="integrations">Integrations</TabsTrigger>
                             <TabsTrigger value="audit">Audit Log</TabsTrigger>
                         </TabsList>
 
@@ -457,8 +459,12 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
                                 />
                             </TabsContent>
 
+                            <TabsContent value="integrations">
+                                <IntegrationsTab />
+                            </TabsContent>
+
                             <TabsContent value="audit">
-                                <AuditTab entries={auditEntries} loading={loading} />
+                                <AuditTab entries={auditEntries} />
                             </TabsContent>
                         </DialogBody>
                     </Tabs>
