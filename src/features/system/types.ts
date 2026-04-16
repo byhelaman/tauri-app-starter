@@ -3,11 +3,14 @@ export type UserStatus = "active" | "inactive"
 export type AuditAction = "role_change" | "login" | "permission_update" | "user_created" | "user_removed"
 
 export interface SystemUser {
-  id: number
-  name: string
+  id: string
+  displayName: string
   email: string
   role: string
   status: UserStatus
+  hierarchyLevel: number
+  createdAt: string
+  lastLoginAt: string | null
 }
 
 export interface RoleDefinition {
@@ -15,6 +18,12 @@ export interface RoleDefinition {
   level: number
   description: string
   builtin: boolean
+}
+
+export interface PermissionDefinition {
+  name: string
+  description: string
+  minRoleLevel: number
 }
 
 export interface AuditEntry {

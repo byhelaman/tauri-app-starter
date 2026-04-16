@@ -25,18 +25,22 @@ interface UserNavProps {
   onOpenSettings?: () => void
   onOpenSystem?: () => void
   onOpenShortcuts?: () => void
+  canOpenSystem?: boolean
 }
 
-export function UserNav({ onOpenProfile, onOpenSettings, onOpenSystem, onOpenShortcuts }: UserNavProps) {
+export function UserNav({ onOpenProfile, onOpenSettings, onOpenSystem, onOpenShortcuts, canOpenSystem = false }: UserNavProps) {
   const { user, signOut } = useAuth()
   const { theme, setTheme } = useTheme()
+  const displayName = typeof user?.user_metadata?.display_name === "string"
+    ? user.user_metadata.display_name
+    : ""
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" aria-label="User menu">
           <Avatar>
-            <AvatarFallback>{getInitials(user?.email ?? "?")}</AvatarFallback>
+            <AvatarFallback>{getInitials(displayName || user?.email || "?")}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
@@ -50,10 +54,12 @@ export function UserNav({ onOpenProfile, onOpenSettings, onOpenSystem, onOpenSho
             <SettingsIcon />
             Settings
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onOpenSystem}>
-            <ShieldIcon />
-            System
-          </DropdownMenuItem>
+          {canOpenSystem && (
+            <DropdownMenuItem onSelect={onOpenSystem}>
+              <ShieldIcon />
+              System
+            </DropdownMenuItem>
+          )}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>

@@ -30,16 +30,32 @@ export function getSupabaseConfig() {
 
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: false,
-        storageKey: "app-auth-token",
-        storage: localStorage,
-        flowType: "pkce",
-      },
-    })
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: false,
+      storageKey: "app-auth-token",
+      storage: localStorage,
+      flowType: "pkce",
+    },
+  })
   : null
+
+/**
+ * Creates a short-lived Supabase client that never persists auth state.
+ * Useful for background auth actions (invite/reset) without mutating current session.
+ */
+export function createIsolatedSupabaseClient() {
+  if (!isSupabaseConfigured) return null
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  })
+}
 
 // ── Auto-refresh management for Tauri desktop apps ──────────────────────
 // Supabase cannot detect foreground/background state in non-browser

@@ -22,6 +22,9 @@ dist-ssr
 # Tauri
 src-tauri/target
 
+# Supabase CLI
+supabase/.temp/
+
 # Clave privada de firma del updater
 *.key
 *.pem

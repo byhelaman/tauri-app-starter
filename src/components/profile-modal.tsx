@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
 import { toast } from "sonner"
 import { getInitials } from "@/lib/utils"
@@ -53,7 +53,7 @@ interface ProfileModalProps {
 }
 
 export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
-  const { user, session, signOut } = useAuth()
+  const { user, claims, signOut } = useAuth()
   const { theme, setTheme } = useTheme()
 
   const [displayName, setDisplayName] = useState(() => user?.email?.split("@")[0] ?? "")
@@ -61,16 +61,42 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
   const [language, setLanguage] = useState("en")
   const [twoFactor, setTwoFactor] = useState(false)
   const [activeSessions, setActiveSessions] = useState(true)
+  const [saving, setSaving] = useState(false)
 
-  // Read role from JWT claims (injected by custom_access_token_hook)
-  const userRole = (session?.access_token
-    ? (() => { try { return JSON.parse(atob(session.access_token.split(".")[1])) } catch { return {} } })()
-    : {}
-  ).user_role ?? "member"
+  const userRole = claims.userRole
 
-  function handleSave() {
-    toast.success("Profile updated")
-    onOpenChange(false)
+  useEffect(() => {
+    if (!open || !supabase) return
+
+    void (async () => {
+      const { data, error } = await supabase.rpc("get_my_profile")
+      if (error) return
+
+      const profile = data as { display_name?: string | null } | null
+      setDisplayName(profile?.display_name ?? user?.email?.split("@")[0] ?? "")
+    })()
+  }, [open, user?.email])
+
+  async function handleSave() {
+    if (!supabase) {
+      toast.error("Supabase is not configured")
+      return
+    }
+
+    setSaving(true)
+    try {
+      const { error } = await supabase.rpc("update_my_display_name", {
+        new_display_name: displayName.trim(),
+      })
+      if (error) {
+        toast.error(error.message)
+        return
+      }
+      toast.success("Profile updated")
+      onOpenChange(false)
+    } finally {
+      setSaving(false)
+    }
   }
 
   function handleRestoreDefaults() {
@@ -114,7 +140,7 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
                   <FieldLabel>Avatar</FieldLabel>
                   <div className="flex items-center gap-4">
                     <Avatar className="size-18">
-                      <AvatarFallback className="text-lg">{getInitials(user?.email ?? "?")}</AvatarFallback>
+                      <AvatarFallback className="text-lg">{getInitials(displayName || user?.email || "?")}</AvatarFallback>
                     </Avatar>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" onClick={() => toast.info("Photo upload coming soon")}>Upload photo</Button>
@@ -295,7 +321,9 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
         </Tabs>
 
         <DialogFooter showCloseButton>
-          <Button onClick={handleSave}>Save changes</Button>
+          <Button onClick={() => void handleSave()} disabled={saving}>
+            {saving ? "Saving..." : "Save changes"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

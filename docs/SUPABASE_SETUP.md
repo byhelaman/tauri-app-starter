@@ -36,7 +36,12 @@ VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 `SQL Editor → New query`
 
-Abre el archivo `supabase/migrations/001_foundation.sql`, copia todo el contenido y ejecútalo.
+Ejecuta los archivos en este orden:
+
+1. `supabase/migrations/001_foundation.sql`
+2. `supabase/migrations/002_admin_rbac.sql`
+
+Abre cada archivo, copia todo el contenido y ejecútalo en una query nueva.
 
 **Qué crea:**
 
@@ -56,11 +61,11 @@ Abre el archivo `supabase/migrations/001_foundation.sql`, copia todo el contenid
 | `delete_own_account` | RPC para que el usuario elimine su propia cuenta (bloqueada si es el único `owner`) |
 | `verify_user_password` | RPC para verificar la contraseña actual |
 | `check_email_exists` | RPC para verificar si un email existe — solo disponible para admins (`hierarchy >= 80`) |
-| `create_role` / `delete_role` | RPCs de gestión dinámica de roles (solo `owner`) |
+| `create_role` / `update_role` / `delete_role` | RPCs de gestión dinámica de roles (solo `owner`) |
 | Políticas RLS | Acceso controlado en todas las tablas |
 | Triggers de seguridad | Bloquean cambios de email y auto-escalada de roles |
 
-Si la ejecución tiene éxito verás `Success. No rows returned` al final.
+Si la ejecución tiene éxito verás `Success. No rows returned` al final de cada script.
 
 ---
 
@@ -138,13 +143,22 @@ Supabase incluye un servidor SMTP de prueba con límite de **2 emails por hora**
 
 `Project Settings → Authentication → SMTP Settings`
 
-Proveedores recomendados: [Resend](https://resend.com), [SendGrid](https://sendgrid.com), [Postmark](https://postmarkapp.com)
+Proveedores recomendados: [Resend](https://resend.com), [Brevo](https://www.brevo.com), [SendGrid](https://sendgrid.com), [Postmark](https://postmarkapp.com)
 
 ```
 Host:     smtp.resend.com
 Port:     465
 User:     resend
 Password: tu-api-key
+```
+
+Ejemplo con Brevo:
+
+```
+Host:     smtp-relay.brevo.com
+Port:     587
+User:     tu-email@dominio.com
+Password: tu-smtp-key
 ```
 
 ---
@@ -161,6 +175,22 @@ WHERE schemaname = 'public'
 ```
 
 Todos deben mostrar `rowsecurity = true`.
+
+---
+
+## 9. Desplegar Edge Function para reset de contraseña por admin
+
+Esta app incluye el endpoint seguro `admin-reset-user-password` para que un admin pueda restablecer una contraseña.
+
+```bash
+supabase functions deploy admin-reset-user-password
+```
+
+La función usa los secretos internos de Supabase Functions (`SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`) y valida jerarquía/permisos (`users.manage`) antes de aplicar el cambio.
+
+Archivo de la función:
+
+- `supabase/functions/admin-reset-user-password/index.ts`
 
 ---
 
@@ -188,9 +218,11 @@ Todos deben mostrar `rowsecurity = true`.
 
 > `owner` recibe **todos** los permisos dinámicamente — no requiere entradas en `role_permissions`.
 
+> Al eliminar un rol con `delete_role`, los usuarios asignados a ese rol se reasignan automáticamente al rol inmediatamente inferior en jerarquía.
+
 ### Añadir roles o permisos propios
 
-Edita las secciones 1, 2 y 3 de `001_foundation.sql` antes de ejecutar la migración:
+Edita las secciones 1, 2 y 3 de `001_foundation.sql` antes de ejecutar las migraciones:
 
 ```sql
 -- Agregar un nuevo rol

@@ -18,7 +18,9 @@ pnpm build
 pnpm tauri build
 ```
 
-There are no test or lint scripts configured in package.json.
+Available quality scripts in package.json:
+- `pnpm lint`
+- `pnpm test`
 
 ## Environment Setup
 
@@ -60,11 +62,11 @@ This is a **Tauri 2 desktop app template** with React 19 + TypeScript frontend b
 
 ### Supabase / Database
 
-The foundation migration (`supabase/migrations/001_foundation.sql`) creates:
+The foundation migrations (`supabase/migrations/001_foundation.sql` + `supabase/migrations/002_admin_rbac.sql`) create:
 - `profiles` table — linked to `auth.users`, stores role assignment
 - `roles`, `permissions`, `role_permissions` — RBAC tables
 
-**Role hierarchy**: `super_admin` (100) → `admin` (80) → `member` (10) → `guest` (0)
+**Role hierarchy**: `owner` (100) → `admin` (80) → `member` (10) → `guest` (0)
 
 **Critical**: The `custom_access_token_hook` function must be activated in the Supabase dashboard (Auth → Hooks) for JWT claims (role/permissions) to be injected into tokens. Without this, RBAC won't work. See `docs/SUPABASE_SETUP.md` for the full setup procedure.
 
@@ -72,7 +74,7 @@ Helper RPCs: `has_permission()`, `get_my_profile()`, `get_all_users()`, `update_
 
 Security constraints baked into the RPCs:
 - `check_email_exists` — restricted to `hierarchy_level >= 80` (prevents user enumeration)
-- `delete_own_account` — blocked if the caller is the only `super_admin` in the system
+- `delete_own_account` — blocked if the caller is the only `owner` in the system
 
 ### Tauri security
 

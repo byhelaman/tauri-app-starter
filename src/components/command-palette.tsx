@@ -21,9 +21,10 @@ interface CommandPaletteProps {
   onOpenNotifications?: () => void
   onOpenSystem?: () => void
   onOpenShortcuts?: () => void
+  showSystem?: boolean
 }
 
-export function CommandPalette({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenSystem, onOpenShortcuts }: CommandPaletteProps) {
+export function CommandPalette({ onOpenProfile, onOpenSettings, onOpenNotifications, onOpenSystem, onOpenShortcuts, showSystem = false }: CommandPaletteProps) {
   const { signOut } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
@@ -95,10 +96,12 @@ export function CommandPalette({ onOpenProfile, onOpenSettings, onOpenNotificati
                 <KeyboardIcon />
                 Keyboard shortcuts
               </CommandItem>
-              <CommandItem onSelect={() => run(onOpenSystem)}>
-                <ShieldIcon />
-                System
-              </CommandItem>
+              {showSystem && (
+                <CommandItem onSelect={() => run(onOpenSystem)}>
+                  <ShieldIcon />
+                  System
+                </CommandItem>
+              )}
               <CommandItem onSelect={() => run(signOut)}>
                 <LogOut />
                 Sign out

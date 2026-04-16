@@ -325,10 +325,7 @@ export function BulkCopyDialog<TData>({ table, tableId, scope, open, onOpenChang
                     </FieldSet>
                 </DialogBody>
 
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>
-                        Close
-                    </Button>
+                <DialogFooter showCloseButton>
                     <Button onClick={saveSettings}>
                         Save
                     </Button>

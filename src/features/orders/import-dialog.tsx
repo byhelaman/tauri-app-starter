@@ -235,10 +235,7 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
             />
           </DialogBody>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => handleClose(false)}>
-              Close
-            </Button>
+          <DialogFooter showCloseButton>
             <Button type="submit" disabled={!formState.isValid}>
               Import
             </Button>

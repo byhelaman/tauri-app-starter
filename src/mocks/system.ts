@@ -1,11 +1,11 @@
 import type { AuditEntry, PermissionMatrix, RoleDefinition, SystemUser } from "@/features/system/types"
 
 export const DEMO_USERS: SystemUser[] = [
-  { id: 1, name: "Alex Thompson", email: "alex@company.com", role: "owner", status: "active" },
-  { id: 2, name: "Maria Garcia", email: "maria@company.com", role: "admin", status: "active" },
-  { id: 3, name: "John Smith", email: "john@company.com", role: "member", status: "active" },
-  { id: 4, name: "Sarah Lee", email: "sarah@company.com", role: "member", status: "inactive" },
-  { id: 5, name: "Guest User", email: "guest@company.com", role: "guest", status: "active" },
+  { id: "00000000-0000-0000-0000-000000000001", displayName: "Alex Thompson", email: "alex@company.com", role: "owner", status: "active", hierarchyLevel: 100, createdAt: "2026-01-01T00:00:00Z", lastLoginAt: "2026-04-01T10:00:00Z" },
+  { id: "00000000-0000-0000-0000-000000000002", displayName: "Maria Garcia", email: "maria@company.com", role: "admin", status: "active", hierarchyLevel: 80, createdAt: "2026-01-02T00:00:00Z", lastLoginAt: "2026-04-01T10:00:00Z" },
+  { id: "00000000-0000-0000-0000-000000000003", displayName: "John Smith", email: "john@company.com", role: "member", status: "active", hierarchyLevel: 10, createdAt: "2026-01-03T00:00:00Z", lastLoginAt: "2026-04-01T10:00:00Z" },
+  { id: "00000000-0000-0000-0000-000000000004", displayName: "Sarah Lee", email: "sarah@company.com", role: "member", status: "inactive", hierarchyLevel: 10, createdAt: "2026-01-04T00:00:00Z", lastLoginAt: null },
+  { id: "00000000-0000-0000-0000-000000000005", displayName: "Guest User", email: "guest@company.com", role: "guest", status: "active", hierarchyLevel: 0, createdAt: "2026-01-05T00:00:00Z", lastLoginAt: "2026-04-01T10:00:00Z" },
 ]
 
 export const INITIAL_ROLES: RoleDefinition[] = [
@@ -16,10 +16,10 @@ export const INITIAL_ROLES: RoleDefinition[] = [
 ]
 
 export const INITIAL_PERMISSION_MATRIX: PermissionMatrix = {
-  owner: { view_content: true, create_content: true, edit_content: true, delete_content: true, manage_users: true, manage_roles: true, system_config: true },
-  admin: { view_content: true, create_content: true, edit_content: true, delete_content: true, manage_users: true, manage_roles: false, system_config: false },
-  member: { view_content: true, create_content: true, edit_content: true, delete_content: false, manage_users: false, manage_roles: false, system_config: false },
-  guest: { view_content: true, create_content: false, edit_content: false, delete_content: false, manage_users: false, manage_roles: false, system_config: false },
+  owner: { "profile.read": true, "profile.update": true, "users.view": true, "users.manage": true, "system.view": true, "system.manage": true },
+  admin: { "profile.read": true, "profile.update": true, "users.view": true, "users.manage": true, "system.view": true, "system.manage": false },
+  member: { "profile.read": true, "profile.update": true, "users.view": false, "users.manage": false, "system.view": false, "system.manage": false },
+  guest: { "profile.read": false, "profile.update": false, "users.view": false, "users.manage": false, "system.view": false, "system.manage": false },
 }
 
 export const AUDIT_LOG: AuditEntry[] = [

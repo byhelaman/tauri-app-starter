@@ -43,9 +43,10 @@ Ver la guía completa en [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md).
 Pasos requeridos en orden:
 
 1. Crear proyecto y copiar credenciales al `.env`
-2. Ejecutar `supabase/migrations/001_foundation.sql` en el SQL Editor
+2. Ejecutar `supabase/migrations/001_foundation.sql` y luego `supabase/migrations/002_admin_rbac.sql` en el SQL Editor
 3. Activar el Auth Hook (`Authentication → Hooks → custom_access_token_hook`) ⚠️
-4. Promover el primer `super_admin` con SQL directo
+4. Desplegar `supabase/functions/admin-reset-user-password` (para reset de contraseña por admin)
+5. Promover el primer `owner` con SQL directo
 
 ---
 
@@ -91,8 +92,12 @@ src-tauri/
 └── tauri.conf.json         # Configuración de Tauri
 
 supabase/
+├── functions/
+│   └── admin-reset-user-password/
+│       └── index.ts           # Reset seguro por admin + notificación
 └── migrations/
-    └── 001_foundation.sql  # RBAC, perfiles, JWT hook, RPCs
+  ├── 001_foundation.sql  # RBAC base, perfiles, JWT hook, RLS, triggers, RPCs utilitarias
+  └── 002_admin_rbac.sql  # RPCs/grants de administración y gestión de roles
 ```
 
 ---
@@ -111,7 +116,7 @@ El template incluye:
 
 | Rol | Nivel | Descripción |
 |-----|-------|-------------|
-| `super_admin` | 100 | Control total del sistema |
+| `owner` | 100 | Control total del sistema |
 | `admin` | 80 | Gestionar usuarios y configuración |
 | `member` | 10 | Usuario autenticado estándar |
 | `guest` | 0 | No verificado, asignado al registrarse |
@@ -187,5 +192,6 @@ Si no se definen, la app muestra la pantalla de setup para ingresarlas manualmen
 | Identificador | `tauri.conf.json` → `identifier` |
 | Versión | `tauri.conf.json` → `version` y `Cargo.toml` → `version` |
 | Tamaño de ventana | `tauri.conf.json` → `app.windows` |
-| Roles y permisos | `supabase/migrations/001_foundation.sql` → secciones 1, 2 y 3 |
+| Roles y permisos base | `supabase/migrations/001_foundation.sql` → secciones 1, 2 y 3 |
+| RPCs/admin RBAC | `supabase/migrations/002_admin_rbac.sql` |
 | Página principal | `src/pages/dashboard.tsx` |

@@ -166,7 +166,7 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
         </DialogBody>
 
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={sendTest}>
+          <Button variant="outline" onClick={sendTest}>
             Send test notification
           </Button>
         </DialogFooter>

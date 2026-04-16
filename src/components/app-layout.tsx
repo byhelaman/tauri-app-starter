@@ -8,6 +8,7 @@ import { ProfileModal } from "@/components/profile-modal"
 import { SettingsModal } from "@/components/settings-modal"
 import { SystemModal } from "@/components/system-modal"
 import { ShortcutsModal } from "@/components/shortcuts-modal"
+import { useAuth } from "@/contexts/auth-context"
 import { Titlebar } from "@/components/window-controls"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -81,8 +82,15 @@ async function syncGeneralSettings(settings: AppSettings) {
 export function AppLayout() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const { claims, hasPermission } = useAuth()
   const [modal, setModal] = useState<ModalType>(null)
   const [settings, setSettings] = useState<AppSettings>(loadSettings)
+  const canOpenSystem =
+    claims.hierarchyLevel >= 80 ||
+    hasPermission("system.view") ||
+    hasPermission("system.manage") ||
+    hasPermission("users.view") ||
+    hasPermission("users.manage")
 
   useEffect(() => {
     try { localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings)) } catch { /* noop */ }
@@ -103,7 +111,7 @@ export function AppLayout() {
         e.preventDefault()
         setModal("settings")
       }
-      if (e.shiftKey && !mod && !e.altKey && e.code === "KeyS") {
+      if (canOpenSystem && e.shiftKey && !mod && !e.altKey && e.code === "KeyS") {
         e.preventDefault()
         setModal("system")
       }
@@ -132,7 +140,7 @@ export function AppLayout() {
     }
     document.addEventListener("keydown", handleKey)
     return () => document.removeEventListener("keydown", handleKey)
-  }, [navigate])
+  }, [canOpenSystem, navigate])
 
   const [unreadCount, setUnreadCount] = useState(0)
 
@@ -176,8 +184,9 @@ export function AppLayout() {
             onOpenProfile={() => setModal("profile")}
             onOpenSettings={() => setModal("settings")}
             onOpenNotifications={() => setModal("notifications")}
-            onOpenSystem={() => setModal("system")}
+            onOpenSystem={canOpenSystem ? () => setModal("system") : undefined}
             onOpenShortcuts={() => setModal("shortcuts")}
+            showSystem={canOpenSystem}
           />
           <div className="flex items-center gap-2">
             <Button
@@ -204,8 +213,9 @@ export function AppLayout() {
             <UserNav
               onOpenProfile={() => setModal("profile")}
               onOpenSettings={() => setModal("settings")}
-              onOpenSystem={() => setModal("system")}
+              onOpenSystem={canOpenSystem ? () => setModal("system") : undefined}
               onOpenShortcuts={() => setModal("shortcuts")}
+              canOpenSystem={canOpenSystem}
             />
           </div>
         </div>
@@ -231,8 +241,8 @@ export function AppLayout() {
         onUnreadCountChange={setUnreadCount}
       />
       <SystemModal
-        open={modal === "system"}
-        onOpenChange={(open) => setModal(open ? "system" : null)}
+        open={canOpenSystem && modal === "system"}
+        onOpenChange={(open) => setModal(open && canOpenSystem ? "system" : null)}
       />
       <ShortcutsModal
         open={modal === "shortcuts"}
