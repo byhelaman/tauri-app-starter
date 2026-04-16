@@ -1,3 +1,4 @@
+import { useState } from "react"
 import type { Table } from "@tanstack/react-table"
 import { toast } from "sonner"
 import {
@@ -6,6 +7,7 @@ import {
   DownloadIcon,
   PrinterIcon,
   RotateCcwIcon,
+  Settings2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -13,15 +15,27 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  FORMAT_META,
+  formatRows,
+  getScopeRows,
+  type CopyFormat,
+  type ExportFormat,
+  type Scope,
+} from "./table-formats"
+import { BulkCopyDialog } from "./bulk-copy-dialog"
 
 interface DataTableViewOptionsProps<TData> {
   table: Table<TData>
+  tableId: string
 }
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
@@ -37,7 +51,7 @@ function readAskExportLocation(): boolean {
   }
 }
 
-async function saveFile(content: string, filename: string, mime: string, ext: "csv" | "tsv" | "json") {
+async function saveFile(content: string, filename: string, mime: string, ext: string) {
   if (isTauri && readAskExportLocation()) {
     try {
       const { save } = await import("@tauri-apps/plugin-dialog")
@@ -63,57 +77,42 @@ async function saveFile(content: string, filename: string, mime: string, ext: "c
   return true
 }
 
-function getExportData<TData>(table: Table<TData>) {
-  const visibleColumns = table.getVisibleFlatColumns().filter((col) => col.id !== "select" && col.id !== "actions")
-  const headers = visibleColumns.map((col) => col.id)
-  const rows = table.getFilteredRowModel().rows
-  return { visibleColumns, headers, rows }
+const SCOPE_LABEL: Record<Scope, string> = {
+  selected: "Selected",
+  filtered: "Filtered",
+  all: "All",
 }
 
-async function exportToCsv<TData>(table: Table<TData>) {
-  const { visibleColumns, headers, rows } = getExportData(table)
-  const body = rows.map((row) =>
-    visibleColumns.map((col) => {
-      const str = String(row.getValue(col.id) ?? "")
-      return str.includes(",") || str.includes('"') || str.includes("\n") ? `"${str.replace(/"/g, '""')}"` : str
-    }).join(",")
-  )
-  const ok = await saveFile([headers.join(","), ...body].join("\n"), "table-export.csv", "text/csv", "csv")
-  if (ok) toast.success(`Exported ${rows.length} rows as CSV`)
-}
+export function DataTableViewOptions<TData>({ table, tableId }: DataTableViewOptionsProps<TData>) {
+  const selectedCount = table.getSelectedRowModel().rows.length
+  const filteredCount = table.getFilteredRowModel().rows.length
+  const totalCount = table.getCoreRowModel().rows.length
 
-async function exportToTsv<TData>(table: Table<TData>) {
-  const { visibleColumns, headers, rows } = getExportData(table)
-  const body = rows.map((row) =>
-    visibleColumns.map((col) => String(row.getValue(col.id) ?? "").replace(/\t/g, " ")).join("\t")
-  )
-  const ok = await saveFile([headers.join("\t"), ...body].join("\n"), "table-export.tsv", "text/tab-separated-values", "tsv")
-  if (ok) toast.success(`Exported ${rows.length} rows as TSV`)
-}
+  const [scope, setScope] = useState<Scope>("filtered")
+  const [bulkCopyOpen, setBulkCopyOpen] = useState(false)
+  const effectiveScope: Scope = scope === "selected" && selectedCount === 0 ? "filtered" : scope
 
-async function exportToJson<TData>(table: Table<TData>) {
-  const { visibleColumns, rows } = getExportData(table)
-  const data = rows.map((row) =>
-    Object.fromEntries(visibleColumns.map((col) => [col.id, row.getValue(col.id)]))
-  )
-  const ok = await saveFile(JSON.stringify(data, null, 2), "table-export.json", "application/json", "json")
-  if (ok) toast.success(`Exported ${rows.length} rows as JSON`)
-}
+  const scopeCounts: Record<Scope, number> = {
+    selected: selectedCount,
+    filtered: filteredCount,
+    all: totalCount,
+  }
 
-function copyToClipboard<TData>(table: Table<TData>) {
-  const visibleColumns = table.getVisibleFlatColumns().filter((col) => col.id !== "select" && col.id !== "actions")
-  const headers = visibleColumns.map((col) => col.id)
-  const rows = table.getFilteredRowModel().rows.map((row) =>
-    visibleColumns.map((col) => String(row.getValue(col.id) ?? ""))
-  )
-  const text = [headers.join("\t"), ...rows.map((r) => r.join("\t"))].join("\n")
-  navigator.clipboard.writeText(text)
-  toast.success(`Copied ${rows.length} rows to clipboard`)
-}
+  async function exportAs(format: ExportFormat) {
+    const rows = getScopeRows(table, effectiveScope)
+    const content = formatRows(table, rows, format, true)
+    const meta = FORMAT_META[format]
+    const ok = await saveFile(content, `orders-${effectiveScope}.${meta.ext}`, meta.mime, meta.ext)
+    if (ok) toast.success(`Exported ${rows.length} rows as ${meta.label}`)
+  }
 
-export function DataTableViewOptions<TData>({
-  table,
-}: DataTableViewOptionsProps<TData>) {
+  async function copyAs(format: CopyFormat) {
+    const rows = getScopeRows(table, effectiveScope)
+    const content = formatRows(table, rows, format, false)
+    await navigator.clipboard.writeText(content)
+    toast.success(`Copied ${rows.length} rows as ${FORMAT_META[format].label}`)
+  }
+
   return (
     <div className="ml-auto flex items-center gap-2">
       <DropdownMenu>
@@ -147,27 +146,72 @@ export function DataTableViewOptions<TData>({
             <ChevronDownIcon />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-32">
+        <DropdownMenuContent align="end" className="w-40">
+          {/* <DropdownMenuLabel>
+            Scope
+          </DropdownMenuLabel> */}
+          <DropdownMenuRadioGroup value={scope} onValueChange={(v) => setScope(v as Scope)}>
+            {(["selected", "filtered", "all"] as Scope[]).map((s) => (
+              <DropdownMenuRadioItem
+                key={s}
+                value={s}
+                disabled={s === "selected" && selectedCount === 0}
+              >
+                {SCOPE_LABEL[s]} ({scopeCounts[s]})
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+
+          <DropdownMenuSeparator />
+
+          {/* <DropdownMenuLabel>
+            Actions
+          </DropdownMenuLabel> */}
+          <DropdownMenuItem
+            disabled={scopeCounts[effectiveScope] === 0}
+            onClick={() => setBulkCopyOpen(true)}
+          >
+            <Settings2 />
+            Bulk copy
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
+
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <DownloadIcon />
-              Export
+              Export as
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
-              <DropdownMenuItem onClick={() => exportToCsv(table)}>CSV (.csv)</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => exportToTsv(table)}>TSV (.tsv)</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => exportToJson(table)}>JSON (.json)</DropdownMenuItem>
+              {(["csv", "tsv", "json", "md"] as ExportFormat[]).map((f) => (
+                <DropdownMenuItem key={f} onClick={() => exportAs(f)}>
+                  {FORMAT_META[f].label}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
-          <DropdownMenuItem onClick={() => copyToClipboard(table)}>
-            <ClipboardCopyIcon />
-            Copy
-          </DropdownMenuItem>
+
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <ClipboardCopyIcon />
+              Copy as
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              {(["tsv", "csv", "json", "md"] as CopyFormat[]).map((f) => (
+                <DropdownMenuItem key={f} onClick={() => copyAs(f)}>
+                  {FORMAT_META[f].label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+
           <DropdownMenuItem onClick={() => window.print()}>
             <PrinterIcon />
             Print
           </DropdownMenuItem>
+
           <DropdownMenuSeparator />
+
           <DropdownMenuItem
             onClick={() => {
               table.resetColumnFilters()
@@ -181,6 +225,14 @@ export function DataTableViewOptions<TData>({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <BulkCopyDialog
+        table={table}
+        tableId={tableId}
+        scope={effectiveScope}
+        open={bulkCopyOpen}
+        onOpenChange={setBulkCopyOpen}
+      />
     </div>
   )
 }

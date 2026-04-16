@@ -8,7 +8,6 @@ import {
   LoaderCircle,
   Phone,
   Store,
-  Trash2Icon,
   Truck,
   Upload,
   XCircle,
@@ -18,6 +17,7 @@ import { INITIAL_ORDERS } from "@/mocks/orders"
 import { DataTable } from "@/features/orders/data-table"
 import type { FacetedFilterOption } from "@/features/orders/data-table-types"
 import { ImportDialog } from "@/features/orders/import-dialog"
+import { buildBulkCopyText } from "@/features/orders/bulk-copy"
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -91,6 +91,7 @@ export function OrdersPage() {
       <DataTable
         columns={columns}
         data={orders}
+        tableId="orders"
         filterColumn="customer"
         filterPlaceholder="Search customers..."
         facetedFilters={[
@@ -108,14 +109,35 @@ export function OrdersPage() {
           </>
         )}
         bulkActions={(selected, clearSelection) => (
-          <Button
-            variant="destructive"
-            size="icon-sm"
-            aria-label="Delete"
-            onClick={() => setBulkDeleteTarget({ selected, clearSelection })}
-          >
-            <Trash2Icon />
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                const content = buildBulkCopyText(selected as unknown as Record<string, unknown>[], "orders")
+                if (!content) {
+                  toast.error("Nothing to copy")
+                  return
+                }
+                try {
+                  await navigator.clipboard.writeText(content)
+                  toast.success(`Copied ${selected.length} ${selected.length === 1 ? "row" : "rows"}`)
+                } catch {
+                  toast.error("Could not copy to clipboard")
+                }
+              }}
+            >
+              Copy
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              aria-label="Delete"
+              onClick={() => setBulkDeleteTarget({ selected, clearSelection })}
+            >
+              Delete
+            </Button>
+          </>
         )}
         defaultPageSize={25}
       />

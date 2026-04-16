@@ -12,6 +12,7 @@ import type { FacetedFilterConfig } from "./data-table-types"
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>
+  tableId: string
   filterColumn?: string
   filterPlaceholder?: string
   facetedFilters?: FacetedFilterConfig[]
@@ -19,6 +20,7 @@ interface DataTableToolbarProps<TData> {
 
 export function DataTableToolbar<TData>({
   table,
+  tableId,
   filterColumn = "title",
   filterPlaceholder = "Search...",
   facetedFilters,
@@ -80,7 +82,7 @@ export function DataTableToolbar<TData>({
         </Button>
       )}
 
-      <DataTableViewOptions table={table} />
+      <DataTableViewOptions table={table} tableId={tableId} />
     </div>
   )
 }

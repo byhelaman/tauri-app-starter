@@ -32,6 +32,7 @@ import type { FacetedFilterConfig } from "./data-table-types"
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
+  tableId: string
   filterColumn?: string
   filterPlaceholder?: string
   facetedFilters?: FacetedFilterConfig[]
@@ -45,6 +46,7 @@ interface DataTableProps<TData, TValue> {
 export function DataTable<TData, TValue>({
   columns,
   data,
+  tableId,
   filterColumn = "title",
   filterPlaceholder = "Filter...",
   facetedFilters,
@@ -85,6 +87,7 @@ export function DataTable<TData, TValue>({
     <div className={cn("relative flex flex-col gap-4", className)}>
       <DataTableToolbar
         table={table}
+        tableId={tableId}
         filterColumn={filterColumn}
         filterPlaceholder={filterPlaceholder}
         facetedFilters={facetedFilters}
