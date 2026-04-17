@@ -44,7 +44,7 @@ export function DataTableFacetedFilter<TData, TValue>({
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="border-dashed">
-                    <PlusCircle />
+                    <PlusCircle data-icon="inline-start" />
                     {title ?? "Filter"}
                     {selectedValues?.size > 0 && (
                         <>
@@ -102,8 +102,8 @@ export function DataTableFacetedFilter<TData, TValue>({
                         <div className="p-1">
                             <Button
                                 variant="ghost"
-                                size="sm"
-                                className="w-full justify-center"
+                                // size="sm"
+                                className="w-full justify-center font-normal"
                                 onClick={() => column?.setFilterValue(undefined)}
                             >
                                 Clear filters

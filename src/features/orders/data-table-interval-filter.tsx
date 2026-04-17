@@ -22,7 +22,7 @@ function extractStartHour(timeRange: string): number {
 }
 
 /** Collect all unique start hours present in the column data, sorted */
-function getAvailableHours<TData, TValue>(column: Column<TData, TValue>): string[] {
+export function getAvailableHours<TData, TValue>(column: Column<TData, TValue>): string[] {
   const facets = column.getFacetedUniqueValues()
   const hours = new Set<number>()
   for (const [value] of facets) {
@@ -60,7 +60,7 @@ export function DataTableIntervalFilter<TData, TValue>({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" className="border-dashed">
-          <Clock />
+          <Clock data-icon="inline-start" />
           {title}
           {selectedValues.size > 0 && (
             <>
@@ -88,7 +88,7 @@ export function DataTableIntervalFilter<TData, TValue>({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-40 p-0">
-        <div className="max-h-56 overflow-auto scrollbar p-1">
+        <div className="max-h-60 overflow-auto scrollbar p-1">
           {availableHours.map((hour) => (
             <DropdownMenuCheckboxItem
               key={hour}
@@ -107,8 +107,8 @@ export function DataTableIntervalFilter<TData, TValue>({
             <div className="p-1">
               <Button
                 variant="ghost"
-                size="sm"
-                className="w-full justify-center"
+                // size="sm"
+                className="w-full justify-center font-normal"
                 onClick={() => column.setFilterValue(undefined)}
               >
                 Clear filters

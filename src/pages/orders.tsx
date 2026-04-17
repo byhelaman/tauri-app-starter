@@ -96,7 +96,7 @@ export function OrdersPage() {
         data={orders}
         tableId="orders"
         filterColumn="customer"
-        filterPlaceholder="Search customers..."
+        filterPlaceholder="Search..."
         facetedFilters={[
           { columnId: "status", title: "Status", options: STATUS_FILTER_OPTIONS },
           { columnId: "channel", title: "Channel", options: CHANNEL_FILTER_OPTIONS },
