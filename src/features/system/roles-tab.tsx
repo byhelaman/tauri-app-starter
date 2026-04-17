@@ -443,7 +443,6 @@ export function RolesTab({
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuGroup>
                                                         <DropdownMenuItem
-                                                            variant="destructive"
                                                             disabled={role.builtin || !canManageRoles || busy}
                                                             onClick={() => setRemoveTarget(role)}
                                                         >
@@ -464,7 +463,6 @@ export function RolesTab({
                                 <ContextMenuItem onSelect={() => void handleDuplicateRole(role)} disabled={!canManageRoles || busy}>Duplicate role</ContextMenuItem>
                                 <ContextMenuSeparator />
                                 <ContextMenuItem
-                                    variant="destructive"
                                     disabled={role.builtin || !canManageRoles || busy}
                                     onSelect={() => setRemoveTarget(role)}
                                 >

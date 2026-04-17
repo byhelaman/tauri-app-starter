@@ -214,7 +214,7 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
                             <ItemActions>
                               <Button
                                 type="button"
-                                variant="destructive"
+                                variant="ghost"
                                 size="icon"
                                 aria-label={`Remove ${file.name}`}
                                 onClick={() =>

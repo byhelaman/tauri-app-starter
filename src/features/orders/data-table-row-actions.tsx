@@ -47,7 +47,7 @@ export function DataTableRowActions({ order, onDelete }: DataTableRowActionsProp
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => toast.info("Order editing coming soon")}>Edit order</DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive"
+          <DropdownMenuItem
             onClick={() => setConfirmOpen(true)}
           >
             Delete

@@ -65,6 +65,8 @@ import type { RoleDefinition, SystemUser } from "./types"
 
 const updateProfileSchema = z.object({
     displayName: z.string().min(1, "Required"),
+    email: z.string().email("Invalid email"),
+    role: z.string().min(1, "Required"),
 })
 type UpdateProfileValues = z.infer<typeof updateProfileSchema>
 
@@ -170,16 +172,20 @@ function InviteUserDialog({ open, onOpenChange, onInviteUser, roles, canManageUs
 
 interface ViewProfileDialogProps {
     user: SystemUser | null
+    roles: RoleDefinition[]
     onOpenChange: (open: boolean) => void
     onUpdateDisplayName: (userId: string, displayName: string) => Promise<void>
+    onUpdateRole: (userId: string, role: string) => Promise<void>
     canManageUsers: boolean
     busy?: boolean
 }
 
-function ViewProfileDialog({ user, onOpenChange, onUpdateDisplayName, canManageUsers, busy }: ViewProfileDialogProps) {
+function ViewProfileDialog({ user, roles, onOpenChange, onUpdateDisplayName, onUpdateRole, canManageUsers, busy }: ViewProfileDialogProps) {
     const { control, handleSubmit, reset } = useForm<UpdateProfileValues>({
         resolver: zodResolver(updateProfileSchema),
-        values: user ? { displayName: user.displayName } : { displayName: "" },
+        values: user
+            ? { displayName: user.displayName, email: user.email, role: user.role }
+            : { displayName: "", email: "", role: "" },
     })
 
     function handleClose(v: boolean) {
@@ -189,7 +195,12 @@ function ViewProfileDialog({ user, onOpenChange, onUpdateDisplayName, canManageU
 
     async function onSubmit(values: UpdateProfileValues) {
         if (!user) return
-        await onUpdateDisplayName(user.id, values.displayName)
+        const promises: Promise<void>[] = []
+        if (values.displayName !== user.displayName)
+            promises.push(onUpdateDisplayName(user.id, values.displayName))
+        if (values.role !== user.role)
+            promises.push(onUpdateRole(user.id, values.role))
+        await Promise.all(promises)
     }
 
     return (
@@ -232,20 +243,53 @@ function ViewProfileDialog({ user, onOpenChange, onUpdateDisplayName, canManageU
                                     </Field>
                                 )}
                             />
-                            <Field>
-                                <FieldLabel>Email</FieldLabel>
-                                <Input value={user.email} disabled />
-                            </Field>
+                            <Controller
+                                name="email"
+                                control={control}
+                                render={({ field, fieldState }) => (
+                                    <Field data-invalid={fieldState.invalid}>
+                                        <FieldLabel>Email</FieldLabel>
+                                        <Input {...field} type="email" aria-invalid={fieldState.invalid} disabled={!canManageUsers || busy} />
+                                        <FieldError errors={[fieldState.error]} />
+                                    </Field>
+                                )}
+                            />
                             <div className="flex gap-3">
-                                <Field className="flex-1">
-                                    <FieldLabel>Role</FieldLabel>
-                                    <Input value={user.role} disabled />
-                                </Field>
+                                <Controller
+                                    name="role"
+                                    control={control}
+                                    render={({ field, fieldState }) => (
+                                        <Field className="flex-1" data-invalid={fieldState.invalid}>
+                                            <FieldLabel>Role</FieldLabel>
+                                            <Select value={field.value} onValueChange={field.onChange} disabled={!canManageUsers || busy}>
+                                                <SelectTrigger aria-invalid={fieldState.invalid}>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectGroup>
+                                                        {roles.map((r) => (
+                                                            <SelectItem key={r.name} value={r.name}>{r.name}</SelectItem>
+                                                        ))}
+                                                    </SelectGroup>
+                                                </SelectContent>
+                                            </Select>
+                                            <FieldError errors={[fieldState.error]} />
+                                        </Field>
+                                    )}
+                                />
                                 <Field className="w-32">
                                     <FieldLabel>Status</FieldLabel>
                                     <Input value={user.status} disabled />
                                 </Field>
                             </div>
+                            <Field>
+                                <FieldLabel>Last login</FieldLabel>
+                                <p className="text-sm text-muted-foreground">
+                                    {user.lastLoginAt
+                                        ? new Date(user.lastLoginAt).toLocaleString()
+                                        : "Never"}
+                                </p>
+                            </Field>
                         </FieldGroup>
                         <DialogFooter showCloseButton className="mt-4">
                             <Button type="submit" disabled={!canManageUsers || busy}>Save</Button>
@@ -441,7 +485,15 @@ export function UsersTab({ users, roles, onUpdateRole, onUpdateDisplayName, onRe
                 canManageUsers={canManageUsers}
                 busy={inviteBusy}
             />
-            <ViewProfileDialog user={profileUser} onOpenChange={(open) => { if (!open) setProfileUser(null) }} onUpdateDisplayName={handleUpdateDisplayName} canManageUsers={canManageUsers} busy={profileBusy} />
+            <ViewProfileDialog
+                user={profileUser}
+                roles={roles}
+                onOpenChange={(open) => { if (!open) setProfileUser(null) }}
+                onUpdateDisplayName={handleUpdateDisplayName}
+                onUpdateRole={handleRoleChange}
+                canManageUsers={canManageUsers}
+                busy={profileBusy}
+            />
             <ResetPasswordAlert
                 user={resetPasswordUser}
                 onOpenChange={(open) => { if (!open) setResetPasswordUser(null) }}
@@ -519,7 +571,7 @@ export function UsersTab({ users, roles, onUpdateRole, onUpdateDisplayName, onRe
                                         </DropdownMenuGroup>
                                         <DropdownMenuSeparator />
                                         <DropdownMenuGroup>
-                                            <DropdownMenuItem variant="destructive" onClick={() => setRemoveUser(user)} disabled={!canManageUsers || removeBusy}>
+                                            <DropdownMenuItem onClick={() => setRemoveUser(user)} disabled={!canManageUsers || removeBusy}>
                                                 Remove user
                                             </DropdownMenuItem>
                                         </DropdownMenuGroup>
@@ -531,7 +583,7 @@ export function UsersTab({ users, roles, onUpdateRole, onUpdateDisplayName, onRe
                             <ContextMenuItem onSelect={() => setProfileUser(user)}>View profile</ContextMenuItem>
                             <ContextMenuItem onSelect={() => setResetPasswordUser(user)} disabled={!canManageUsers || resetBusy}>Reset password</ContextMenuItem>
                             <ContextMenuSeparator />
-                            <ContextMenuItem variant="destructive" onSelect={() => setRemoveUser(user)} disabled={!canManageUsers || removeBusy}>
+                            <ContextMenuItem onSelect={() => setRemoveUser(user)} disabled={!canManageUsers || removeBusy}>
                                 Remove user
                             </ContextMenuItem>
                         </ContextMenuContent>

@@ -107,7 +107,7 @@ export function OrdersPage() {
             <ContextMenuItem onSelect={() => copyCode(order)}>Copy code</ContextMenuItem>
             <ContextMenuItem onSelect={() => toast.info("Order editing coming soon")}>Edit order</ContextMenuItem>
             <ContextMenuSeparator />
-            <ContextMenuItem variant="destructive" onSelect={() => handleDeleteRequest(order)}>
+            <ContextMenuItem onSelect={() => handleDeleteRequest(order)}>
               Delete
             </ContextMenuItem>
           </>
