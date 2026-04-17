@@ -337,7 +337,7 @@ function ResetPasswordAlert({ user, onOpenChange, onConfirm, busy }: ResetPasswo
                         />
                     </FieldGroup>
                     <DialogFooter showCloseButton>
-                        <Button type="submit" disabled={busy}>Save changes</Button>
+                        <Button type="submit" disabled={busy}>Save Changes</Button>
                     </DialogFooter>
                 </form>
             </DialogContent>

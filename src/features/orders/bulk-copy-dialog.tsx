@@ -29,7 +29,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
+import {
+    InputGroup,
+    InputGroupAddon,
+    InputGroupButton,
+    InputGroupTextarea,
+} from "@/components/ui/input-group"
 import type { Scope } from "./table-formats"
 import { getScopeRows } from "./table-formats"
 import {
@@ -125,18 +130,40 @@ function buildText<TData>(
     return lines.join("\n")
 }
 
+function parseFormat(value: string | undefined): BulkCopyFormat {
+    return value === "lines" || value === "csv" || value === "tsv" || value === "json" || value === "custom"
+        ? value
+        : "lines"
+}
+
 export function BulkCopyDialog<TData>({ table, tableId, scope, open, onOpenChange }: BulkCopyDialogProps<TData>) {
     const savedSettings = readBulkCopySettings(tableId)
-    const [format, setFormat] = useState<BulkCopyFormat>(() => {
-        const savedFormat = savedSettings?.format
-        return savedFormat === "lines" || savedFormat === "csv" || savedFormat === "tsv" || savedFormat === "json" || savedFormat === "custom"
-            ? savedFormat
-            : "lines"
-    })
+    const [format, setFormat] = useState<BulkCopyFormat>(() => parseFormat(savedSettings?.format))
     const [headers, setHeaders] = useState<boolean>(() => savedSettings?.headers ?? true)
     const [template, setTemplate] = useState<string>(() => savedSettings?.template ?? BULK_COPY_DEFAULT_TEMPLATE)
     const [fields, setFields] = useState<string[]>(() => savedSettings?.fields ?? getCopyFieldIds(table).slice(0, 1))
     const templateRef = useRef<HTMLTextAreaElement>(null)
+
+    // Al cerrar el dialog (sin guardar o tras guardar), se descarta el estado
+    // no persistido restaurando los ajustes guardados en localStorage.
+    // Esto ocurre en el handler de evento, no en un efecto.
+    function handleOpenChange(next: boolean) {
+        if (!next) {
+            const saved = readBulkCopySettings(tableId)
+            setFormat(parseFormat(saved?.format))
+            setHeaders(saved?.headers ?? true)
+            setTemplate(saved?.template ?? BULK_COPY_DEFAULT_TEMPLATE)
+            setFields(saved?.fields ?? getCopyFieldIds(table).slice(0, 1))
+        }
+        onOpenChange(next)
+    }
+
+    function resetToDefaults() {
+        setFormat("lines")
+        setHeaders(true)
+        setTemplate(BULK_COPY_DEFAULT_TEMPLATE)
+        setFields(getCopyFieldIds(table).slice(0, 1))
+    }
 
     const rows = getScopeRows(table, scope)
     const fieldOptions = useMemo(() => getCopyFieldIds(table), [table])
@@ -183,14 +210,14 @@ export function BulkCopyDialog<TData>({ table, tableId, scope, open, onOpenChang
             }
             localStorage.setItem(bulkCopySettingsKey(tableId), JSON.stringify(payload))
             toast.success("Bulk copy settings saved")
-            onOpenChange(false)
+            handleOpenChange(false)
         } catch {
             toast.error("Could not save settings")
         }
     }
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent className="max-w-sm">
                 <DialogHeader>
                     <DialogTitle>Bulk Copy</DialogTitle>
@@ -223,15 +250,43 @@ export function BulkCopyDialog<TData>({ table, tableId, scope, open, onOpenChang
                             <>
                                 <Field className="min-w-0">
                                     <FieldLabel htmlFor="bulk-copy-template">Template</FieldLabel>
-                                    <Textarea
-                                        id="bulk-copy-template"
-                                        ref={templateRef}
-                                        value={template}
-                                        onChange={(event) => setTemplate(event.target.value)}
-                                        className="min-h-20 max-h-36 resize-none font-mono text-xs scrollbar"
-                                        spellCheck={false}
-                                        placeholder="{code} - {customer}"
-                                    />
+                                    <InputGroup>
+                                        <InputGroupTextarea
+                                            id="bulk-copy-template"
+                                            ref={templateRef}
+                                            value={template}
+                                            onChange={(e) => setTemplate(e.target.value)}
+                                            className="min-h-20 max-h-25 scrollbar"
+                                            spellCheck={false}
+                                            placeholder="{code} - {customer}"
+                                        />
+                                        <InputGroupAddon align="block-end" className="flex-wrap gap-1">
+                                            {fieldOptions.map((field) => (
+                                                <InputGroupButton
+                                                    key={field}
+                                                    variant="outline"
+                                                    className="border-dashed font-normal"
+                                                    onClick={() => insertToken(`{${field}}`)}
+                                                >
+                                                    {field}
+                                                </InputGroupButton>
+                                            ))}
+                                            <InputGroupButton
+                                                variant="outline"
+                                                className="border-dashed font-normal"
+                                                onClick={() => insertToken("\\n")}
+                                            >
+                                                {"\\n"}
+                                            </InputGroupButton>
+                                            <InputGroupButton
+                                                variant="outline"
+                                                className="border-dashed font-normal"
+                                                onClick={() => insertToken("\\t")}
+                                            >
+                                                {"\\t"}
+                                            </InputGroupButton>
+                                        </InputGroupAddon>
+                                    </InputGroup>
                                     {invalidFields.length > 0 && (
                                         <FieldError>
                                             Unknown: {invalidFields.map((field) => `{${field}}`).join(", ")}
@@ -239,41 +294,6 @@ export function BulkCopyDialog<TData>({ table, tableId, scope, open, onOpenChang
                                     )}
                                 </Field>
 
-                                <Field className="min-w-0">
-                                    <FieldLabel>Insert</FieldLabel>
-                                    <div className="flex flex-wrap gap-1">
-                                        {fieldOptions.map((field) => (
-                                            <Button
-                                                key={field}
-                                                type="button"
-                                                variant="outline"
-                                                size="xs"
-                                                className="font-mono border-dashed"
-                                                onClick={() => insertToken(`{${field}}`)}
-                                            >
-                                                {field}
-                                            </Button>
-                                        ))}
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="xs"
-                                            className="font-mono"
-                                            onClick={() => insertToken("\\n")}
-                                        >
-                                            {"\\n"}
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="xs"
-                                            className="font-mono"
-                                            onClick={() => insertToken("\\t")}
-                                        >
-                                            {"\\t"}
-                                        </Button>
-                                    </div>
-                                </Field>
                             </>
                         ) : (
                             <>
@@ -318,16 +338,20 @@ export function BulkCopyDialog<TData>({ table, tableId, scope, open, onOpenChang
 
                         <Field className="min-w-0">
                             <FieldLabel>Preview</FieldLabel>
-                            <pre className="block max-h-36 max-w-full overflow-auto rounded-md border bg-muted/40 p-2 font-mono text-xs whitespace-pre text-muted-foreground scrollbar">
+                            <pre className="block max-h-25 max-w-full overflow-auto rounded-md border bg-muted/40 p-2 py-1.5 text-sm whitespace-pre
+                            text-muted-foreground scrollbar">
                                 {previewText.trim() ? previewText : "-"}
                             </pre>
                         </Field>
                     </FieldSet>
                 </DialogBody>
 
-                <DialogFooter showCloseButton>
+                <DialogFooter>
+                    <Button variant="outline" onClick={resetToDefaults} className="mr-auto">
+                        Reset
+                    </Button>
                     <Button onClick={saveSettings}>
-                        Save
+                        Save Changes
                     </Button>
                 </DialogFooter>
             </DialogContent>

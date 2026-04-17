@@ -1,3 +1,5 @@
+import { z } from "zod"
+
 export type BulkCopyFormat = "lines" | "csv" | "tsv" | "json" | "custom"
 
 export interface BulkCopySettings {
@@ -6,6 +8,14 @@ export interface BulkCopySettings {
     template: string
     fields: string[]
 }
+
+// Esquema Zod para validar los ajustes leídos de localStorage en tiempo de ejecución.
+const bulkCopySettingsSchema = z.object({
+    format: z.enum(["lines", "csv", "tsv", "json", "custom"]).optional(),
+    headers: z.boolean().optional(),
+    template: z.string().optional(),
+    fields: z.array(z.string()).optional(),
+})
 
 const BULK_COPY_SETTINGS_PREFIX = "bulk-copy-settings:"
 export const BULK_COPY_DEFAULT_TEMPLATE = "{code} - {customer} - {amount}"
@@ -61,7 +71,8 @@ export function readBulkCopySettings(tableId: string): Partial<BulkCopySettings>
     try {
         const raw = localStorage.getItem(bulkCopySettingsKey(tableId))
         if (!raw) return null
-        return JSON.parse(raw) as Partial<BulkCopySettings>
+        const result = bulkCopySettingsSchema.safeParse(JSON.parse(raw))
+        return result.success ? result.data : null
     } catch {
         return null
     }

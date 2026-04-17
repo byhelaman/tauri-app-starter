@@ -225,7 +225,7 @@ function EditRoleDialog({ role, onOpenChange, onSubmit, disabled }: EditRoleDial
                         />
                     </FieldGroup>
                     <DialogFooter showCloseButton>
-                        <Button type="submit" disabled={disabled}>Save changes</Button>
+                        <Button type="submit" disabled={disabled}>Save Changes</Button>
                     </DialogFooter>
                 </form>
             </DialogContent>

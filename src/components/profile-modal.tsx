@@ -322,7 +322,7 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
 
         <DialogFooter showCloseButton>
           <Button onClick={() => void handleSave()} disabled={saving}>
-            {saving ? "Saving..." : "Save changes"}
+            {saving ? "Saving..." : "Save Changes"}
           </Button>
         </DialogFooter>
       </DialogContent>
