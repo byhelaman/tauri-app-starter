@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 import { useNavigate } from "react-router-dom"
 import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { supabase } from "@/lib/supabase"
+import { useRateLimit } from "@/hooks/use-rate-limit"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -42,16 +43,18 @@ const step2Schema = z.object({
 type Step1Values = z.infer<typeof step1Schema>
 type Step2Values = z.infer<typeof step2Schema>
 
-const COOLDOWN_SECONDS = 60
 
 export function RecoveryForm({
   onSignIn,
   ...props
 }: React.ComponentProps<typeof Card> & { onSignIn?: () => void }) {
   const navigate = useNavigate()
+  const { isLocked, lockoutRemaining, recordFailure } = useRateLimit({
+    maxAttempts: 1,
+    lockoutSeconds: 60,
+    storageKey: "rl:send-recovery-code",
+  })
   const [step, setStep] = useState<1 | 2>(1)
-  const [cooldown, setCooldown] = useState(0)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const step1 = useForm<Step1Values>({
     resolver: zodResolver(step1Schema),
@@ -65,25 +68,6 @@ export function RecoveryForm({
 
   const emailValue = step1.watch("email")
 
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-    }
-  }, [])
-
-  const startCooldown = () => {
-    setCooldown(COOLDOWN_SECONDS)
-    intervalRef.current = setInterval(() => {
-      setCooldown((prev) => {
-        if (prev <= 1) {
-          clearInterval(intervalRef.current!)
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-  }
-
   const handleSendCode = async () => {
     if (!supabase) return
     const { error } = await supabase.auth.resetPasswordForEmail(emailValue)
@@ -92,7 +76,7 @@ export function RecoveryForm({
       return
     }
     toast.success("Code sent! Check your email.")
-    startCooldown()
+    recordFailure()
   }
 
   const onStep1Submit = async (data: Step1Values) => {
@@ -176,9 +160,9 @@ export function RecoveryForm({
                         <InputGroupButton
                           variant="link"
                           onClick={handleSendCode}
-                          disabled={cooldown > 0 || !emailValue}
+                          disabled={isLocked || !emailValue}
                         >
-                          {cooldown > 0 ? `Resend in ${cooldown}s` : "Send code"}
+                          {isLocked ? `Resend in ${lockoutRemaining}s` : "Send code"}
                         </InputGroupButton>
                       </InputGroupAddon>
                     </InputGroup>

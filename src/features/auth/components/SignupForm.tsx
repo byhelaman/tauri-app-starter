@@ -45,7 +45,7 @@ export function SignupForm({
 }: React.ComponentProps<typeof Card> & { onSignIn?: () => void }) {
   const navigate = useNavigate()
   const { isLocked, lockoutRemaining, recordFailure } = useRateLimit({
-    maxAttempts: 5,
+    maxAttempts: 1,
     lockoutSeconds: 60,
     storageKey: "rl:send-code",
   })

@@ -175,12 +175,13 @@ interface ViewProfileDialogProps {
     roles: RoleDefinition[]
     onOpenChange: (open: boolean) => void
     onUpdateDisplayName: (userId: string, displayName: string) => Promise<void>
+    onUpdateEmail: (userId: string, email: string) => Promise<void>
     onUpdateRole: (userId: string, role: string) => Promise<void>
     canManageUsers: boolean
     busy?: boolean
 }
 
-function ViewProfileDialog({ user, roles, onOpenChange, onUpdateDisplayName, onUpdateRole, canManageUsers, busy }: ViewProfileDialogProps) {
+function ViewProfileDialog({ user, roles, onOpenChange, onUpdateDisplayName, onUpdateEmail, onUpdateRole, canManageUsers, busy }: ViewProfileDialogProps) {
     const { control, handleSubmit, reset } = useForm<UpdateProfileValues>({
         resolver: zodResolver(updateProfileSchema),
         values: user
@@ -198,9 +199,20 @@ function ViewProfileDialog({ user, roles, onOpenChange, onUpdateDisplayName, onU
         const promises: Promise<void>[] = []
         if (values.displayName !== user.displayName)
             promises.push(onUpdateDisplayName(user.id, values.displayName))
+        if (values.email !== user.email)
+            promises.push(onUpdateEmail(user.id, values.email))
         if (values.role !== user.role)
             promises.push(onUpdateRole(user.id, values.role))
-        await Promise.all(promises)
+        if (promises.length === 0) {
+            handleClose(false)
+            return
+        }
+        try {
+            await Promise.all(promises)
+            handleClose(false)
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Could not save changes")
+        }
     }
 
     return (
@@ -394,6 +406,7 @@ interface UsersTabProps {
     roles: RoleDefinition[]
     onUpdateRole: (userId: string, role: string) => Promise<void>
     onUpdateDisplayName: (userId: string, displayName: string) => Promise<void>
+    onUpdateEmail: (userId: string, email: string) => Promise<void>
     onRemoveUser: (userId: string) => Promise<void>
     onInviteUser: (name: string, email: string, role: string) => Promise<void>
     onResetPassword: (userId: string, newPassword: string) => Promise<void>
@@ -401,7 +414,7 @@ interface UsersTabProps {
     loading?: boolean
 }
 
-export function UsersTab({ users, roles, onUpdateRole, onUpdateDisplayName, onRemoveUser, onInviteUser, onResetPassword, canManageUsers, loading }: UsersTabProps) {
+export function UsersTab({ users, roles, onUpdateRole, onUpdateDisplayName, onUpdateEmail, onRemoveUser, onInviteUser, onResetPassword, canManageUsers, loading }: UsersTabProps) {
     const [search, setSearch] = useState("")
     const [showInvite, setShowInvite] = useState(false)
     const [profileUser, setProfileUser] = useState<SystemUser | null>(null)
@@ -432,7 +445,15 @@ export function UsersTab({ users, roles, onUpdateRole, onUpdateDisplayName, onRe
         setProfileBusy(true)
         try {
             await onUpdateDisplayName(userId, displayName)
-            setProfileUser(null)
+        } finally {
+            setProfileBusy(false)
+        }
+    }
+
+    async function handleUpdateEmail(userId: string, email: string) {
+        setProfileBusy(true)
+        try {
+            await onUpdateEmail(userId, email)
         } finally {
             setProfileBusy(false)
         }
@@ -490,6 +511,7 @@ export function UsersTab({ users, roles, onUpdateRole, onUpdateDisplayName, onRe
                 roles={roles}
                 onOpenChange={(open) => { if (!open) setProfileUser(null) }}
                 onUpdateDisplayName={handleUpdateDisplayName}
+                onUpdateEmail={handleUpdateEmail}
                 onUpdateRole={handleRoleChange}
                 canManageUsers={canManageUsers}
                 busy={profileBusy}

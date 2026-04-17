@@ -332,6 +332,28 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
         }
     }
 
+    async function updateUserEmail(userId: string, newEmail: string) {
+        if (!supabase) {
+            throw new Error("Supabase is not configured")
+        }
+
+        const { data, error } = await supabase.functions.invoke("admin-update-user-email", {
+            body: { targetUserId: userId, newEmail },
+        })
+
+        if (error) {
+            throw new Error(error.message)
+        }
+
+        const response = (data ?? {}) as { success?: boolean; message?: string }
+        if (!response.success) {
+            throw new Error(response.message ?? "Email update failed")
+        }
+
+        toast.success("Email updated")
+        await fetchSystemData()
+    }
+
     async function resetPasswordForUser(userId: string, newPassword: string) {
         if (!supabase) {
             throw new Error("Supabase is not configured")
@@ -449,6 +471,7 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
                                         roles={roles}
                                         onUpdateRole={updateUserRole}
                                         onUpdateDisplayName={updateUserDisplayName}
+                                        onUpdateEmail={updateUserEmail}
                                         onRemoveUser={removeUser}
                                         onInviteUser={inviteUser}
                                         onResetPassword={resetPasswordForUser}
