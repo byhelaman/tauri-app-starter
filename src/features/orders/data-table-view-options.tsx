@@ -5,9 +5,9 @@ import {
   ChevronDownIcon,
   ClipboardCopyIcon,
   DownloadIcon,
+  ListTodo,
   PrinterIcon,
   RotateCcwIcon,
-  Settings2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -171,7 +171,7 @@ export function DataTableViewOptions<TData>({ table, tableId }: DataTableViewOpt
             disabled={scopeCounts[effectiveScope] === 0}
             onClick={() => setBulkCopyOpen(true)}
           >
-            <Settings2 />
+            <ListTodo/>
             Bulk copy
           </DropdownMenuItem>
 

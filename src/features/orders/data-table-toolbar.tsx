@@ -16,6 +16,7 @@ interface DataTableToolbarProps<TData> {
   filterColumn?: string
   filterPlaceholder?: string
   facetedFilters?: FacetedFilterConfig[]
+  actions?: React.ReactNode
 }
 
 export function DataTableToolbar<TData>({
@@ -24,6 +25,7 @@ export function DataTableToolbar<TData>({
   filterColumn = "title",
   filterPlaceholder = "Search...",
   facetedFilters,
+  actions,
 }: DataTableToolbarProps<TData>) {
   const isFiltered = table.getState().columnFilters.length > 0
   const isSorted = table.getState().sorting.length > 0
@@ -81,6 +83,8 @@ export function DataTableToolbar<TData>({
           <X />
         </Button>
       )}
+
+      {actions}
 
       <DataTableViewOptions table={table} tableId={tableId} />
     </div>

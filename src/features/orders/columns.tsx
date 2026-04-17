@@ -68,7 +68,7 @@ export function createColumns(
     {
       accessorKey: "date",
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Date" className="justify-center" />,
-      cell: ({ row }) => <ReadOnlyCell value={row.getValue("date") as string} className="font-mono text-muted-foreground w-30" />,
+      cell: ({ row }) => <p className="w-25 text-center mx-auto">{row.getValue("date") as string}</p>,
     },
     {
       accessorKey: "customer",
@@ -89,12 +89,12 @@ export function createColumns(
     {
       accessorKey: "time",
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Time" className="justify-center" />,
-      cell: ({ row }) => <ReadOnlyCell value={row.getValue("time") as string} className="font-mono w-35" />,
+      cell: ({ row }) => <p className="w-30 text-center mx-auto font-mono">{row.getValue("time") as string}</p>,
     },
     {
       accessorKey: "code",
-      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Code" />,
-      cell: ({ row }) => <ReadOnlyCell value={row.getValue("code") as string} className="font-mono text-muted-foreground w-30" />,
+      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Code" className="justify-center"/>,
+      cell: ({ row }) => <p className="font-mono text-muted-foreground mx-auto w-25 text-center">{row.getValue("code") as string}</p>,
     },
     {
       accessorKey: "status",
@@ -135,7 +135,7 @@ export function createColumns(
       cell: ({ row }) => {
         const value = row.getValue("amount") as number
         const formatted = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
-        return <ReadOnlyCell value={formatted} className="text-right font-mono" />
+        return <p className="text-right font-mono">{formatted}</p>
       },
     },
     {

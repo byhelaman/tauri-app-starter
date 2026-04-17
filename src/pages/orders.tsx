@@ -23,6 +23,7 @@ import {
   ContextMenuSeparator,
 } from "@/components/ui/context-menu"
 import { PageHeader } from "@/components/page-header"
+import { useTableHighlights } from "@/features/orders/table-highlights"
 import { Button } from "@/components/ui/button"
 import {
   AlertDialog,
@@ -55,6 +56,8 @@ export function OrdersPage() {
   const [bulkDeleteTarget, setBulkDeleteTarget] = useState<{ selected: Order[], clearSelection: () => void } | null>(null)
   const [rowDeleteTarget, setRowDeleteTarget] = useState<Order | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+
+  const { toolbarActions, rowClassName } = useTableHighlights()
 
   const handleDeleteRequest = useCallback((order: Order) => {
     setRowDeleteTarget(order)
@@ -111,7 +114,7 @@ export function OrdersPage() {
         bulkActions={(selected, clearSelection) => (
           <>
             <Button
-              variant="secondary"
+              variant="outline"
               size="sm"
               onClick={async () => {
                 const content = buildBulkCopyText(selected as unknown as Record<string, unknown>[], "orders")
@@ -139,6 +142,8 @@ export function OrdersPage() {
             </Button>
           </>
         )}
+        toolbarActions={toolbarActions}
+        rowClassName={rowClassName}
         defaultPageSize={25}
       />
 

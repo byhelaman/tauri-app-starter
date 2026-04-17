@@ -38,9 +38,11 @@ interface DataTableProps<TData, TValue> {
   facetedFilters?: FacetedFilterConfig[]
   className?: string
   bulkActions?: (selectedRows: TData[], clearSelection: () => void) => ReactNode
+  toolbarActions?: ReactNode
   rowContextMenu?: (row: TData) => ReactNode
   defaultPageSize?: number
   pageSizeOptions?: number[]
+  rowClassName?: (row: TData) => string | undefined
 }
 
 export function DataTable<TData, TValue>({
@@ -52,9 +54,11 @@ export function DataTable<TData, TValue>({
   facetedFilters,
   className,
   bulkActions,
+  toolbarActions,
   rowContextMenu,
   defaultPageSize = 10,
   pageSizeOptions,
+  rowClassName,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -91,6 +95,7 @@ export function DataTable<TData, TValue>({
         filterColumn={filterColumn}
         filterPlaceholder={filterPlaceholder}
         facetedFilters={facetedFilters}
+        actions={toolbarActions}
       />
 
       <div className="overflow-auto max-h-[calc(100svh-17rem)] rounded-md border scrollbar">
@@ -112,7 +117,11 @@ export function DataTable<TData, TValue>({
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => {
                 const rowEl = (
-                  <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+                  <TableRow 
+                    key={row.id} 
+                    className={rowClassName?.(row.original)}
+                    data-state={row.getIsSelected() && "selected"}
+                  >
                     {row.getVisibleCells().map((cell) => (
                       <TableCell key={cell.id}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
