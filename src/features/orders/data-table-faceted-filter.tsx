@@ -81,7 +81,7 @@ export function DataTableFacetedFilter<TData, TValue>({
                     )}
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-40 p-0">
+            <DropdownMenuContent align="start" className="hidden w-40 p-0 lg:block">
                 <div className="max-h-56 overflow-auto scrollbar p-1">
                     {options.map((option) => (
                         <DropdownMenuCheckboxItem

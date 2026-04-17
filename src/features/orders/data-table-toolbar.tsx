@@ -76,7 +76,7 @@ export function DataTableToolbar<TData>({
         </InputGroup>
       )}
 
-      {/* Mobile Dropdown Filters */}
+      {/* Mobile Dropdown Filters — lg:hidden en el trigger Y en el content para que el portal también desaparezca al superar el breakpoint */}
       {hasFiltersList && (
         <div className="flex lg:hidden">
           <DropdownMenu>
@@ -94,20 +94,20 @@ export function DataTableToolbar<TData>({
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-30">
+            <DropdownMenuContent align="start" className="w-30 lg:hidden">
               {facetedFilters?.map((filter) => {
                 const column = table.getColumn(filter.columnId)
                 if (!column) return null
                 const filterValue = column.getFilterValue()
                 const selectedValues = new Set(Array.isArray(filterValue) ? (filterValue as string[]) : [])
-                
+
                 return (
                   <DropdownMenuSub key={filter.columnId}>
                     <DropdownMenuSubTrigger>
                       <PlusCircle />
                       {filter.title}
                     </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="max-h-60 overflow-auto scrollbar">
+                    <DropdownMenuSubContent className="max-h-60 overflow-auto scrollbar lg:hidden">
                       {filter.options.map((opt) => {
                         const checked = selectedValues.has(opt.value)
                         return (
@@ -145,7 +145,7 @@ export function DataTableToolbar<TData>({
                       <Clock />
                       {intervalFilter.title}
                     </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="max-h-60 overflow-auto scrollbar">
+                    <DropdownMenuSubContent className="max-h-60 overflow-auto scrollbar lg:hidden">
                       {availableHours.map((hour) => {
                         const checked = selectedValues.has(hour)
                         return (

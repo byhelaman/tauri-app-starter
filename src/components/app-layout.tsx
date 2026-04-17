@@ -12,7 +12,7 @@ import { ShortcutsModal } from "@/components/shortcuts-modal"
 import { useAuth } from "@/contexts/auth-context"
 import { Titlebar } from "@/components/window-controls"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 const NAV_ITEMS = [
   { label: "Dashboard", to: "/" },
@@ -172,11 +172,16 @@ export function AppLayout() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="lg:hidden">
-              {NAV_ITEMS.map(({ label, to }) => (
-                <DropdownMenuItem key={to} onSelect={() => navigate(to)}>
-                  {label}
-                </DropdownMenuItem>
-              ))}
+              <DropdownMenuRadioGroup
+                value={NAV_ITEMS.find(({ to }) => to === "/" ? pathname === "/" : pathname.startsWith(to))?.to ?? ""}
+                onValueChange={(to) => navigate(to)}
+              >
+                {NAV_ITEMS.map(({ label, to }) => (
+                  <DropdownMenuRadioItem key={to} value={to}>
+                    {label}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
             </DropdownMenuContent>
           </DropdownMenu>
 

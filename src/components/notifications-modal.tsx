@@ -114,7 +114,12 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
     }
   }, [])
 
-  // Fetch on open
+  // Fetch inicial al montar para que el badge sea preciso sin abrir el modal
+  useEffect(() => {
+    void fetchNotifications()
+  }, [fetchNotifications])
+
+  // Refresca al abrir para mostrar datos actualizados
   useEffect(() => {
     if (open) void fetchNotifications()
   }, [open, fetchNotifications])
