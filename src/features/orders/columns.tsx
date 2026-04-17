@@ -89,6 +89,12 @@ export function createColumns(
     {
       accessorKey: "time",
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Time" className="justify-center" />,
+      filterFn: (row, _columnId, filterValue: string[]) => {
+        if (!Array.isArray(filterValue) || filterValue.length === 0) return true
+        const time = row.getValue("time") as string
+        const startHour = time.split(" - ")[0]?.trim().split(":")[0] ?? ""
+        return filterValue.includes(startHour)
+      },
       cell: ({ row }) => <p className="w-30 text-center mx-auto font-mono">{row.getValue("time") as string}</p>,
     },
     {

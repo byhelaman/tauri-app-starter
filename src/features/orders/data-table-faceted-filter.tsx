@@ -81,18 +81,36 @@ export function DataTableFacetedFilter<TData, TValue>({
                     )}
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-40">
-                {options.map((option) => (
-                    <DropdownMenuCheckboxItem
-                        key={option.value}
-                        className="capitalize"
-                        checked={selectedValues.has(option.value)}
-                        onCheckedChange={() => toggle(option.value)}
-                    >
-                        {option.icon && <option.icon />}
-                        {option.label}
-                    </DropdownMenuCheckboxItem>
-                ))}
+            <DropdownMenuContent align="start" className="w-40 p-0">
+                <div className="max-h-56 overflow-auto scrollbar p-1">
+                    {options.map((option) => (
+                        <DropdownMenuCheckboxItem
+                            key={option.value}
+                            className="capitalize"
+                            checked={selectedValues.has(option.value)}
+                            onCheckedChange={() => toggle(option.value)}
+                            onSelect={(e) => e.preventDefault()}
+                        >
+                            {option.icon && <option.icon />}
+                            {option.label}
+                        </DropdownMenuCheckboxItem>
+                    ))}
+                </div>
+                {selectedValues.size > 0 && (
+                    <>
+                        <Separator />
+                        <div className="p-1">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="w-full justify-center"
+                                onClick={() => column?.setFilterValue(undefined)}
+                            >
+                                Clear filters
+                            </Button>
+                        </div>
+                    </>
+                )}
             </DropdownMenuContent>
         </DropdownMenu>
     )

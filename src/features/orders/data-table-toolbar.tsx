@@ -7,6 +7,7 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group"
 import { DataTableFacetedFilter } from "./data-table-faceted-filter"
+import { DataTableIntervalFilter } from "./data-table-interval-filter"
 import { DataTableViewOptions } from "./data-table-view-options"
 import type { FacetedFilterConfig } from "./data-table-types"
 
@@ -16,6 +17,7 @@ interface DataTableToolbarProps<TData> {
   filterColumn?: string
   filterPlaceholder?: string
   facetedFilters?: FacetedFilterConfig[]
+  intervalFilter?: { columnId: string; title?: string }
   actions?: React.ReactNode
 }
 
@@ -25,6 +27,7 @@ export function DataTableToolbar<TData>({
   filterColumn = "title",
   filterPlaceholder = "Search...",
   facetedFilters,
+  intervalFilter,
   actions,
 }: DataTableToolbarProps<TData>) {
   const isFiltered = table.getState().columnFilters.length > 0
@@ -61,6 +64,13 @@ export function DataTableToolbar<TData>({
           />
         )
       })}
+
+      {intervalFilter && (
+        <DataTableIntervalFilter
+          column={table.getColumn(intervalFilter.columnId)}
+          title={intervalFilter.title}
+        />
+      )}
 
       {isFiltered && (
         <Button

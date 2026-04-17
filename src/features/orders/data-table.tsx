@@ -36,6 +36,7 @@ interface DataTableProps<TData, TValue> {
   filterColumn?: string
   filterPlaceholder?: string
   facetedFilters?: FacetedFilterConfig[]
+  intervalFilter?: { columnId: string; title?: string }
   className?: string
   bulkActions?: (selectedRows: TData[], clearSelection: () => void) => ReactNode
   toolbarActions?: ReactNode
@@ -52,6 +53,7 @@ export function DataTable<TData, TValue>({
   filterColumn = "title",
   filterPlaceholder = "Filter...",
   facetedFilters,
+  intervalFilter,
   className,
   bulkActions,
   toolbarActions,
@@ -95,6 +97,7 @@ export function DataTable<TData, TValue>({
         filterColumn={filterColumn}
         filterPlaceholder={filterPlaceholder}
         facetedFilters={facetedFilters}
+        intervalFilter={intervalFilter}
         actions={toolbarActions}
       />
 

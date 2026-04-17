@@ -101,6 +101,7 @@ export function OrdersPage() {
           { columnId: "status", title: "Status", options: STATUS_FILTER_OPTIONS },
           { columnId: "channel", title: "Channel", options: CHANNEL_FILTER_OPTIONS },
         ]}
+        intervalFilter={{ columnId: "time", title: "Interval" }}
         rowContextMenu={(order) => (
           <>
             <ContextMenuItem onSelect={() => copyCode(order)}>Copy code</ContextMenuItem>
