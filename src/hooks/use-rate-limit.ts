@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from "react"
 
+/**
+ * Limitador de frecuencia del lado del cliente para mejorar la UX (throttling de envío de formularios).
+ *
+ * IMPORTANTE: esto no es un control de seguridad. El usuario puede borrar localStorage
+ * para saltarse el bloqueo. El rate limiting real lo aplica en el servidor Supabase Auth
+ * y los RPCs de la base de datos. Usar este hook únicamente para dar feedback inmediato
+ * al usuario ante fallos repetidos.
+ */
 interface UseRateLimitOptions {
   maxAttempts?: number
   lockoutSeconds?: number

@@ -90,13 +90,26 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
                 ? client.rpc("get_all_users")
                 : Promise.resolve({ data: [] as RpcUser[], error: null })
 
-            const [usersRes, rolesRes, permissionsRes, matrixRes, auditRes] = await Promise.all([
+            const [usersResult, rolesResult, permissionsResult, matrixResult, auditResult] = await Promise.allSettled([
                 usersPromise,
                 client.rpc("get_all_roles"),
                 client.rpc("get_all_permissions"),
                 client.rpc("get_role_permission_matrix"),
                 client.rpc("get_audit_log", { p_limit: 100, p_offset: 0 }),
             ])
+
+            // Unwrap settled results — report the first rejection but continue rendering available data
+            if (usersResult.status === "rejected") throw usersResult.reason
+            if (rolesResult.status === "rejected") throw rolesResult.reason
+            if (permissionsResult.status === "rejected") throw permissionsResult.reason
+            if (matrixResult.status === "rejected") throw matrixResult.reason
+            if (auditResult.status === "rejected") throw auditResult.reason
+
+            const usersRes = usersResult.value
+            const rolesRes = rolesResult.value
+            const permissionsRes = permissionsResult.value
+            const matrixRes = matrixResult.value
+            const auditRes = auditResult.value
 
             if (usersRes.error) throw usersRes.error
             if (rolesRes.error) throw rolesRes.error

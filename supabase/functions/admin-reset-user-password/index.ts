@@ -30,11 +30,21 @@ function corsHeaders(origin: string | null) {
     return headers
 }
 
+// Headers de seguridad estándar para todas las respuestas
+function securityHeaders(): Record<string, string> {
+    return {
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    }
+}
+
 function json(status: number, body: JsonObject, origin: string | null) {
     return new Response(JSON.stringify(body), {
         status,
         headers: {
             ...corsHeaders(origin),
+            ...securityHeaders(),
             "Content-Type": "application/json",
         },
     })

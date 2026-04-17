@@ -226,6 +226,9 @@ BEGIN
     user_permissions := (auth.jwt() -> 'permissions')::jsonb;
     RETURN user_permissions ? required_permission;
 EXCEPTION WHEN OTHERS THEN
+    -- Emite un WARNING visible en los logs de Supabase para facilitar el diagnóstico,
+    -- sin exponer información al cliente.
+    RAISE WARNING 'has_permission(%) falló inesperadamente: %', required_permission, SQLERRM;
     RETURN false;
 END;
 $$;

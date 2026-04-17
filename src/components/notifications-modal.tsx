@@ -243,6 +243,7 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
                     <Button
                       variant="ghost"
                       size="icon-sm"
+                      aria-label="Dismiss notification"
                       onClick={(e) => {
                         e.stopPropagation()
                         void dismiss(n.id)

@@ -27,7 +27,7 @@ import { Input } from "@/components/ui/input"
 
 const signInSchema = z.object({
   email: z.string().email("Enter a valid email"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
 })
 
 type SignInValues = z.infer<typeof signInSchema>
@@ -102,9 +102,10 @@ export function SignInForm({
                       type="email"
                       placeholder="m@example.com"
                       aria-invalid={fieldState.invalid}
+                      aria-describedby={fieldState.error ? "email-error" : undefined}
                       disabled={isLocked}
                     />
-                    <FieldError errors={[fieldState.error]} />
+                    <FieldError id="email-error" errors={[fieldState.error]} />
                   </Field>
                 )}
               />
@@ -129,11 +130,12 @@ export function SignInForm({
                       id="password"
                       type="password"
                       aria-invalid={fieldState.invalid}
+                      aria-describedby={isLocked ? "password-lockout" : fieldState.error ? "password-error" : undefined}
                       disabled={isLocked}
                     />
                     {isLocked
-                      ? <FieldDescription className="text-destructive">Too many attempts — try again in {lockoutRemaining}s</FieldDescription>
-                      : <FieldError errors={[fieldState.error]} />
+                      ? <FieldDescription id="password-lockout" className="text-destructive">Too many attempts — try again in {lockoutRemaining}s</FieldDescription>
+                      : <FieldError id="password-error" errors={[fieldState.error]} />
                     }
                   </Field>
                 )}

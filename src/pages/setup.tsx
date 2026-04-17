@@ -81,8 +81,9 @@ export function SetupPage() {
                           type="url"
                           placeholder="https://your-project.supabase.co"
                           aria-invalid={fieldState.invalid}
+                          aria-describedby={fieldState.error ? "supabase-url-error" : undefined}
                         />
-                        <FieldError errors={[fieldState.error]} />
+                        <FieldError id="supabase-url-error" errors={[fieldState.error]} />
                       </Field>
                     )}
                   />
@@ -97,11 +98,12 @@ export function SetupPage() {
                           id="supabase-anon-key"
                           type="password"
                           aria-invalid={fieldState.invalid}
+                          aria-describedby={fieldState.error ? "supabase-anon-key-error supabase-anon-key-desc" : "supabase-anon-key-desc"}
                         />
-                        <FieldDescription>
+                        <FieldDescription id="supabase-anon-key-desc">
                           Found in Project Settings → API Keys
                         </FieldDescription>
-                        <FieldError errors={[fieldState.error]} />
+                        <FieldError id="supabase-anon-key-error" errors={[fieldState.error]} />
                       </Field>
                     )}
                   />

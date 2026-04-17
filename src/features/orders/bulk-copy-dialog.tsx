@@ -204,7 +204,7 @@ export function BulkCopyDialog<TData>({ table, tableId, scope, open, onOpenChang
                         <Field>
                             <FieldLabel>Format</FieldLabel>
                             <Select value={format} onValueChange={(value) => setFormat(value as BulkCopyFormat)}>
-                                <SelectTrigger size="sm">
+                                <SelectTrigger>
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>

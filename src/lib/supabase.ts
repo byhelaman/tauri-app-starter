@@ -3,7 +3,11 @@ import { createClient } from "@supabase/supabase-js"
 export const STORAGE_KEY_URL = "app_supabase_url"
 export const STORAGE_KEY_ANON = "app_supabase_anon_key"
 
-// Env vars take precedence; localStorage is the fallback for desktop setup
+// Las variables de entorno tienen prioridad; localStorage es el fallback para el flujo de setup en escritorio.
+//
+// Nota de seguridad: la "anon key" de Supabase es una clave *pública* por diseño — es seguro
+// incluirla en el bundle del cliente y guardarla en localStorage. Solo concede acceso a las filas
+// permitidas por las políticas de Row-Level Security (RLS). Nunca guardar aquí la service-role key.
 const supabaseUrl =
   import.meta.env.VITE_SUPABASE_URL ||
   (typeof localStorage !== "undefined" ? localStorage.getItem(STORAGE_KEY_URL) : null) ||
@@ -57,10 +61,14 @@ export function createIsolatedSupabaseClient() {
   })
 }
 
-// ── Auto-refresh management for Tauri desktop apps ──────────────────────
-// Supabase cannot detect foreground/background state in non-browser
-// environments, so we drive it manually via visibility/focus events.
-
+// ── Auto-refresh para apps de escritorio con Tauri ──────────────────────
+// Supabase no puede detectar el estado primer plano/segundo plano en entornos que no son
+// navegador, por lo que lo manejamos manualmente mediante eventos de visibilidad y foco.
+//
+// Rate limiting: el refresh de sesión lo disparan eventos del SO (focus/blur, visibilitychange).
+// Supabase aplica validación de tokens en el servidor en cada llamada RPC, por lo que aunque
+// el refresh se ejecute con frecuencia el riesgo se limita a peticiones de red extra.
+// El buffer de 5 minutos de expiración evita llamadas de refresh innecesarias.
 let isAutoRefreshActive = false
 
 export const startSessionRefresh = () => {

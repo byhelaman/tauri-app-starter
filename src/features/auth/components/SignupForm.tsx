@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { toast } from "sonner"
 import { useNavigate } from "react-router-dom"
 import { Controller, useForm } from "react-hook-form"
@@ -48,6 +49,7 @@ export function SignupForm({
     lockoutSeconds: 60,
     storageKey: "rl:send-code",
   })
+  const [isSendingCode, setIsSendingCode] = useState(false)
 
   const form = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
@@ -58,17 +60,22 @@ export function SignupForm({
   const passwordValue = form.watch("password")
 
   const handleSendCode = async () => {
-    if (!supabase) return
-    const { error } = await supabase.auth.signUp({
-      email: emailValue,
-      password: passwordValue,
-    })
-    if (error) {
-      toast.error(error.message)
-      return
+    if (!supabase || isSendingCode) return
+    setIsSendingCode(true)
+    try {
+      const { error } = await supabase.auth.signUp({
+        email: emailValue,
+        password: passwordValue,
+      })
+      if (error) {
+        toast.error(error.message)
+        return
+      }
+      toast.success("Code sent! Check your email.")
+      recordFailure()
+    } finally {
+      setIsSendingCode(false)
     }
-    toast.success("Code sent! Check your email.")
-    recordFailure()
   }
 
   const onSubmit = async (data: SignupValues) => {
@@ -109,8 +116,9 @@ export function SignupForm({
                     type="email"
                     placeholder="m@example.com"
                     aria-invalid={fieldState.invalid}
+                    aria-describedby={fieldState.error ? "signup-email-error" : undefined}
                   />
-                  <FieldError errors={[fieldState.error]} />
+                  <FieldError id="signup-email-error" errors={[fieldState.error]} />
                 </Field>
               )}
             />
@@ -126,9 +134,10 @@ export function SignupForm({
                     id="signup-password"
                     type="password"
                     aria-invalid={fieldState.invalid}
+                    aria-describedby={fieldState.error ? "signup-password-error signup-password-desc" : "signup-password-desc"}
                   />
-                  <FieldDescription>Must be at least 8 characters long.</FieldDescription>
-                  <FieldError errors={[fieldState.error]} />
+                  <FieldDescription id="signup-password-desc">Must be at least 8 characters long.</FieldDescription>
+                  <FieldError id="signup-password-error" errors={[fieldState.error]} />
                 </Field>
               )}
             />
@@ -153,9 +162,9 @@ export function SignupForm({
                       <InputGroupButton
                         variant="link"
                         onClick={handleSendCode}
-                        disabled={isLocked || !emailValue || passwordValue.length < 8}
+                        disabled={isLocked || isSendingCode || !emailValue || passwordValue.length < 8}
                       >
-                        {isLocked ? `Resend in ${lockoutRemaining}s` : "Send code"}
+                        {isLocked ? `Resend in ${lockoutRemaining}s` : isSendingCode ? "Sending..." : "Send code"}
                       </InputGroupButton>
                     </InputGroupAddon>
                   </InputGroup>

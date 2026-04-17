@@ -2,6 +2,15 @@ import { useState, useCallback, useEffect } from "react"
 import { check, type Update } from "@tauri-apps/plugin-updater"
 import { relaunch } from "@tauri-apps/plugin-process"
 
+// Forma mínima para una actualización simulada en modo desarrollo.
+interface SimulatedUpdate extends Pick<Update, "version" | "body"> {
+  downloadAndInstall: Update["downloadAndInstall"]
+  available: boolean
+  currentVersion: string
+  date: string | undefined
+  rid: number
+}
+
 interface UpdateProgress {
   downloaded: number
   total: number | null
@@ -108,7 +117,16 @@ export function useUpdater(): UseUpdaterReturn {
 
   const simulateUpdate = useCallback(() => {
     setIsSimulated(true)
-    setUpdate({ version: "9.9.9", body: "Bug fixes and performance improvements." } as unknown as Update)
+    const mock: SimulatedUpdate = {
+      version: "9.9.9",
+      body: "Bug fixes and performance improvements.",
+      available: true,
+      currentVersion: "0.0.0",
+      date: undefined,
+      rid: 0,
+      downloadAndInstall: async () => { /* no-op in simulation */ },
+    }
+    setUpdate(mock as unknown as Update)
   }, [])
 
   return {

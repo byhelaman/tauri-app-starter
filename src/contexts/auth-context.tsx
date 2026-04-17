@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import type { Session, User } from "@supabase/supabase-js"
+import { z } from "zod"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 
 type AuthClaims = {
@@ -14,24 +15,31 @@ const EMPTY_CLAIMS: AuthClaims = {
   permissions: [],
 }
 
+// Esquema para validar los campos del payload JWT en tiempo de ejecución.
+// NOTA: los claims solo se usan para controlar la UI (mostrar/ocultar elementos).
+// La autorización real se aplica en el servidor mediante RLS y RPCs de Supabase.
+const jwtClaimsSchema = z.object({
+  user_role: z.string().optional(),
+  hierarchy_level: z.union([z.number(), z.string()]).optional(),
+  permissions: z.array(z.string()).optional(),
+})
+
 function parseClaims(session: Session | null): AuthClaims {
   const token = session?.access_token
   if (!token) return EMPTY_CLAIMS
 
   try {
     const [, payload] = token.split(".")
+    if (!payload) return EMPTY_CLAIMS
     const normalized = payload.replace(/-/g, "+").replace(/_/g, "/")
     const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4)
-    const parsed = JSON.parse(atob(padded)) as {
-      user_role?: string
-      hierarchy_level?: number
-      permissions?: string[]
-    }
+    const raw: unknown = JSON.parse(atob(padded))
+    const parsed = jwtClaimsSchema.parse(raw)
 
     return {
       userRole: parsed.user_role ?? "guest",
       hierarchyLevel: Number(parsed.hierarchy_level ?? 0),
-      permissions: Array.isArray(parsed.permissions) ? parsed.permissions : [],
+      permissions: parsed.permissions ?? [],
     }
   } catch {
     return EMPTY_CLAIMS
@@ -54,12 +62,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(isSupabaseConfigured)
   const refreshingRef = useRef(false)
-  const claims = parseClaims(session)
+  const claims = useMemo(() => parseClaims(session), [session])
 
-  const hasPermission = (permission: string) => {
+  const hasPermission = useCallback((permission: string) => {
     if (claims.hierarchyLevel >= 100) return true
     return claims.permissions.includes(permission)
-  }
+  }, [claims])
 
   const refreshClaimsSession = useCallback(async () => {
     if (!supabase || refreshingRef.current) return
@@ -150,7 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       )
 
-    // Owners receive all permissions dynamically, so permission catalog changes alter their claims.
+    // Los owners reciben todos los permisos dinámicamente, por lo que cambios en el catálogo afectan sus claims.
     if (claims.hierarchyLevel >= 100) {
       channel.on(
         "postgres_changes",

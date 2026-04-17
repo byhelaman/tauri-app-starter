@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react"
 import type { Table } from "@tanstack/react-table"
 import { SearchIcon, X, FilterIcon, Clock, PlusCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -41,6 +42,17 @@ export function DataTableToolbar<TData>({
   intervalFilter,
   actions,
 }: DataTableToolbarProps<TData>) {
+  const currentFilterValue = (table.getColumn(filterColumn)?.getFilterValue() as string) ?? ""
+  const [searchInput, setSearchInput] = useState(currentFilterValue)
+
+  // Debounce en la búsqueda — evita ejecutar el filtro en cada pulsación de tecla
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      table.getColumn(filterColumn)?.setFilterValue(searchInput || undefined)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchInput, filterColumn, table])
+
   const isFiltered = table.getState().columnFilters.length > 0
   const isSorted = table.getState().sorting.length > 0
   const activeFiltersCount = table.getState().columnFilters.length
@@ -55,8 +67,8 @@ export function DataTableToolbar<TData>({
           </InputGroupAddon>
           <InputGroupInput
             placeholder={filterPlaceholder}
-            value={(table.getColumn(filterColumn)?.getFilterValue() as string) ?? ""}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => table.getColumn(filterColumn)?.setFilterValue(e.target.value)}
+            value={searchInput}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchInput(e.target.value)}
           />
           {isFiltered && (
             <InputGroupAddon align="inline-end">{table.getFilteredRowModel().rows.length} results</InputGroupAddon>
@@ -186,7 +198,7 @@ export function DataTableToolbar<TData>({
       </div>
 
       {isFiltered && (
-        <Button variant="ghost" size="sm" onClick={() => table.resetColumnFilters()}>
+        <Button variant="ghost" size="sm" onClick={() => { table.resetColumnFilters(); setSearchInput("") }}>
           Reset <X data-icon="inline-end" />
         </Button>
       )}

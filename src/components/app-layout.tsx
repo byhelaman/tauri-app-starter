@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { z } from "zod"
 import { Outlet, useLocation, useNavigate } from "react-router-dom"
 import { BellIcon, ChevronDown, Settings } from "lucide-react"
 import { UserNav } from "@/components/user-nav"
@@ -47,6 +48,21 @@ const DEFAULT_SETTINGS: AppSettings = {
   askExportLocation: true,
 }
 
+// Esquema en tiempo de ejecución para que valores almacenados corruptos u obsoletos
+// se rechacen y las claves desconocidas se eliminen, evitando errores de tipo silenciosos.
+const appSettingsSchema = z.object({
+  launchAtLogin: z.boolean(),
+  startMinimized: z.boolean(),
+  closeToTray: z.boolean(),
+  emailNotifications: z.boolean(),
+  pushNotifications: z.boolean(),
+  weeklyDigest: z.boolean(),
+  showOnlineStatus: z.boolean(),
+  usageAnalytics: z.boolean(),
+  autoUpdate: z.boolean(),
+  askExportLocation: z.boolean(),
+}).partial()
+
 const SETTINGS_STORAGE_KEY = "app-settings"
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
@@ -55,7 +71,8 @@ function loadSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_STORAGE_KEY)
     if (!raw) return DEFAULT_SETTINGS
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) }
+    const parsed = appSettingsSchema.parse(JSON.parse(raw))
+    return { ...DEFAULT_SETTINGS, ...parsed }
   } catch {
     return DEFAULT_SETTINGS
   }

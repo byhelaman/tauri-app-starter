@@ -238,7 +238,8 @@ BEGIN
 END;
 $$;
 
--- Asigna un rol a un usuario (sin verificar jerarquía del rol actual — para usuarios nuevos/guest)
+-- Asigna un rol inicial a un usuario recién creado (solo aplica a usuarios con rol 'guest').
+-- Para cambiar el rol de usuarios existentes usar update_user_role().
 CREATE OR REPLACE FUNCTION public.set_new_user_role(
     target_user_id UUID,
     target_role    TEXT
@@ -249,13 +250,35 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-    caller_level      int;
-    target_role_level int;
+    caller_level         int;
+    target_role_level    int;
+    target_current_role  text;
+    target_current_level int;
 BEGIN
     caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
 
     IF NOT public.has_permission('users.manage') THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
+    END IF;
+
+    -- Verificar que el usuario objetivo existe y obtener su rol actual
+    SELECT p.role, r.hierarchy_level
+    INTO target_current_role, target_current_level
+    FROM public.profiles p
+    JOIN public.roles r ON p.role = r.name
+    WHERE p.id = target_user_id;
+
+    IF target_current_role IS NULL THEN
+        RAISE EXCEPTION 'Usuario no encontrado: %', target_user_id;
+    END IF;
+
+    -- Esta función es exclusiva para usuarios guest (hierarchy_level = 0).
+    -- Previene el bypass de jerarquía: sin esta validación se podría usar esta función
+    -- sobre usuarios existentes saltándose las comprobaciones de update_user_role().
+    IF target_current_level > 0 THEN
+        RAISE EXCEPTION
+            'set_new_user_role solo aplica a usuarios guest. Usa update_user_role() para el usuario %',
+            target_user_id;
     END IF;
 
     SELECT hierarchy_level INTO target_role_level
@@ -270,8 +293,6 @@ BEGIN
     UPDATE public.profiles
     SET role = target_role
     WHERE id = target_user_id;
-
-    IF NOT FOUND THEN RAISE EXCEPTION 'Usuario no encontrado: %', target_user_id; END IF;
 
     RETURN json_build_object('success', true, 'user_id', target_user_id, 'role', target_role);
 END;

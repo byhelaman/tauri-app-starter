@@ -1,4 +1,4 @@
-import { Radio, XCircle } from "lucide-react"
+import { Radio } from "lucide-react"
 import type { Order } from "./columns"
 import { useHighlights, type HighlightConfig } from "@/hooks/use-highlights"
 
