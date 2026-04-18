@@ -1,6 +1,6 @@
 # Tauri App Starter
 
-Template de aplicación de escritorio con autenticación completa, RBAC y actualizaciones automáticas.
+Template de aplicación de escritorio con autenticación completa, RBAC dinámico, panel de administración y actualizaciones automáticas.
 
 **Stack:** Tauri 2 · React 19 · TypeScript · Vite · TailwindCSS 4 · shadcn/ui · Supabase
 
@@ -43,9 +43,9 @@ Ver la guía completa en [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md).
 Pasos requeridos en orden:
 
 1. Crear proyecto y copiar credenciales al `.env`
-2. Ejecutar `supabase/migrations/001_foundation.sql` y luego `supabase/migrations/002_admin_rbac.sql` en el SQL Editor
+2. Ejecutar las 5 migraciones en el SQL Editor (`supabase/migrations/001` → `005`)
 3. Activar el Auth Hook (`Authentication → Hooks → custom_access_token_hook`) ⚠️
-4. Desplegar `supabase/functions/admin-reset-user-password` (para reset de contraseña por admin)
+4. Desplegar las 3 edge functions (`admin-reset-user-password`, `admin-update-user-email`, `admin-invite-user`)
 5. Promover el primer `owner` con SQL directo
 
 ---
@@ -57,7 +57,64 @@ pnpm dev          # Servidor Vite (frontend only, sin ventana nativa)
 pnpm tauri dev    # App completa con ventana Tauri
 pnpm build        # Build de producción (frontend)
 pnpm tauri build  # Build de escritorio (genera instalador)
+pnpm lint         # Linting
+pnpm test         # Tests
 ```
+
+---
+
+## Funcionalidades
+
+### Autenticación
+
+- **Sign in** — email + contraseña con validación Zod
+- **Sign up** — email + contraseña + verificación OTP (código 6 dígitos)
+- **Recovery** — reset de contraseña en 2 pasos (OTP → nueva contraseña)
+- **Invite** — flujo de aceptación de invitación por admin (OTP → nueva contraseña)
+- **Sesión persistente** — token en localStorage con refresh automático en focus/visibility
+- **Redirect post-login** — redirige a la ruta original que intentó acceder
+
+### Panel de administración (System Modal)
+
+Accesible para roles con `users.manage` o jerarquía ≥ 80.
+
+**Pestaña Usuarios:**
+- Listado con búsqueda, filtro por rol y estado (activo / invite pendiente)
+- Cambio de rol inline con actualización optimista
+- Ver perfil: editar nombre y email por separado en sub-modales
+- Restricción: el email de usuarios con invite pendiente no puede modificarse
+- Invitar usuarios nuevos con rol asignado
+- Reset de contraseña por admin (invalida todas las sesiones activas)
+- Eliminar usuario
+
+**Pestaña Roles & Permisos:**
+- Crear, editar, duplicar y eliminar roles dinámicamente
+- Duplicar rol copia permisos de forma atómica (un solo round-trip)
+- Eliminar rol reasigna sus usuarios al rol más bajo disponible
+- Matriz de permisos con toggles inline
+- Roles del sistema (`owner`, `guest`) protegidos — no se pueden eliminar ni modificar permisos
+
+**Pestaña Audit Log:**
+- Registro inmutable de todas las acciones administrativas con actor, target y metadata
+
+### RBAC
+
+| Rol | Nivel | Descripción |
+|-----|-------|-------------|
+| `owner` | 100 | Control total del sistema |
+| `admin` | 80 | Gestionar usuarios y configuración |
+| `member` | 10 | Usuario autenticado estándar |
+| `guest` | 0 | Sin verificar, asignado al registrarse |
+
+Los claims `user_role`, `hierarchy_level` y `permissions[]` se inyectan en el JWT vía Auth Hook. Los roles y permisos son dinámicos — se crean y modifican desde el panel sin tocar código.
+
+### Notificaciones
+
+Sistema de notificaciones in-app persistentes con badge en el nav, marcado individual y masivo, y descarte.
+
+### Actualizaciones automáticas
+
+Verifica actualizaciones al iniciar y cada 4 horas. Muestra diálogo con progreso de descarga. Ver [docs/RELEASES.md](docs/RELEASES.md).
 
 ---
 
@@ -66,78 +123,59 @@ pnpm tauri build  # Build de escritorio (genera instalador)
 ```
 src/
 ├── components/
-│   ├── ui/                 # Componentes shadcn/ui
-│   ├── auth-guard.tsx      # Protección de rutas autenticadas
-│   ├── update-dialog.tsx   # Diálogo de actualización automática
-│   └── updater-context.tsx
+│   ├── ui/                    # Componentes shadcn/ui + primitivos propios
+│   ├── avatar-field.tsx       # Campo de avatar reutilizable
+│   ├── auth-guard.tsx         # Protección de rutas autenticadas
+│   ├── profile-modal.tsx      # Modal de perfil del usuario actual
+│   ├── system-modal.tsx       # Panel de administración completo
+│   ├── update-dialog.tsx      # Diálogo de actualización automática
+│   └── user-nav.tsx           # Navegación de usuario (avatar + modales)
 ├── contexts/
-│   └── auth-context.tsx    # Sesión, signIn, signOut
+│   └── auth-context.tsx       # Sesión, signIn, signOut, claims
 ├── features/
-│   └── auth/               # SignIn, SignUp, Recovery
+│   ├── auth/                  # SignIn, SignUp, Recovery, InviteAccept
+│   └── system/                # UsersTab, RolesTab, AuditTab, diálogos
 ├── hooks/
-│   └── use-updater.tsx     # Lógica de actualizaciones
+│   └── use-updater.tsx        # Lógica de actualizaciones automáticas
 ├── lib/
-│   ├── supabase.ts         # Cliente Supabase optimizado para desktop
+│   ├── supabase.ts            # Cliente Supabase optimizado para desktop
 │   └── utils.ts
 └── pages/
-    ├── dashboard.tsx       # Página principal (punto de partida)
-    └── setup.tsx           # Configuración de credenciales
+    ├── dashboard.tsx          # Página principal (punto de partida)
+    └── setup.tsx              # Configuración de credenciales
 
 src-tauri/
 ├── src/
-│   ├── lib.rs              # Plugins y setup de Tauri
+│   ├── lib.rs                 # Plugins y setup de Tauri
 │   └── main.rs
 ├── capabilities/
-│   └── default.json        # Permisos de la app
-└── tauri.conf.json         # Configuración de Tauri
+│   └── default.json           # Permisos de la app
+└── tauri.conf.json            # Configuración de Tauri
 
 supabase/
 ├── functions/
-│   └── admin-reset-user-password/
-│       └── index.ts           # Reset seguro por admin + notificación
+│   ├── _shared/
+│   │   └── admin-handler.ts   # Middleware compartido (auth, jerarquía, CORS)
+│   ├── admin-invite-user/     # Invitar usuario con rol asignado
+│   ├── admin-reset-user-password/  # Reset + invalidación de sesiones
+│   └── admin-update-user-email/    # Cambio de email con audit
 └── migrations/
-  ├── 001_foundation.sql  # RBAC base, perfiles, JWT hook, RLS, triggers, RPCs utilitarias
-  └── 002_admin_rbac.sql  # RPCs/grants de administración y gestión de roles
+    ├── 001_foundation.sql     # Profiles, JWT hook, RLS, RPCs base
+    ├── 002_admin_rbac.sql     # Roles, permisos, gestión de usuarios
+    ├── 003_audit_and_notifications.sql  # Audit log, notificaciones
+    ├── 004_admin_sync_email.sql         # Trigger sync email, audit email
+    └── 005_role_management_fixes.sql    # delete_role fallback, duplicate_role
 ```
 
 ---
 
-## Autenticación
-
-El template incluye:
-
-- **Sign in** — email + contraseña con validación Zod
-- **Sign up** — email + contraseña + verificación OTP (código 6 dígitos)
-- **Recovery** — reset de contraseña en 2 pasos (OTP → nueva contraseña)
-- **Sesión persistente** — token en localStorage con refresh automático
-- **Redirect post-login** — redirige a la ruta original que intentó acceder
-
-### Roles disponibles
-
-| Rol | Nivel | Descripción |
-|-----|-------|-------------|
-| `owner` | 100 | Control total del sistema |
-| `admin` | 80 | Gestionar usuarios y configuración |
-| `member` | 10 | Usuario autenticado estándar |
-| `guest` | 0 | No verificado, asignado al registrarse |
-
-Los claims `user_role`, `hierarchy_level` y `permissions[]` se inyectan automáticamente en el JWT a través del Auth Hook.
-
----
-
 ## Actualizaciones automáticas
-
-El sistema verifica actualizaciones al iniciar y cada 4 horas. Si hay una versión nueva, muestra un diálogo con barra de progreso de descarga.
-
-### Configuración
 
 **1. Generar clave de firma:**
 
 ```bash
 pnpm tauri signer generate -w ~/.tauri/tu-app.key
 ```
-
-Guarda la **public key** que imprime en consola.
 
 **2. Actualizar `src-tauri/tauri.conf.json`:**
 
@@ -168,14 +206,11 @@ git push origin v1.0.0
 
 GitHub Actions compilará, firmará y publicará el instalador automáticamente.
 
-> Ver [docs/RELEASES.md](docs/RELEASES.md) para el workflow completo de CI/CD.
-
 ---
 
 ## Variables de entorno
 
 ```env
-# .env
 VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJ...
 ```
@@ -193,5 +228,4 @@ Si no se definen, la app muestra la pantalla de setup para ingresarlas manualmen
 | Versión | `tauri.conf.json` → `version` y `Cargo.toml` → `version` |
 | Tamaño de ventana | `tauri.conf.json` → `app.windows` |
 | Roles y permisos base | `supabase/migrations/001_foundation.sql` → secciones 1, 2 y 3 |
-| RPCs/admin RBAC | `supabase/migrations/002_admin_rbac.sql` |
 | Página principal | `src/pages/dashboard.tsx` |
