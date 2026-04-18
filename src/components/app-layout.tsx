@@ -202,7 +202,7 @@ export function AppLayout() {
           </div>
         </nav>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <CommandPalette
             onOpenProfile={() => setModal("profile")}
             onOpenSettings={() => setModal("settings")}
@@ -211,7 +211,7 @@ export function AppLayout() {
             onOpenShortcuts={() => setModal("shortcuts")}
             showSystem={canOpenSystem}
           />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <Button
               variant="ghost"
               size="icon"
@@ -233,6 +233,7 @@ export function AppLayout() {
             >
               <Settings aria-hidden="true" />
             </Button>
+          </div>
             <UserNav
               onOpenProfile={() => setModal("profile")}
               onOpenSettings={() => setModal("settings")}
@@ -240,7 +241,6 @@ export function AppLayout() {
               onOpenShortcuts={() => setModal("shortcuts")}
               canOpenSystem={canOpenSystem}
             />
-          </div>
         </div>
       </Titlebar>
 

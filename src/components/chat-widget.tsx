@@ -1,5 +1,7 @@
-import { useState, useEffect } from "react"
-import { MessageCircle, X, Settings, Send, ChevronLeft, Bot, Copy, RefreshCw, Trash2 } from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
+import { MessageCircle, X, Settings, Send, ChevronLeft, Bot, Copy, Check, RefreshCw, Trash2, ClipboardCopy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
     InputGroup,
@@ -22,6 +24,8 @@ type WidgetView = "chat" | "setup" | "settings"
 export function ChatWidget() {
     const [open, setOpen] = useState(false)
     const [view, setView] = useState<WidgetView>("chat")
+    const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
+    const [chatCopied, setChatCopied] = useState(false)
 
     const [apiKey, setApiKey] = useState(() => localStorage.getItem(STORAGE_KEY_API_KEY) ?? "")
     const [model, setModel] = useState(() => localStorage.getItem(STORAGE_KEY_MODEL) ?? DEFAULT_MODEL)
@@ -32,14 +36,8 @@ export function ChatWidget() {
         loading,
         messagesEndRef, inputRef,
         handleSend, handleKeyDown,
-        copyToClipboard, copyChat, handleRetry,
+        copyToClipboard, copyChat, clearMessages, handleRetry,
     } = useChat(apiKey, model)
-
-    // Al abrir: ir a setup si no hay API key, de lo contrario al chat
-    useEffect(() => {
-        if (!open) return
-        setView(apiKey ? "chat" : "setup")
-    }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
     // Focus al input al entrar en vista chat
     useEffect(() => {
@@ -47,6 +45,11 @@ export function ChatWidget() {
             setTimeout(() => inputRef.current?.focus(), 50)
         }
     }, [view, open, inputRef])
+
+    function handleOpen() {
+        setView(apiKey ? "chat" : "setup")
+        setOpen(true)
+    }
 
     function handleSave(newApiKey: string, newModel: string) {
         setApiKey(newApiKey)
@@ -65,11 +68,23 @@ export function ChatWidget() {
         setView("setup")
     }
 
+    const handleCopyMessage = useCallback((text: string, idx: number) => {
+        copyToClipboard(text)
+        setCopiedIdx(idx)
+        setTimeout(() => setCopiedIdx(null), 1500)
+    }, [copyToClipboard])
+
+    function handleCopyChat() {
+        copyChat()
+        setChatCopied(true)
+        setTimeout(() => setChatCopied(false), 1500)
+    }
+
     if (!open) {
         return (
             <Button
                 className="fixed bottom-4 right-4 z-50"
-                onClick={() => setOpen(true)}
+                onClick={handleOpen}
                 aria-label="Open AI chat"
             >
                 <Bot />
@@ -101,10 +116,10 @@ export function ChatWidget() {
                         <>
                             {messages.length > 0 && (
                                 <>
-                                    <Button variant="ghost" size="icon" onClick={copyChat} aria-label="Copy conversation">
-                                        <Copy data-icon />
+                                    <Button variant="ghost" size="icon" onClick={handleCopyChat} aria-label="Copy conversation">
+                                        {chatCopied ? <Check data-icon /> : <ClipboardCopy data-icon />}
                                     </Button>
-                                    <Button variant="ghost" size="icon" onClick={() => setMessages([])} aria-label="Clear chat">
+                                    <Button variant="ghost" size="icon" onClick={clearMessages} aria-label="Clear chat">
                                         <Trash2 data-icon />
                                     </Button>
                                 </>
@@ -161,23 +176,45 @@ export function ChatWidget() {
                                     msg.role === "user" ? "items-end" : "items-start"
                                 )}
                             >
-                                <div className={cn(
-                                    "text-sm max-w-[85%] whitespace-pre-wrap wrap-break-word",
-                                    msg.role === "user"
-                                        ? "rounded-lg px-3 py-2 bg-muted text-foreground"
-                                        : "px-1 py-0.5 text-foreground"
-                                )}>
-                                    {msg.content}
-                                </div>
+                                {msg.role === "user" ? (
+                                    <div className="text-sm max-w-[85%] whitespace-pre-wrap wrap-break-word rounded-lg px-3 py-1.5 bg-muted text-foreground">
+                                        {msg.content}
+                                    </div>
+                                ) : (
+                                    <div className="text-sm max-w-[85%] px-1 py-0.5 space-y-1">
+                                        <ReactMarkdown
+                                            remarkPlugins={[remarkGfm]}
+                                            components={{
+                                                p: ({ children }) => <p className="my-1 leading-relaxed">{children}</p>,
+                                                ul: ({ children }) => <ul className="my-1 ml-4 list-disc space-y-0.5">{children}</ul>,
+                                                ol: ({ children }) => <ol className="my-1 ml-4 list-decimal space-y-0.5">{children}</ol>,
+                                                strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                                                code: ({ children, className }) => className
+                                                    ? <code className="block overflow-x-auto rounded bg-muted px-3 py-2 text-xs font-mono whitespace-pre">{children}</code>
+                                                    : <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">{children}</code>,
+                                                pre: ({ children }) => <>{children}</>,
+                                                table: ({ children }) => (
+                                                    <div className="overflow-x-auto my-1 scrollbar">
+                                                        <table className="w-full border-collapse">{children}</table>
+                                                    </div>
+                                                ),
+                                                th: ({ children }) => <th className="border border-border px-2 py-1 bg-muted font-medium text-left">{children}</th>,
+                                                td: ({ children }) => <td className="border border-border px-2 py-1">{children}</td>,
+                                            }}
+                                        >
+                                            {msg.content}
+                                        </ReactMarkdown>
+                                    </div>
+                                )}
                                 <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <Button
                                         variant="ghost"
                                         size="icon-xs"
                                         className="text-muted-foreground"
-                                        onClick={() => copyToClipboard(msg.content)}
+                                        onClick={() => handleCopyMessage(msg.content, i)}
                                         aria-label="Copy message"
                                     >
-                                        <Copy />
+                                        {copiedIdx === i ? <Check className="size-3" /> : <Copy className="size-3" />}
                                     </Button>
                                     {msg.isError && i === messages.length - 1 && (
                                         <Button
@@ -209,7 +246,6 @@ export function ChatWidget() {
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyDown={handleKeyDown}
-                                disabled={loading}
                                 rows={Math.min(input.split("\n").length, 5)}
                                 className="min-h-0 max-h-30 scrollbar"
                             />

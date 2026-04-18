@@ -7,12 +7,47 @@ export interface Message {
     isError?: boolean
 }
 
+const STORAGE_KEY_HISTORY = "ai_chat_history"
+const MAX_HISTORY = 100
+
+function loadHistory(): Message[] {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY_HISTORY)
+        if (!raw) return []
+        return JSON.parse(raw) as Message[]
+    } catch {
+        return []
+    }
+}
+
+function saveHistory(messages: Message[]) {
+    try {
+        localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(messages.slice(-MAX_HISTORY)))
+    } catch {
+        // silencioso — localStorage puede estar lleno
+    }
+}
+
 export function useChat(apiKey: string, model: string) {
-    const [messages, setMessages] = useState<Message[]>([])
+    const [messages, setMessagesRaw] = useState<Message[]>(loadHistory)
     const [input, setInput] = useState("")
     const [loading, setLoading] = useState(false)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLTextAreaElement>(null)
+
+    // Persiste el historial cada vez que cambian los mensajes
+    useEffect(() => {
+        saveHistory(messages)
+    }, [messages])
+
+    // Wrapper que persiste y actualiza a la vez
+    const setMessages = useCallback((updater: Message[] | ((prev: Message[]) => Message[])) => {
+        setMessagesRaw(prev => {
+            const next = typeof updater === "function" ? updater(prev) : updater
+            saveHistory(next)
+            return next
+        })
+    }, [])
 
     // Scroll automático al último mensaje
     useEffect(() => {
@@ -47,7 +82,7 @@ export function useChat(apiKey: string, model: string) {
         } finally {
             setLoading(false)
         }
-    }, [input, loading, messages, apiKey, model])
+    }, [input, loading, messages, apiKey, model, setMessages])
 
     function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
         if (e.key === "Enter" && !e.shiftKey) {
@@ -67,6 +102,10 @@ export function useChat(apiKey: string, model: string) {
         void navigator.clipboard.writeText(text)
     }
 
+    function clearMessages() {
+        setMessages([])
+    }
+
     function handleRetry() {
         // Elimina el último error y restaura el input con el último mensaje del usuario
         const lastUserMsg = [...messages].reverse().find(m => m.role === "user")
@@ -81,6 +120,6 @@ export function useChat(apiKey: string, model: string) {
         loading,
         messagesEndRef, inputRef,
         handleSend, handleKeyDown,
-        copyToClipboard, copyChat, handleRetry,
+        copyToClipboard, copyChat, clearMessages, handleRetry,
     }
 }
