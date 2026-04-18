@@ -93,3 +93,41 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.get_ai_schema() TO authenticated;
+
+-- ============================================================
+-- 3. EXECUTE QUERY (solo lectura garantizada por BD)
+-- ============================================================
+
+-- Ejecuta SQL analítico arbitrario con garantía de solo lectura a nivel de motor.
+-- SET LOCAL transaction_read_only = on hace que PostgreSQL rechace cualquier
+-- sentencia DML (INSERT/UPDATE/DELETE/CREATE/DROP) antes de ejecutarla,
+-- independientemente del contenido del query — sin depender de regex.
+-- RLS aplica vía SECURITY INVOKER con el JWT del usuario.
+CREATE OR REPLACE FUNCTION public.execute_ai_query(query TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+SET search_path = 'public'
+AS $$
+DECLARE
+    result JSONB;
+BEGIN
+    IF NOT has_permission('ai.chat') THEN
+        RAISE EXCEPTION 'Permission denied: requires ai.chat';
+    END IF;
+
+    -- Garantía de BD: bloquea escrituras a nivel de executor de PostgreSQL.
+    -- Cualquier intento de INSERT/UPDATE/DELETE falla con "cannot execute X
+    -- in a read-only transaction" antes de que se ejecute.
+    PERFORM set_config('transaction_read_only', 'on', true);
+
+    EXECUTE format(
+        'SELECT jsonb_agg(row_to_json(q)) FROM (%s) q LIMIT 500',
+        query
+    ) INTO result;
+
+    RETURN COALESCE(result, '[]'::JSONB);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.execute_ai_query(text) TO authenticated;
