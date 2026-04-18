@@ -239,6 +239,7 @@ interface RolesTabProps {
     matrix: PermissionMatrix
     onTogglePermission: (role: string, permission: string, enabled: boolean) => Promise<void>
     onAddRole: (role: RoleDefinition) => Promise<void>
+    onDuplicateRole: (sourceName: string, newName: string) => Promise<void>
     onEditRole: (original: string, updated: Partial<RoleDefinition>) => Promise<void>
     onRemoveRole: (name: string) => Promise<void>
     canManageRoles: boolean
@@ -251,6 +252,7 @@ export function RolesTab({
     matrix,
     onTogglePermission,
     onAddRole,
+    onDuplicateRole,
     onEditRole,
     onRemoveRole,
     canManageRoles,
@@ -306,21 +308,9 @@ export function RolesTab({
             copyIndex += 1
         }
 
-        const duplicate: RoleDefinition = {
-            name: duplicateName,
-            level: role.level,
-            description: role.description,
-            builtin: false,
-        }
-
         setBusy(true)
         try {
-            await onAddRole(duplicate)
-            for (const permission of permissions) {
-                if (matrix[role.name]?.[permission.name]) {
-                    await onTogglePermission(duplicate.name, permission.name, true)
-                }
-            }
+            await onDuplicateRole(role.name, duplicateName)
         } finally {
             setBusy(false)
         }
@@ -476,8 +466,8 @@ export function RolesTab({
                                 <p className="text-sm text-muted-foreground">Permissions</p>
                                 <div className="grid grid-cols-2 gap-4 pb-2">
                                     {permissions.map((permission) => {
-                                        const isLocked = role.name === "owner"
-                                        const checked = isLocked ? true : (matrix[role.name]?.[permission.name] ?? false)
+                                        const isLocked = role.builtin
+                                        const checked = isLocked && role.name === "owner" ? true : (matrix[role.name]?.[permission.name] ?? false)
                                         return (
                                             <Field key={permission.name} orientation="horizontal">
                                                 <Checkbox

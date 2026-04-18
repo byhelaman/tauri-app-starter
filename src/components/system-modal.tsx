@@ -314,6 +314,19 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
         }
     }
 
+    async function duplicateRole(sourceName: string, newName: string) {
+        if (!supabase) return
+        const { error } = await supabase.rpc("duplicate_role", {
+            p_source_role: sourceName,
+            p_new_name: newName,
+        })
+        if (error) {
+            toast.error(error.message)
+            return
+        }
+        toast.success("Role duplicated")
+    }
+
     async function addRole(role: RoleDefinition) {
         if (!supabase) return
         const { error } = await supabase.rpc("create_role", {
@@ -424,6 +437,7 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
                                     matrix={matrix}
                                     onTogglePermission={togglePermission}
                                     onAddRole={addRole}
+                                    onDuplicateRole={duplicateRole}
                                     onEditRole={editRole}
                                     onRemoveRole={removeRole}
                                     canManageRoles={canManageRoles}
