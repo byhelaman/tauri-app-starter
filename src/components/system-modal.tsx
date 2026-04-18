@@ -218,38 +218,44 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
 
     async function updateUserRole(userId: string, role: string) {
         if (!supabase) return
+        const original = users.find(u => u.id === userId)?.role
+        setUsers(prev => prev.map(u => u.id === userId ? { ...u, role } : u))
         const { error } = await supabase.rpc("update_user_role", { target_user_id: userId, new_role: role })
         if (error) {
+            setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: original ?? u.role } : u))
             toast.error(error.message)
             return
         }
         toast.success("User role updated")
-        await fetchSystemData()
     }
 
     async function updateUserDisplayName(userId: string, displayName: string) {
         if (!supabase) return
+        const original = users.find(u => u.id === userId)?.displayName
+        setUsers(prev => prev.map(u => u.id === userId ? { ...u, displayName } : u))
         const { error } = await supabase.rpc("update_user_display_name", {
             target_user_id: userId,
             new_display_name: displayName,
         })
         if (error) {
+            setUsers(prev => prev.map(u => u.id === userId ? { ...u, displayName: original ?? u.displayName } : u))
             toast.error(error.message)
             return
         }
         toast.success("User profile updated")
-        await fetchSystemData()
     }
 
     async function removeUser(userId: string) {
         if (!supabase) return
+        const snapshot = users
+        setUsers(prev => prev.filter(u => u.id !== userId))
         const { error } = await supabase.rpc("delete_user", { target_user_id: userId })
         if (error) {
+            setUsers(snapshot)
             toast.error(error.message)
             return
         }
         toast.success("User removed")
-        await fetchSystemData()
     }
 
     async function inviteUser(name: string, email: string, role: string) {
@@ -263,8 +269,6 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
 
         const response = (data ?? {}) as { success?: boolean; message?: string }
         if (!response.success) throw new Error(response.message ?? "Invite failed")
-
-        await fetchSystemData()
     }
 
     async function updateUserEmail(userId: string, newEmail: string) {
@@ -286,7 +290,6 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
         }
 
         toast.success("Email updated")
-        await fetchSystemData()
     }
 
     async function resetPasswordForUser(userId: string, newPassword: string) {
@@ -323,7 +326,6 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
             return
         }
         toast.success("Role created")
-        await fetchSystemData()
     }
 
     async function editRole(original: string, updated: Partial<RoleDefinition>) {
@@ -339,7 +341,6 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
             return
         }
         toast.success("Role updated")
-        await fetchSystemData()
     }
 
     async function removeRole(name: string) {
@@ -356,7 +357,6 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
         } else {
             toast.success("Role deleted")
         }
-        await fetchSystemData()
     }
 
     async function togglePermission(role: string, permission: string, enabled: boolean) {
@@ -404,6 +404,7 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
                                     <UsersTab
                                         users={users}
                                         roles={roles}
+                                        actorLevel={claims.hierarchyLevel}
                                         onUpdateRole={updateUserRole}
                                         onUpdateDisplayName={updateUserDisplayName}
                                         onUpdateEmail={updateUserEmail}

@@ -29,7 +29,14 @@ Deno.serve(async (req: Request) => {
     })
 
     if (updateError) {
-        return json(500, { success: false, message: `Password update failed: ${updateError.message}` }, origin)
+        console.error("Password update failed:", updateError.message)
+        return json(500, { success: false, message: "Could not reset password" }, origin)
+    }
+
+    // Best-effort: invalida todas las sesiones activas para que una cuenta comprometida quede bloqueada de inmediato.
+    const { error: signOutError } = await supabaseAdmin.auth.admin.signOut(targetUserId, "global")
+    if (signOutError) {
+        console.error("Session invalidation failed after password reset:", signOutError.message)
     }
 
     return json(200, { success: true, message: "Password reset completed" }, origin)

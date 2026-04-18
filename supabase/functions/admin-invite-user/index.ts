@@ -19,7 +19,8 @@ Deno.serve(async (req: Request) => {
     })
 
     if (inviteError) {
-        return json(500, { success: false, message: inviteError.message }, origin)
+        console.error("Invite failed:", inviteError.message)
+        return json(500, { success: false, message: "Could not send invitation" }, origin)
     }
 
     const invitedUserId = data.user.id
@@ -31,8 +32,9 @@ Deno.serve(async (req: Request) => {
         })
 
         if (roleError) {
+            console.error("Role assignment failed:", roleError.message)
             await supabaseAdmin.rpc("delete_user", { target_user_id: invitedUserId })
-            return json(500, { success: false, message: `Role assignment failed: ${roleError.message}` }, origin)
+            return json(500, { success: false, message: "Could not assign role — invitation cancelled" }, origin)
         }
     }
 

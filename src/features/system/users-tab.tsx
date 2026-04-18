@@ -40,6 +40,7 @@ import { ResetPasswordDialog } from "./reset-password-dialog"
 interface UsersTabProps {
     users: SystemUser[]
     roles: RoleDefinition[]
+    actorLevel: number
     onUpdateRole: (userId: string, role: string) => Promise<void>
     onUpdateDisplayName: (userId: string, displayName: string) => Promise<void>
     onUpdateEmail: (userId: string, email: string) => Promise<void>
@@ -50,7 +51,7 @@ interface UsersTabProps {
     loading?: boolean
 }
 
-export function UsersTab({ users, roles, onUpdateRole, onUpdateDisplayName, onUpdateEmail, onRemoveUser, onInviteUser, onResetPassword, canManageUsers, loading }: UsersTabProps) {
+export function UsersTab({ users, roles, actorLevel, onUpdateRole, onUpdateDisplayName, onUpdateEmail, onRemoveUser, onInviteUser, onResetPassword, canManageUsers, loading }: UsersTabProps) {
     const [search, setSearch] = useState("")
     const [showInvite, setShowInvite] = useState(false)
     const [profileUser, setProfileUser] = useState<SystemUser | null>(null)
@@ -60,6 +61,11 @@ export function UsersTab({ users, roles, onUpdateRole, onUpdateDisplayName, onUp
     const [roleBusy, setRoleBusy] = useState(false)
     const [resetBusy, setResetBusy] = useState(false)
     const [removeBusy, setRemoveBusy] = useState(false)
+
+    const assignableRoles = roles.filter(r => r.level < actorLevel)
+
+    // Deriva el usuario del diálogo desde el array vivo para reflejar cambios optimistas.
+    const profileUserLive = profileUser ? (users.find(u => u.id === profileUser.id) ?? null) : null
 
     const filtered = users.filter(
         (u) =>
@@ -119,13 +125,14 @@ export function UsersTab({ users, roles, onUpdateRole, onUpdateDisplayName, onUp
                 open={showInvite}
                 onOpenChange={setShowInvite}
                 onInviteUser={handleInviteUser}
-                roles={roles}
+                roles={assignableRoles}
                 canManageUsers={canManageUsers}
                 busy={inviteBusy}
             />
             <ViewProfileDialog
-                user={profileUser}
+                user={profileUserLive}
                 roles={roles}
+                actorLevel={actorLevel}
                 onOpenChange={(open) => { if (!open) setProfileUser(null) }}
                 onUpdateDisplayName={onUpdateDisplayName}
                 onUpdateEmail={onUpdateEmail}
@@ -191,7 +198,7 @@ export function UsersTab({ users, roles, onUpdateRole, onUpdateDisplayName, onUp
                                     <SelectContent>
                                         <SelectGroup>
                                             {roles.map((r) => (
-                                                <SelectItem key={r.name} value={r.name}>{r.name}</SelectItem>
+                                                <SelectItem key={r.name} value={r.name} disabled={r.level >= actorLevel}>{r.name}</SelectItem>
                                             ))}
                                         </SelectGroup>
                                     </SelectContent>

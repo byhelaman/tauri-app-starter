@@ -167,6 +167,7 @@ function EditEmailDialog({ open, onOpenChange, userId, currentEmail, onSave }: E
 export interface ViewProfileDialogProps {
     user: SystemUser | null
     roles: RoleDefinition[]
+    actorLevel: number
     onOpenChange: (open: boolean) => void
     onUpdateDisplayName: (userId: string, displayName: string) => Promise<void>
     onUpdateEmail: (userId: string, email: string) => Promise<void>
@@ -174,7 +175,7 @@ export interface ViewProfileDialogProps {
     canManageUsers: boolean
 }
 
-export function ViewProfileDialog({ user, roles, onOpenChange, onUpdateDisplayName, onUpdateEmail, onUpdateRole, canManageUsers }: ViewProfileDialogProps) {
+export function ViewProfileDialog({ user, roles, actorLevel, onOpenChange, onUpdateDisplayName, onUpdateEmail, onUpdateRole, canManageUsers }: ViewProfileDialogProps) {
     const [editName, setEditName] = useState(false)
     const [editEmail, setEditEmail] = useState(false)
     const [roleSaving, setRoleSaving] = useState(false)
@@ -281,7 +282,7 @@ export function ViewProfileDialog({ user, roles, onOpenChange, onUpdateDisplayNa
                                         <SelectContent>
                                             <SelectGroup>
                                                 {roles.map((r) => (
-                                                    <SelectItem key={r.name} value={r.name}>{r.name}</SelectItem>
+                                                    <SelectItem key={r.name} value={r.name} disabled={r.level >= actorLevel}>{r.name}</SelectItem>
                                                 ))}
                                             </SelectGroup>
                                         </SelectContent>
