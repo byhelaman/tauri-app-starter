@@ -54,8 +54,6 @@ export function InviteAcceptForm({
     defaultValues: { password: "" },
   })
 
-  const emailValue = step1.watch("email")
-
   const onStep1Submit = async (data: Step1Values) => {
     if (!supabase) return
     const { error } = await supabase.auth.verifyOtp({

@@ -9,6 +9,7 @@ import { ProfileModal } from "@/components/profile-modal"
 import { SettingsModal } from "@/components/settings-modal"
 import { SystemModal } from "@/components/system-modal"
 import { ShortcutsModal } from "@/components/shortcuts-modal"
+import { ChatWidget } from "@/components/chat-widget"
 import { useAuth } from "@/contexts/auth-context"
 import { Titlebar } from "@/components/window-controls"
 import { Button } from "@/components/ui/button"
@@ -270,6 +271,7 @@ export function AppLayout() {
         open={modal === "shortcuts"}
         onOpenChange={(open) => setModal(open ? "shortcuts" : null)}
       />
+      {hasPermission("ai.chat") && <ChatWidget />}
     </div>
   )
 }
