@@ -32,40 +32,29 @@ VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ---
 
-## 3. Ejecutar la migración
+## 3. Ejecutar las migraciones
 
 `SQL Editor → New query`
 
-Ejecuta los archivos en este orden:
+Ejecuta los archivos **en orden**. Abre cada uno, copia el contenido completo y ejecútalo en una query nueva.
 
 1. `supabase/migrations/001_foundation.sql`
 2. `supabase/migrations/002_admin_rbac.sql`
-
-Abre cada archivo, copia todo el contenido y ejecútalo en una query nueva.
-
-**Qué crea:**
-
-| Objeto | Descripción |
-|--------|-------------|
-| `roles` | Tabla de roles del sistema |
-| `permissions` | Tabla de permisos |
-| `role_permissions` | Asignaciones rol → permiso |
-| `profiles` | Perfil vinculado a cada usuario de auth |
-| `custom_access_token_hook` | Función que inyecta rol/permisos en el JWT |
-| `handle_new_user` | Trigger que crea el perfil automáticamente al registrarse |
-| `has_permission` | RPC para verificar permisos desde RLS u otras funciones |
-| `get_my_profile` | RPC para obtener el perfil propio con permisos |
-| `get_all_users` | RPC para listar usuarios (requiere `users.view`) |
-| `update_user_role` | RPC para cambiar el rol de un usuario (requiere `users.manage`) |
-| `delete_user` | RPC para eliminar un usuario (requiere `users.manage`) |
-| `delete_own_account` | RPC para que el usuario elimine su propia cuenta (bloqueada si es el único `owner`) |
-| `verify_user_password` | RPC para verificar la contraseña actual |
-| `check_email_exists` | RPC para verificar si un email existe — solo disponible para admins (`hierarchy >= 80`) |
-| `create_role` / `update_role` / `delete_role` | RPCs de gestión dinámica de roles (solo `owner`) |
-| Políticas RLS | Acceso controlado en todas las tablas |
-| Triggers de seguridad | Bloquean cambios de email y auto-escalada de roles |
+3. `supabase/migrations/003_audit_and_notifications.sql`
+4. `supabase/migrations/004_admin_sync_email.sql`
+5. `supabase/migrations/005_role_management_fixes.sql`
 
 Si la ejecución tiene éxito verás `Success. No rows returned` al final de cada script.
+
+**Qué crea cada migración:**
+
+| Migración | Objetos principales |
+|-----------|---------------------|
+| `001` | `profiles`, `handle_new_user` trigger, `custom_access_token_hook`, `has_permission`, `get_my_profile`, `verify_user_password`, `check_email_exists`, RLS |
+| `002` | `roles`, `permissions`, `role_permissions`, `get_all_users`, `update_user_role`, `update_user_display_name`, `delete_user`, `delete_own_account`, `create_role`, `update_role`, `delete_role`, `duplicate_role`, `assign_role_permission`, `remove_role_permission`, `get_all_roles`, `get_all_permissions`, `get_role_permission_matrix`, `set_new_user_role` |
+| `003` | `audit_log`, `notifications`, `log_audit_event`, `log_audit_event_as_admin`, `notify_user`, `notify_admins`, `get_audit_log`, `get_my_notifications`, `mark_notification_read`, `mark_all_notifications_read`, `dismiss_notification` |
+| `004` | Trigger `on_auth_user_email_updated` (sincroniza `profiles.email`), `admin_audit_email_change`, `log_audit_event_as_admin` |
+| `005` | Corrige `delete_role` (fallback al rol más bajo), añade `duplicate_role` atómico |
 
 ---
 
@@ -135,6 +124,14 @@ El template usa OTP para recovery también. Verifica que el template **"Reset Pa
 
 El template por defecto funciona. Si personalizas el email, usa `{{ .Token }}` (no `{{ .ConfirmationURL }}`).
 
+### Email de invitación
+
+La función `admin-invite-user` usa `inviteUserByEmail`. El template de **"Invite user"** debe enviar el OTP como código numérico para que el flujo de aceptación de invitación funcione:
+
+`Authentication → Email Templates → Invite user`
+
+Asegúrate de que el template incluya `{{ .Token }}` en el cuerpo del email.
+
 ---
 
 ## 7. Configurar SMTP (producción)
@@ -178,22 +175,26 @@ Todos deben mostrar `rowsecurity = true`.
 
 ---
 
-## 9. Desplegar Edge Function para reset de contraseña por admin
+## 9. Desplegar Edge Functions
 
-Esta app incluye el endpoint seguro `admin-reset-user-password` para que un admin pueda restablecer una contraseña.
+El sistema incluye tres edge functions que ejecutan operaciones privilegiadas con la `service_role` key. Todas deben desplegarse con `--no-verify-jwt`.
 
 ```bash
 supabase functions deploy admin-reset-user-password --no-verify-jwt
+supabase functions deploy admin-update-user-email --no-verify-jwt
+supabase functions deploy admin-invite-user --no-verify-jwt
 ```
 
 > **¿Por qué `--no-verify-jwt`?**
-> Supabase usa claves asimétricas (ES256) para firmar JWTs. La verificación built-in de Edge Functions no soporta ES256 y rechaza el request con `UNAUTHORIZED_UNSUPPORTED_TOKEN_ALGORITHM`. Al desactivarla, la función valida el token **manualmente** con `supabase.auth.getUser(accessToken)`, que sí soporta ES256.
+> Supabase usa claves asimétricas (ES256) para firmar JWTs. La verificación built-in de Edge Functions no soporta ES256 y rechaza el request con `UNAUTHORIZED_UNSUPPORTED_TOKEN_ALGORITHM`. Al desactivarla, cada función valida el token **manualmente** con `supabase.auth.getUser(accessToken)`, que sí soporta ES256.
 
-La función usa los secretos internos de Supabase Functions (`SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`) y valida jerarquía/permisos (`users.manage`) antes de aplicar el cambio.
+| Función | Qué hace |
+|---------|----------|
+| `admin-reset-user-password` | Resetea la contraseña de un usuario e invalida todas sus sesiones activas |
+| `admin-update-user-email` | Cambia el email de un usuario (bloqueado si tiene invite pendiente) |
+| `admin-invite-user` | Invita a un nuevo usuario y le asigna un rol |
 
-Archivo de la función:
-
-- `supabase/functions/admin-reset-user-password/index.ts`
+Todas validan jerarquía/permisos (`users.manage`) antes de aplicar el cambio.
 
 ---
 
@@ -221,7 +222,9 @@ Archivo de la función:
 
 > `owner` recibe **todos** los permisos dinámicamente — no requiere entradas en `role_permissions`.
 
-> Al eliminar un rol con `delete_role`, los usuarios asignados a ese rol se reasignan automáticamente al rol inmediatamente inferior en jerarquía.
+> Al eliminar un rol con `delete_role`, los usuarios asignados se reasignan automáticamente al rol con el nivel más bajo disponible (normalmente `guest`). Los roles del sistema `owner` y `guest` no pueden eliminarse.
+
+> `duplicate_role` crea una copia exacta de un rol con todos sus permisos en una sola operación atómica.
 
 ### Añadir roles o permisos propios
 
