@@ -256,7 +256,7 @@ export function BulkCopyDialog<TData>({ table, tableId, scope, open, onOpenChang
                                             ref={templateRef}
                                             value={template}
                                             onChange={(e) => setTemplate(e.target.value)}
-                                            className="min-h-20 max-h-25 scrollbar"
+                                            className="max-h-30 scrollbar"
                                             spellCheck={false}
                                             placeholder="{code} - {customer}"
                                         />
