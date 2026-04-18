@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { MessageCircle, X, Settings, Send, ChevronLeft, Bot, Copy, Check, RefreshCw, Trash2, ClipboardCopy } from "lucide-react"
+import { MessageCircle, X, Settings, Send, ChevronLeft, Bot, Copy, Check, RefreshCw, Trash2, ClipboardCopy, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
 import {
     InputGroup,
     InputGroupAddon,
@@ -26,16 +27,19 @@ export function ChatWidget() {
     const [view, setView] = useState<WidgetView>("chat")
     const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
     const [chatCopied, setChatCopied] = useState(false)
+    const [editingIdx, setEditingIdx] = useState<number | null>(null)
+    const [editContent, setEditContent] = useState("")
+    const editRef = useRef<HTMLTextAreaElement>(null)
 
     const [apiKey, setApiKey] = useState(() => localStorage.getItem(STORAGE_KEY_API_KEY) ?? "")
     const [model, setModel] = useState(() => localStorage.getItem(STORAGE_KEY_MODEL) ?? DEFAULT_MODEL)
 
     const {
-        messages, setMessages,
+        messages,
         input, setInput,
-        loading,
+        loading, statusText,
         messagesEndRef, inputRef,
-        handleSend, handleKeyDown,
+        handleSend, handleKeyDown, handleEdit,
         copyToClipboard, copyChat, clearMessages, handleRetry,
     } = useChat(apiKey, model)
 
@@ -45,6 +49,13 @@ export function ChatWidget() {
             setTimeout(() => inputRef.current?.focus(), 50)
         }
     }, [view, open, inputRef])
+
+    // Focus al textarea de edición al activar modo edición
+    useEffect(() => {
+        if (editingIdx !== null) {
+            setTimeout(() => editRef.current?.focus(), 50)
+        }
+    }, [editingIdx])
 
     function handleOpen() {
         setView(apiKey ? "chat" : "setup")
@@ -64,7 +75,7 @@ export function ChatWidget() {
         localStorage.removeItem(STORAGE_KEY_MODEL)
         setApiKey("")
         setModel(DEFAULT_MODEL)
-        setMessages([])
+        clearMessages()
         setView("setup")
     }
 
@@ -78,6 +89,31 @@ export function ChatWidget() {
         copyChat()
         setChatCopied(true)
         setTimeout(() => setChatCopied(false), 1500)
+    }
+
+    function startEdit(idx: number, content: string) {
+        setEditingIdx(idx)
+        setEditContent(content)
+    }
+
+    function cancelEdit() {
+        setEditingIdx(null)
+        setEditContent("")
+    }
+
+    function confirmEdit() {
+        if (editingIdx === null) return
+        handleEdit(editingIdx, editContent)
+        setEditingIdx(null)
+        setEditContent("")
+    }
+
+    function handleEditKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault()
+            confirmEdit()
+        }
+        if (e.key === "Escape") cancelEdit()
     }
 
     if (!open) {
@@ -176,7 +212,23 @@ export function ChatWidget() {
                                     msg.role === "user" ? "items-end" : "items-start"
                                 )}
                             >
-                                {msg.role === "user" ? (
+                                {/* Modo edición inline para mensajes del usuario */}
+                                {msg.role === "user" && editingIdx === i ? (
+                                    <div className="w-full max-w-[85%] flex flex-col gap-1.5">
+                                        <Textarea
+                                            ref={editRef}
+                                            value={editContent}
+                                            onChange={e => setEditContent(e.target.value)}
+                                            onKeyDown={handleEditKeyDown}
+                                            rows={Math.min(editContent.split("\n").length, 5)}
+                                            className="text-sm resize-none min-h-0 py-1 scrollbar"
+                                        />
+                                        <div className="flex gap-1.5 justify-end">
+                                            <Button size="xs" variant="outline" onClick={cancelEdit}>Cancel</Button>
+                                            <Button size="xs" onClick={confirmEdit} disabled={!editContent.trim()}>Send</Button>
+                                        </div>
+                                    </div>
+                                ) : msg.role === "user" ? (
                                     <div className="text-sm max-w-[85%] whitespace-pre-wrap wrap-break-word rounded-lg px-3 py-1.5 bg-muted text-foreground">
                                         {msg.content}
                                     </div>
@@ -204,37 +256,62 @@ export function ChatWidget() {
                                         >
                                             {msg.content}
                                         </ReactMarkdown>
+                                        {/* Cursor de streaming mientras llegan tokens */}
+                                        {msg.isStreaming && (
+                                            <span className="inline-block w-0.5 h-3.5 bg-current align-middle ml-0.5 animate-pulse" />
+                                        )}
                                     </div>
                                 )}
-                                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon-xs"
-                                        className="text-muted-foreground"
-                                        onClick={() => handleCopyMessage(msg.content, i)}
-                                        aria-label="Copy message"
-                                    >
-                                        {copiedIdx === i ? <Check className="size-3" /> : <Copy className="size-3" />}
-                                    </Button>
-                                    {msg.isError && i === messages.length - 1 && (
+
+                                {/* Botones de acción — ocultos hasta hover */}
+                                {editingIdx !== i && (
+                                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                         <Button
                                             variant="ghost"
                                             size="icon-xs"
                                             className="text-muted-foreground"
-                                            onClick={handleRetry}
-                                            aria-label="Retry"
+                                            onClick={() => handleCopyMessage(msg.content, i)}
+                                            aria-label="Copy message"
                                         >
-                                            <RefreshCw className="size-3" />
+                                            {copiedIdx === i ? <Check className="size-3" /> : <Copy className="size-3" />}
                                         </Button>
-                                    )}
-                                </div>
+                                        {msg.role === "user" && !loading && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-xs"
+                                                className="text-muted-foreground"
+                                                onClick={() => startEdit(i, msg.content)}
+                                                aria-label="Edit message"
+                                            >
+                                                <Pencil className="size-3" />
+                                            </Button>
+                                        )}
+                                        {msg.isError && i === messages.length - 1 && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-xs"
+                                                className="text-muted-foreground"
+                                                onClick={handleRetry}
+                                                aria-label="Retry"
+                                            >
+                                                <RefreshCw className="size-3" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         ))}
+
+                        {/* Indicador de carga / estado de tool calls */}
                         {loading && (
-                            <div className="self-start bg-muted rounded-lg px-3 py-2">
-                                <Spinner className="text-muted-foreground" />
+                            <div className="self-start flex items-center gap-2 px-1 py-1">
+                                <Spinner className="size-3 text-muted-foreground shrink-0" />
+                                {statusText && (
+                                    <span className="text-xs text-muted-foreground">{statusText}</span>
+                                )}
                             </div>
                         )}
+
                         <div ref={messagesEndRef} />
                     </CardContent>
 
