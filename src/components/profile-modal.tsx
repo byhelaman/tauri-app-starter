@@ -130,7 +130,7 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
             <TabsTrigger value="security">Security</TabsTrigger>
           </TabsList>
 
-          <DialogBody className="mt-1 p-1">
+          <DialogBody className="mt-1 py-1">
 
             {/* General */}
             <TabsContent value="general">

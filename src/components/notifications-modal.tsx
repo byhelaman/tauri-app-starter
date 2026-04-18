@@ -210,7 +210,7 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
           </div>
         </DialogHeader>
 
-        <DialogBody className="mt-1 p-1">
+        <DialogBody className="mt-1 py-1">
           {notifications.length === 0 ? (
             <Empty>
               <EmptyHeader>

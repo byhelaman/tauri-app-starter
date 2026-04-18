@@ -411,7 +411,7 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
                             <TabsTrigger value="audit">Audit Log</TabsTrigger>
                         </TabsList>
 
-                        <DialogBody className="mt-1 p-1">
+                        <DialogBody className="mt-1 py-1">
                             {canViewUsers && (
                                 <TabsContent value="users">
                                     <UsersTab

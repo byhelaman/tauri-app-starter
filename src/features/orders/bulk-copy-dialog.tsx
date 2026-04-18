@@ -226,7 +226,7 @@ export function BulkCopyDialog<TData>({ table, tableId, scope, open, onOpenChang
                     </DialogDescription>
                 </DialogHeader>
 
-                <DialogBody className="p-1">
+                <DialogBody className="py-1">
                     <FieldSet className="min-w-0">
                         <Field>
                             <FieldLabel>Format</FieldLabel>

@@ -96,7 +96,7 @@ export function SettingsModal({ open, onOpenChange, settings, onSettingsChange }
             <TabsTrigger value="application">Application</TabsTrigger>
           </TabsList>
 
-          <DialogBody className="mt-1 p-1">
+          <DialogBody className="mt-1 py-1">
             <TabsContent value="general">
               <FieldGroup>
                 <SettingRow
