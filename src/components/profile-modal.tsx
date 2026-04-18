@@ -4,7 +4,7 @@ import { toast } from "sonner"
 import { getInitials } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
 import { supabase } from "@/lib/supabase"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { AvatarField } from "@/components/avatar-field"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ChangePasswordDialog } from "@/components/change-password-dialog"
@@ -136,17 +136,7 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
             <TabsContent value="general">
               <FieldGroup>
 
-                <Field>
-                  <FieldLabel>Avatar</FieldLabel>
-                  <div className="flex items-center gap-4">
-                    <Avatar className="size-18">
-                      <AvatarFallback className="text-lg">{getInitials(displayName || user?.email || "?")}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => toast.info("Photo upload coming soon")}>Upload photo</Button>
-                    </div>
-                  </div>
-                </Field>
+                <AvatarField initials={getInitials(displayName || user?.email || "?")} />
 
                 <Field>
                   <FieldLabel htmlFor="display-name">Display name</FieldLabel>

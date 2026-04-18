@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
 import { getInitials } from "@/lib/utils"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { AvatarField } from "@/components/avatar-field"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -220,23 +220,10 @@ export function ViewProfileDialog({ user, roles, actorLevel, onOpenChange, onUpd
                     </DialogHeader>
                     {user && (
                         <FieldGroup>
-                            <Field>
-                                <FieldLabel>Avatar</FieldLabel>
-                                <div className="flex items-center gap-4">
-                                    <Avatar className="size-18">
-                                        <AvatarFallback className="text-lg">{getInitials(user.displayName || user.email)}</AvatarFallback>
-                                    </Avatar>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        type="button"
-                                        onClick={() => toast.info("Photo upload coming soon")}
-                                        disabled={!canManageUsers}
-                                    >
-                                        Upload photo
-                                    </Button>
-                                </div>
-                            </Field>
+                            <AvatarField
+                                initials={getInitials(user.displayName || user.email)}
+                                disabled={!canManageUsers}
+                            />
                             <Field>
                                 <FieldLabel>Display name</FieldLabel>
                                 <div className="flex items-center gap-2">
