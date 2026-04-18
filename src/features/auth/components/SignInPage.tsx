@@ -2,8 +2,9 @@ import { useState } from "react"
 import { SignInForm } from "./SignInForm"
 import { SignupForm } from "./SignupForm"
 import { RecoveryForm } from "./RecoveryForm"
+import { InviteAcceptForm } from "./InviteAcceptForm"
 
-type View = "signin" | "signup" | "recovery"
+type View = "signin" | "signup" | "recovery" | "invite"
 
 export function SignInPage() {
   const [view, setView] = useState<View>("signin")
@@ -15,6 +16,7 @@ export function SignInPage() {
           <SignInForm
             onSignUp={() => setView("signup")}
             onForgotPassword={() => setView("recovery")}
+            onInvite={() => setView("invite")}
           />
         )}
         {view === "signup" && (
@@ -22,6 +24,9 @@ export function SignInPage() {
         )}
         {view === "recovery" && (
           <RecoveryForm onSignIn={() => setView("signin")} />
+        )}
+        {view === "invite" && (
+          <InviteAcceptForm onSignIn={() => setView("signin")} />
         )}
       </div>
     </div>

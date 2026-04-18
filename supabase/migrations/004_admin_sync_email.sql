@@ -54,3 +54,33 @@ $$;
 
 REVOKE ALL ON FUNCTION public.admin_audit_email_change(uuid, text, text, uuid, text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_audit_email_change(uuid, text, text, uuid, text) TO service_role;
+
+-- 3. Generic admin audit helper — SECURITY DEFINER wrapper so edge functions
+--    (service_role) can write audit entries with full actor context.
+CREATE OR REPLACE FUNCTION public.log_audit_event_as_admin(
+    p_action      TEXT,
+    p_description TEXT,
+    p_actor_id    UUID,
+    p_actor_email TEXT,
+    p_target_id   UUID,
+    p_metadata    JSONB DEFAULT '{}'
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+    PERFORM public.log_audit_event(
+        p_action,
+        p_description,
+        p_actor_id,
+        p_actor_email,
+        p_target_id,
+        p_metadata
+    );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.log_audit_event_as_admin(text, text, uuid, text, uuid, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.log_audit_event_as_admin(text, text, uuid, text, uuid, jsonb) TO service_role;

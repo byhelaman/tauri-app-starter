@@ -1,38 +1,8 @@
 import { useState } from "react"
-import { Controller, useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
 import { toast } from "sonner"
 import { MoreHorizontalIcon, SearchIcon } from "lucide-react"
-import { getInitials } from "@/lib/utils"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter,
-} from "@/components/ui/dialog"
-import {
-    Field,
-    FieldLabel,
-    FieldGroup,
-    FieldError,
-} from "@/components/ui/field"
 import {
     InputGroup,
     InputGroupAddon,
@@ -62,344 +32,10 @@ import {
     ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import type { RoleDefinition, SystemUser } from "./types"
-
-const updateProfileSchema = z.object({
-    displayName: z.string().min(1, "Required"),
-    email: z.string().email("Invalid email"),
-    role: z.string().min(1, "Required"),
-})
-type UpdateProfileValues = z.infer<typeof updateProfileSchema>
-
-const inviteSchema = z.object({
-    name: z.string().min(1, "Required"),
-    email: z.string().email("Invalid email"),
-    role: z.string().min(1, "Required"),
-})
-type InviteValues = z.infer<typeof inviteSchema>
-
-const resetPasswordSchema = z.object({
-    newPassword: z.string().min(8, "Must be at least 8 characters"),
-})
-type ResetPasswordValues = z.infer<typeof resetPasswordSchema>
-
-interface InviteUserDialogProps {
-    open: boolean
-    onOpenChange: (open: boolean) => void
-    onInviteUser: (name: string, email: string, role: string) => Promise<void>
-    roles: RoleDefinition[]
-    canManageUsers: boolean
-    busy?: boolean
-}
-
-function InviteUserDialog({ open, onOpenChange, onInviteUser, roles, canManageUsers, busy }: InviteUserDialogProps) {
-    const { control, handleSubmit, reset } = useForm<InviteValues>({
-        resolver: zodResolver(inviteSchema),
-        defaultValues: { name: "", email: "", role: "guest" },
-    })
-
-    function handleClose(v: boolean) {
-        onOpenChange(v)
-        if (!v) reset()
-    }
-
-    async function onSubmit(values: InviteValues) {
-        await onInviteUser(values.name, values.email, values.role)
-        handleClose(false)
-    }
-
-    return (
-        <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="max-w-sm">
-                <DialogHeader>
-                    <DialogTitle>Invite user</DialogTitle>
-                    <DialogDescription>Create the account and send an onboarding email.</DialogDescription>
-                </DialogHeader>
-                <form className="contents" onSubmit={handleSubmit(onSubmit)}>
-                    <FieldGroup>
-                        <Controller
-                            name="name"
-                            control={control}
-                            render={({ field, fieldState }) => (
-                                <Field data-invalid={fieldState.invalid}>
-                                    <FieldLabel>Display name</FieldLabel>
-                                    <Input {...field} placeholder="John Smith" aria-invalid={fieldState.invalid} disabled={!canManageUsers || busy} />
-                                    <FieldError errors={[fieldState.error]} />
-                                </Field>
-                            )}
-                        />
-                        <Controller
-                            name="email"
-                            control={control}
-                            render={({ field, fieldState }) => (
-                                <Field data-invalid={fieldState.invalid}>
-                                    <FieldLabel>Email</FieldLabel>
-                                    <Input {...field} type="email" placeholder="john@company.com" aria-invalid={fieldState.invalid} disabled={!canManageUsers || busy} />
-                                    <FieldError errors={[fieldState.error]} />
-                                </Field>
-                            )}
-                        />
-                        <Controller
-                            name="role"
-                            control={control}
-                            render={({ field, fieldState }) => (
-                                <Field data-invalid={fieldState.invalid}>
-                                    <FieldLabel>Role</FieldLabel>
-                                    <Select value={field.value} onValueChange={field.onChange} disabled={!canManageUsers || busy}>
-                                        <SelectTrigger aria-invalid={fieldState.invalid}>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectGroup>
-                                                {roles.map((role) => (
-                                                    <SelectItem key={role.name} value={role.name}>{role.name}</SelectItem>
-                                                ))}
-                                            </SelectGroup>
-                                        </SelectContent>
-                                    </Select>
-                                    <FieldError errors={[fieldState.error]} />
-                                </Field>
-                            )}
-                        />
-                    </FieldGroup>
-                    <DialogFooter showCloseButton>
-                        <Button type="submit" disabled={!canManageUsers || busy}>Send invite</Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-    )
-}
-
-interface ViewProfileDialogProps {
-    user: SystemUser | null
-    roles: RoleDefinition[]
-    onOpenChange: (open: boolean) => void
-    onUpdateDisplayName: (userId: string, displayName: string) => Promise<void>
-    onUpdateEmail: (userId: string, email: string) => Promise<void>
-    onUpdateRole: (userId: string, role: string) => Promise<void>
-    canManageUsers: boolean
-    busy?: boolean
-}
-
-function ViewProfileDialog({ user, roles, onOpenChange, onUpdateDisplayName, onUpdateEmail, onUpdateRole, canManageUsers, busy }: ViewProfileDialogProps) {
-    const { control, handleSubmit, reset } = useForm<UpdateProfileValues>({
-        resolver: zodResolver(updateProfileSchema),
-        values: user
-            ? { displayName: user.displayName, email: user.email, role: user.role }
-            : { displayName: "", email: "", role: "" },
-    })
-
-    function handleClose(v: boolean) {
-        onOpenChange(v)
-        if (!v) reset()
-    }
-
-    async function onSubmit(values: UpdateProfileValues) {
-        if (!user) return
-        const promises: Promise<void>[] = []
-        if (values.displayName !== user.displayName)
-            promises.push(onUpdateDisplayName(user.id, values.displayName))
-        if (values.email !== user.email)
-            promises.push(onUpdateEmail(user.id, values.email))
-        if (values.role !== user.role)
-            promises.push(onUpdateRole(user.id, values.role))
-        if (promises.length === 0) {
-            handleClose(false)
-            return
-        }
-        try {
-            await Promise.all(promises)
-            handleClose(false)
-        } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Could not save changes")
-        }
-    }
-
-    return (
-        <Dialog open={!!user} onOpenChange={handleClose}>
-            <DialogContent className="max-w-sm">
-                <DialogHeader>
-                    <DialogTitle>Profile</DialogTitle>
-                    <DialogDescription>User details and account information.</DialogDescription>
-                </DialogHeader>
-                {user && (
-                    <form className="contents" onSubmit={handleSubmit(onSubmit)}>
-                        <FieldGroup>
-                            <Field>
-                                <FieldLabel>Avatar</FieldLabel>
-                                <div className="flex items-center gap-4">
-                                    <Avatar className="size-18">
-                                        <AvatarFallback className="text-lg">{getInitials(user.displayName || user.email)}</AvatarFallback>
-                                    </Avatar>
-                                    <div className="flex gap-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            type="button"
-                                            onClick={() => toast.info("Photo upload coming soon")}
-                                            disabled={!canManageUsers || busy}
-                                        >
-                                            Upload photo
-                                        </Button>
-                                    </div>
-                                </div>
-                            </Field>
-                            <Controller
-                                name="displayName"
-                                control={control}
-                                render={({ field, fieldState }) => (
-                                    <Field data-invalid={fieldState.invalid}>
-                                        <FieldLabel>Display name</FieldLabel>
-                                        <Input {...field} aria-invalid={fieldState.invalid} disabled={!canManageUsers || busy} />
-                                        <FieldError errors={[fieldState.error]} />
-                                    </Field>
-                                )}
-                            />
-                            <Controller
-                                name="email"
-                                control={control}
-                                render={({ field, fieldState }) => (
-                                    <Field data-invalid={fieldState.invalid}>
-                                        <FieldLabel>Email</FieldLabel>
-                                        <Input {...field} type="email" aria-invalid={fieldState.invalid} disabled={!canManageUsers || busy} />
-                                        <FieldError errors={[fieldState.error]} />
-                                    </Field>
-                                )}
-                            />
-                            <div className="flex gap-3">
-                                <Controller
-                                    name="role"
-                                    control={control}
-                                    render={({ field, fieldState }) => (
-                                        <Field className="flex-1" data-invalid={fieldState.invalid}>
-                                            <FieldLabel>Role</FieldLabel>
-                                            <Select value={field.value} onValueChange={field.onChange} disabled={!canManageUsers || busy}>
-                                                <SelectTrigger aria-invalid={fieldState.invalid}>
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectGroup>
-                                                        {roles.map((r) => (
-                                                            <SelectItem key={r.name} value={r.name}>{r.name}</SelectItem>
-                                                        ))}
-                                                    </SelectGroup>
-                                                </SelectContent>
-                                            </Select>
-                                            <FieldError errors={[fieldState.error]} />
-                                        </Field>
-                                    )}
-                                />
-                                <Field className="w-32">
-                                    <FieldLabel>Status</FieldLabel>
-                                    <Input value={user.status} disabled />
-                                </Field>
-                            </div>
-                            <Field>
-                                <FieldLabel>Last login</FieldLabel>
-                                <p className="text-sm text-muted-foreground">
-                                    {user.lastLoginAt
-                                        ? new Date(user.lastLoginAt).toLocaleString()
-                                        : "Never"}
-                                </p>
-                            </Field>
-                        </FieldGroup>
-                        <DialogFooter showCloseButton className="mt-4">
-                            <Button type="submit" disabled={!canManageUsers || busy}>Save</Button>
-                        </DialogFooter>
-                    </form>
-                )}
-            </DialogContent>
-        </Dialog>
-    )
-}
-
-interface RemoveUserAlertProps {
-    user: SystemUser | null
-    onOpenChange: (open: boolean) => void
-    onConfirm: (userId: string) => Promise<void>
-    busy?: boolean
-}
-
-function RemoveUserAlert({ user, onOpenChange, onConfirm, busy }: RemoveUserAlertProps) {
-    return (
-        <AlertDialog open={!!user} onOpenChange={onOpenChange}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Remove user?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        <span className="font-medium">{user?.displayName || user?.email}</span> will be removed from the workspace. This action cannot be undone.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                        variant="destructive"
-                        onClick={() => user ? void onConfirm(user.id) : undefined}
-                        disabled={busy}
-                    >
-                        Remove
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
-    )
-}
-
-interface ResetPasswordAlertProps {
-    user: SystemUser | null
-    onOpenChange: (open: boolean) => void
-    onConfirm: (userId: string, newPassword: string) => Promise<void>
-    busy?: boolean
-}
-
-function ResetPasswordAlert({ user, onOpenChange, onConfirm, busy }: ResetPasswordAlertProps) {
-    const { control, handleSubmit, reset } = useForm<ResetPasswordValues>({
-        resolver: zodResolver(resetPasswordSchema),
-        defaultValues: { newPassword: "" },
-    })
-
-    function handleClose(v: boolean) {
-        onOpenChange(v)
-        if (!v) reset()
-    }
-
-    async function onSubmit(values: ResetPasswordValues) {
-        if (!user) return
-        await onConfirm(user.id, values.newPassword)
-        handleClose(false)
-    }
-
-    return (
-        <Dialog open={!!user} onOpenChange={handleClose}>
-            <DialogContent className="max-w-sm">
-                <DialogHeader>
-                    <DialogTitle>Reset password</DialogTitle>
-                    <DialogDescription>
-                        Set a new password for <span className="font-medium">{user?.email}</span>.
-                    </DialogDescription>
-                </DialogHeader>
-                <form className="contents" onSubmit={handleSubmit(onSubmit)}>
-                    <FieldGroup>
-                        <Controller
-                            name="newPassword"
-                            control={control}
-                            render={({ field, fieldState }) => (
-                                <Field data-invalid={fieldState.invalid}>
-                                    <FieldLabel>New password</FieldLabel>
-                                    <Input {...field} type="password" aria-invalid={fieldState.invalid} disabled={busy} />
-                                    <FieldError errors={[fieldState.error]} />
-                                </Field>
-                            )}
-                        />
-                    </FieldGroup>
-                    <DialogFooter showCloseButton>
-                        <Button type="submit" disabled={busy}>Save Changes</Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-    )
-}
+import { ViewProfileDialog } from "./user-profile-dialog"
+import { InviteUserDialog } from "./invite-user-dialog"
+import { RemoveUserAlert } from "./remove-user-alert"
+import { ResetPasswordDialog } from "./reset-password-dialog"
 
 interface UsersTabProps {
     users: SystemUser[]
@@ -422,7 +58,6 @@ export function UsersTab({ users, roles, onUpdateRole, onUpdateDisplayName, onUp
     const [removeUser, setRemoveUser] = useState<SystemUser | null>(null)
     const [inviteBusy, setInviteBusy] = useState(false)
     const [roleBusy, setRoleBusy] = useState(false)
-    const [profileBusy, setProfileBusy] = useState(false)
     const [resetBusy, setResetBusy] = useState(false)
     const [removeBusy, setRemoveBusy] = useState(false)
 
@@ -438,24 +73,6 @@ export function UsersTab({ users, roles, onUpdateRole, onUpdateDisplayName, onUp
             await onUpdateRole(userId, role)
         } finally {
             setRoleBusy(false)
-        }
-    }
-
-    async function handleUpdateDisplayName(userId: string, displayName: string) {
-        setProfileBusy(true)
-        try {
-            await onUpdateDisplayName(userId, displayName)
-        } finally {
-            setProfileBusy(false)
-        }
-    }
-
-    async function handleUpdateEmail(userId: string, email: string) {
-        setProfileBusy(true)
-        try {
-            await onUpdateEmail(userId, email)
-        } finally {
-            setProfileBusy(false)
         }
     }
 
@@ -510,13 +127,12 @@ export function UsersTab({ users, roles, onUpdateRole, onUpdateDisplayName, onUp
                 user={profileUser}
                 roles={roles}
                 onOpenChange={(open) => { if (!open) setProfileUser(null) }}
-                onUpdateDisplayName={handleUpdateDisplayName}
-                onUpdateEmail={handleUpdateEmail}
-                onUpdateRole={handleRoleChange}
+                onUpdateDisplayName={onUpdateDisplayName}
+                onUpdateEmail={onUpdateEmail}
+                onUpdateRole={onUpdateRole}
                 canManageUsers={canManageUsers}
-                busy={profileBusy}
             />
-            <ResetPasswordAlert
+            <ResetPasswordDialog
                 user={resetPasswordUser}
                 onOpenChange={(open) => { if (!open) setResetPasswordUser(null) }}
                 onConfirm={handleResetPassword}

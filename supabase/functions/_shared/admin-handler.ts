@@ -49,22 +49,27 @@ export function json(status: number, body: JsonObject, origin: string | null): R
     })
 }
 
-export type AdminContext = {
+// Actor-only context — use for operations on new/non-existing users (e.g. invite)
+export type ActorContext = {
     supabaseAdmin: SupabaseClient
     actorUserId: string
     actorEmail: string
-    targetUserId: string
     actorLevel: number
-    targetLevel: number
     payload: JsonObject
     origin: string | null
 }
 
+// Full context — use for operations on existing users (e.g. reset password, update email)
+export type AdminContext = ActorContext & {
+    targetUserId: string
+    targetLevel: number
+}
+
 /**
- * Validates the incoming request and resolves actor/target permissions.
- * Returns an AdminContext on success, or a Response on any validation/auth failure.
+ * Validates request, authenticates the actor, and checks users.manage permission.
+ * Returns ActorContext on success, or a Response on any failure.
  */
-export async function buildAdminContext(req: Request): Promise<AdminContext | Response> {
+export async function buildActorContext(req: Request): Promise<ActorContext | Response> {
     const origin = req.headers.get("Origin")
 
     if (origin && !allowedOrigins.has(origin)) {
@@ -116,11 +121,6 @@ export async function buildAdminContext(req: Request): Promise<AdminContext | Re
         return json(400, { success: false, message: "Invalid JSON body" }, origin)
     }
 
-    const targetUserId = String(payload.targetUserId ?? "").trim()
-    if (!targetUserId) {
-        return json(400, { success: false, message: "targetUserId is required" }, origin)
-    }
-
     const { data: actorProfile, error: actorProfileError } = await supabaseAdmin
         .from("profiles")
         .select("id, role, roles!inner(hierarchy_level)")
@@ -150,6 +150,31 @@ export async function buildAdminContext(req: Request): Promise<AdminContext | Re
         return json(403, { success: false, message: "Permission denied: requires users.manage" }, origin)
     }
 
+    return {
+        supabaseAdmin,
+        actorUserId: actorUser.id,
+        actorEmail: actorUser.email ?? "",
+        actorLevel,
+        payload,
+        origin,
+    }
+}
+
+/**
+ * Extends buildActorContext with target user validation and hierarchy check.
+ * Returns AdminContext on success, or a Response on any failure.
+ */
+export async function buildAdminContext(req: Request): Promise<AdminContext | Response> {
+    const actor = await buildActorContext(req)
+    if (actor instanceof Response) return actor
+
+    const { supabaseAdmin, actorLevel, payload, origin } = actor
+
+    const targetUserId = String(payload.targetUserId ?? "").trim()
+    if (!targetUserId) {
+        return json(400, { success: false, message: "targetUserId is required" }, origin)
+    }
+
     const { data: targetProfile, error: targetProfileError } = await supabaseAdmin
         .from("profiles")
         .select("id, role, roles!inner(hierarchy_level)")
@@ -170,14 +195,5 @@ export async function buildAdminContext(req: Request): Promise<AdminContext | Re
         }, origin)
     }
 
-    return {
-        supabaseAdmin,
-        actorUserId: actorUser.id,
-        actorEmail: actorUser.email ?? "",
-        targetUserId,
-        actorLevel,
-        targetLevel,
-        payload,
-        origin,
-    }
+    return { ...actor, targetUserId, targetLevel }
 }

@@ -14,7 +14,7 @@ import { UsersTab } from "@/features/system/users-tab"
 import { RolesTab } from "@/features/system/roles-tab"
 import { AuditTab } from "@/features/system/audit-tab"
 import { IntegrationsTab } from "@/features/system/integrations-tab"
-import { createIsolatedSupabaseClient, supabase } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/contexts/auth-context"
 import type { AuditEntry, PermissionDefinition, PermissionMatrix, RoleDefinition, SystemUser } from "@/features/system/types"
 
@@ -60,11 +60,6 @@ interface RpcAuditEntry {
     created_at: string
 }
 
-function generateTempPassword(length = 24) {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*"
-    const values = crypto.getRandomValues(new Uint32Array(length))
-    return Array.from(values, (value) => chars[value % chars.length]).join("")
-}
 
 export function SystemModal({ open, onOpenChange }: SystemModalProps) {
     const { hasPermission, claims } = useAuth()
@@ -258,78 +253,18 @@ export function SystemModal({ open, onOpenChange }: SystemModalProps) {
     }
 
     async function inviteUser(name: string, email: string, role: string) {
-        if (!supabase) {
-            throw new Error("Supabase is not configured")
-        }
+        if (!supabase) throw new Error("Supabase is not configured")
 
-        const isolated = createIsolatedSupabaseClient()
-        if (!isolated) {
-            throw new Error("Supabase is not configured")
-        }
+        const { data, error } = await supabase.functions.invoke("admin-invite-user", {
+            body: { email, displayName: name, role },
+        })
 
-        const normalizedEmail = email.trim().toLowerCase()
-        const normalizedName = name.trim()
-        let invitedUserId: string | null = null
+        if (error) throw new Error(error.message)
 
-        try {
-            const { data: emailExists, error: checkError } = await supabase.rpc("check_email_exists", {
-                p_email: normalizedEmail,
-            })
+        const response = (data ?? {}) as { success?: boolean; message?: string }
+        if (!response.success) throw new Error(response.message ?? "Invite failed")
 
-            if (checkError) {
-                throw new Error(checkError.message)
-            }
-            if (emailExists) {
-                throw new Error("Email already exists")
-            }
-
-            const { data: signupData, error: signupError } = await isolated.auth.signUp({
-                email: normalizedEmail,
-                password: generateTempPassword(),
-                options: {
-                    data: { display_name: normalizedName },
-                },
-            })
-
-            if (signupError) {
-                throw new Error(signupError.message)
-            }
-
-            invitedUserId = signupData.user?.id ?? null
-            if (!invitedUserId) {
-                throw new Error("Could not create invited user")
-            }
-
-            if (role !== "guest") {
-                const { error: roleError } = await supabase.rpc("set_new_user_role", {
-                    target_user_id: invitedUserId,
-                    target_role: role,
-                })
-
-                if (roleError) {
-                    throw new Error(`Role assignment failed: ${roleError.message}`)
-                }
-            }
-
-            const { error: resetError } = await isolated.auth.resetPasswordForEmail(normalizedEmail)
-            if (resetError) {
-                throw new Error(`Recovery email failed: ${resetError.message}`)
-            }
-
-            await fetchSystemData()
-        } catch (error) {
-            if (invitedUserId) {
-                const { error: rollbackError } = await supabase.rpc("delete_user", { target_user_id: invitedUserId })
-                if (rollbackError) {
-                    throw new Error(`Invite failed and rollback failed: ${rollbackError.message}`)
-                }
-            }
-
-            if (error instanceof Error) {
-                throw error
-            }
-            throw new Error("Could not invite user")
-        }
+        await fetchSystemData()
     }
 
     async function updateUserEmail(userId: string, newEmail: string) {

@@ -36,10 +36,12 @@ export function SignInForm({
   className,
   onSignUp,
   onForgotPassword,
+  onInvite,
   ...props
 }: React.ComponentProps<"div"> & {
   onSignUp?: () => void
   onForgotPassword?: () => void
+  onInvite?: () => void
 }) {
   const { signIn } = useAuth()
   const navigate = useNavigate()
@@ -143,18 +145,25 @@ export function SignInForm({
 
             </FieldGroup>
           </CardContent>
-          <CardFooter>
+          <CardFooter className="flex-col gap-3">
             <Button
               type="submit"
-            disabled={form.formState.isSubmitting || isLocked}
-            className="w-full"
-          >
-            {isLocked
-              ? `Locked (${lockoutRemaining}s)`
-              : form.formState.isSubmitting
-                ? "Signing in..."
-                : "Sign In"}
+              disabled={form.formState.isSubmitting || isLocked}
+              className="w-full"
+            >
+              {isLocked
+                ? `Locked (${lockoutRemaining}s)`
+                : form.formState.isSubmitting
+                  ? "Signing in..."
+                  : "Sign In"}
             </Button>
+            <button
+              type="button"
+              onClick={onInvite}
+              className="text-sm underline-offset-4 hover:underline"
+            >
+              Have an invite code?
+            </button>
           </CardFooter>
         </form>
       </Card>
