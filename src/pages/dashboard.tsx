@@ -39,7 +39,7 @@ function ThrowError(): never {
   )
 }
 
-import { ACTIVITY, UPCOMING } from "@/mocks/dashboard"
+import { ACTIVITY, STATS, UPCOMING } from "@/mocks/dashboard"
 
 export function DashboardPage() {
   const { user } = useAuth()
@@ -64,6 +64,40 @@ export function DashboardPage() {
           </Button>
         </CardContent>
       </Card>
+
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold">Statistics</h2>
+          <span className="text-xs text-muted-foreground">Last 7 days</span>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {STATS.map((stat) => {
+            const Icon = stat.icon
+            return (
+              <Card key={stat.label}>
+                <CardHeader className="pb-2">
+                  <CardDescription>{stat.label}</CardDescription>
+                  <CardTitle className="text-2xl">{stat.value}</CardTitle>
+                </CardHeader>
+                <CardContent className="flex items-center justify-between gap-3 pt-0">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs text-muted-foreground">{stat.detail}</span>
+                    <Badge
+                      variant={stat.tone === "warning" ? "destructive" : stat.tone === "positive" ? "secondary" : "outline"}
+                      className="w-fit"
+                    >
+                      {stat.change}
+                    </Badge>
+                  </div>
+                  <div className="flex size-9 items-center justify-center rounded-md bg-muted">
+                    <Icon className="size-4 text-muted-foreground" />
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      </section>
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>

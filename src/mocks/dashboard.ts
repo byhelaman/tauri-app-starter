@@ -15,6 +15,15 @@ export interface UpcomingEntry {
   tag: string
 }
 
+export interface DashboardStat {
+  label: string
+  value: string
+  detail: string
+  change: string
+  tone: "positive" | "neutral" | "warning"
+  icon: LucideIcon
+}
+
 export const ACTIVITY: ActivityEntry[] = [
   { user: "Alex Rivera", action: "created order", target: "ORD-X1G03", time: "2m ago", icon: PackageIcon },
   { user: "Sara Chen", action: "marked shipped", target: "ORD-U6D90", time: "18m ago", icon: TruckIcon },
@@ -29,4 +38,39 @@ export const UPCOMING: UpcomingEntry[] = [
   { title: "ORD-J0S72 payment due", description: "Oscorp · API Rate Tier", when: "Thu, 10:00 AM", tag: "Payment" },
   { title: "ORD-V9E12 kickoff", description: "Vandelay · Data Migration", when: "Apr 22", tag: "Service" },
   { title: "ORD-O1X96 audit call", description: "Black Mesa · Security Review", when: "Apr 28", tag: "Service" },
+]
+
+export const STATS: DashboardStat[] = [
+  {
+    label: "Orders this week",
+    value: "148",
+    detail: "+24 vs last week",
+    change: "+19%",
+    tone: "positive",
+    icon: PackageIcon,
+  },
+  {
+    label: "Revenue",
+    value: "$82.4k",
+    detail: "Net after refunds",
+    change: "+11%",
+    tone: "positive",
+    icon: DollarSignIcon,
+  },
+  {
+    label: "Pending shipments",
+    value: "27",
+    detail: "5 need review",
+    change: "Attention",
+    tone: "warning",
+    icon: TruckIcon,
+  },
+  {
+    label: "Completion rate",
+    value: "96.2%",
+    detail: "On-time delivery",
+    change: "Stable",
+    tone: "neutral",
+    icon: PackageCheckIcon,
+  },
 ]
