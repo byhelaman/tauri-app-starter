@@ -60,7 +60,7 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
   const [bio, setBio] = useState("")
   const [language, setLanguage] = useState("en")
   const [twoFactor, setTwoFactor] = useState(false)
-  const [activeSessions, setActiveSessions] = useState(true)
+  const [activeSessions, setActiveSessions] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const userRole = claims.userRole

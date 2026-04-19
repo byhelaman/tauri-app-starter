@@ -120,6 +120,13 @@ export function SettingsModal({ open, onOpenChange, settings, onSettingsChange }
                   checked={settings.closeToTray}
                   onCheckedChange={() => toggle("closeToTray")}
                 />
+                <SettingRow
+                  id="ask-export-location"
+                  label="Ask where to save files"
+                  description="Prompt for a location when saving files to disk"
+                  checked={settings.askExportLocation}
+                  onCheckedChange={() => toggle("askExportLocation")}
+                />
               </FieldGroup>
             </TabsContent>
 
@@ -170,16 +177,6 @@ export function SettingsModal({ open, onOpenChange, settings, onSettingsChange }
 
             <TabsContent value="application">
               <div className="flex flex-col gap-4">
-                <FieldGroup>
-                  <SettingRow
-                    id="ask-export-location"
-                    label="Ask where to save files"
-                    description="Prompt for a location when saving files to disk"
-                    checked={settings.askExportLocation}
-                    onCheckedChange={() => toggle("askExportLocation")}
-                  />
-                </FieldGroup>
-
                 <FieldGroup>
                   <Field orientation="horizontal">
                     <FieldContent>

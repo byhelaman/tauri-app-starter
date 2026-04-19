@@ -40,12 +40,12 @@ const DEFAULT_SETTINGS: AppSettings = {
   launchAtLogin: false,
   startMinimized: false,
   closeToTray: true,
-  emailNotifications: true,
+  emailNotifications: false,
   pushNotifications: false,
-  weeklyDigest: true,
-  showOnlineStatus: true,
-  usageAnalytics: true,
-  autoUpdate: true,
+  weeklyDigest: false,
+  showOnlineStatus: false,
+  usageAnalytics: false,
+  autoUpdate: false,
   askExportLocation: true,
 }
 
