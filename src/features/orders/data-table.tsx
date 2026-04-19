@@ -4,6 +4,7 @@ import {
   type ColumnDef,
   type ColumnFiltersState,
   type SortingState,
+  type Table as TanStackTable,
   type VisibilityState,
   flexRender,
   getFacetedRowModel,
@@ -39,11 +40,13 @@ interface DataTableProps<TData, TValue> {
   intervalFilter?: { columnId: string; title?: string }
   className?: string
   bulkActions?: (selectedRows: TData[], clearSelection: () => void) => ReactNode
-  toolbarActions?: ReactNode
+  toolbarActions?: ReactNode | ((table: TanStackTable<TData>) => ReactNode)
   rowContextMenu?: (row: TData) => ReactNode
   defaultPageSize?: number
   pageSizeOptions?: number[]
   rowClassName?: (row: TData) => string | undefined
+  fitHeight?: boolean
+  scrollAreaClassName?: string
 }
 
 export function DataTable<TData, TValue>({
@@ -61,6 +64,8 @@ export function DataTable<TData, TValue>({
   defaultPageSize = 10,
   pageSizeOptions,
   rowClassName,
+  fitHeight = false,
+  scrollAreaClassName,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -90,7 +95,7 @@ export function DataTable<TData, TValue>({
   })
 
   return (
-    <div className={cn("relative flex flex-col gap-4", className)}>
+    <div className={cn("relative flex flex-col gap-4", fitHeight && "h-full min-h-0", className)}>
       <DataTableToolbar
         table={table}
         tableId={tableId}
@@ -101,7 +106,7 @@ export function DataTable<TData, TValue>({
         actions={toolbarActions}
       />
 
-      <div className="overflow-auto max-h-[calc(100svh-17rem)] rounded-md border scrollbar">
+      <div className={cn("overflow-auto rounded-md border scrollbar", fitHeight ? "min-h-0 flex-1" : "max-h-[calc(100svh-17rem)]", scrollAreaClassName)}>
         <Table containerClassName="overflow-visible">
           <TableHeader className="sticky top-0 z-10 bg-background">
             {table.getHeaderGroups().map((headerGroup) => (

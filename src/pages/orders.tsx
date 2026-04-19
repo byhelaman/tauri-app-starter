@@ -35,6 +35,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  createQueueColumns,
+  type QueueOrder,
+  type QueueStatus,
+} from "@/features/orders/modal-columns"
+import { INITIAL_QUEUE_ORDERS } from "@/mocks/orders"
 
 const STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
   { label: "Pending", value: "pending", icon: Clock },
@@ -51,11 +66,20 @@ const CHANNEL_FILTER_OPTIONS: FacetedFilterOption[] = [
   { label: "Phone", value: "Phone", icon: Phone },
 ]
 
+const QUEUE_STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
+  { label: "Queued", value: "queued", icon: Clock },
+  { label: "Processing", value: "processing", icon: LoaderCircle },
+  { label: "Ready", value: "ready", icon: Truck },
+  { label: "Delivered", value: "delivered", icon: CheckCircle2 },
+]
+
 export function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS)
+  const [queueOrders, setQueueOrders] = useState<QueueOrder[]>(INITIAL_QUEUE_ORDERS)
   const [bulkDeleteTarget, setBulkDeleteTarget] = useState<{ selected: Order[], clearSelection: () => void } | null>(null)
   const [rowDeleteTarget, setRowDeleteTarget] = useState<Order | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [tableModalOpen, setTableModalOpen] = useState(false)
 
   const { toolbarActions, rowClassName } = useTableHighlights()
 
@@ -76,7 +100,29 @@ export function OrdersPage() {
     setOrders((prev) => prev.filter((o) => o.code !== code))
   }, [])
 
+  const handleQueueStatusChange = useCallback((code: string, status: QueueStatus) => {
+    setQueueOrders((prev) => prev.map((o) => o.code === code ? { ...o, status } : o))
+  }, [])
+
+  const handleQueuePriorityToggle = useCallback((code: string) => {
+    setQueueOrders((prev) => prev.map((o) => o.code === code ? { ...o, priority: !o.priority } : o))
+  }, [])
+
+  const handleQueueRemove = useCallback((code: string) => {
+    setQueueOrders((prev) => prev.filter((o) => o.code !== code))
+    toast.success("Removed from queue")
+  }, [])
+
+  const copyQueueCode = useCallback((order: QueueOrder) => {
+    navigator.clipboard.writeText(order.code)
+    toast.success("Order code copied")
+  }, [])
+
   const columns = useMemo(() => createColumns(handleDelete, handleStatusChange), [handleDelete, handleStatusChange])
+  const queueColumns = useMemo(
+    () => createQueueColumns(handleQueueStatusChange, handleQueuePriorityToggle, handleQueueRemove),
+    [handleQueuePriorityToggle, handleQueueRemove, handleQueueStatusChange]
+  )
 
   return (
     <main className="h-full overflow-hidden flex flex-col p-6 gap-6">
@@ -84,10 +130,15 @@ export function OrdersPage() {
         title="Orders"
         description="Track customer orders and their fulfillment status."
         actions={
-          <Button variant="outline" onClick={() => setImportOpen(true)}>
-            <Upload data-icon="inline-start" />
-            Import
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setTableModalOpen(true)}>
+              View table
+            </Button>
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload data-icon="inline-start" />
+              Import
+            </Button>
+          </div>
         }
       />
       <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
@@ -147,6 +198,62 @@ export function OrdersPage() {
         rowClassName={rowClassName}
         defaultPageSize={25}
       />
+
+      <Dialog open={tableModalOpen} onOpenChange={setTableModalOpen}>
+        <DialogContent className="w-[95vw]! h-auto! max-w-310! max-h-205!">
+          <DialogHeader>
+            <DialogTitle>Orders table</DialogTitle>
+            <DialogDescription>Operational queue view with simplified columns.</DialogDescription>
+          </DialogHeader>
+          <DialogBody className="py-1 overflow-y-hidden">
+            <DataTable
+              columns={queueColumns}
+              data={queueOrders}
+              tableId="orders-queue"
+              filterColumn="customer"
+              filterPlaceholder="Search queue..."
+              facetedFilters={[
+                { columnId: "status", title: "Status", options: QUEUE_STATUS_FILTER_OPTIONS },
+                { columnId: "channel", title: "Channel", options: CHANNEL_FILTER_OPTIONS },
+              ]}
+              toolbarActions={(table) => {
+                const priorityColumn = table.getColumn("priority")
+                if (!priorityColumn) return null
+                const priorityOnly = priorityColumn.getFilterValue() === true
+
+                return (
+                  <Button
+                    variant="outline"
+                    onClick={() => priorityColumn.setFilterValue(priorityOnly ? undefined : true)}
+                    className={priorityOnly
+                      ? "border-dashed border-red-400 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-600 dark:border-red-500 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 dark:hover:text-red-400"
+                      : "border-dashed"
+                    }
+                  >
+                    <Clock data-icon="inline-start" />
+                    Priority only
+                  </Button>
+                )
+              }}
+              rowContextMenu={(order) => (
+                <>
+                  <ContextMenuItem onSelect={() => copyQueueCode(order)}>Copy code</ContextMenuItem>
+                  <ContextMenuItem onSelect={() => handleQueuePriorityToggle(order.code)}>
+                    {order.priority ? "Set normal priority" : "Set high priority"}
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem onSelect={() => handleQueueRemove(order.code)}>
+                    Remove from queue
+                  </ContextMenuItem>
+                </>
+              )}
+              defaultPageSize={25}
+              scrollAreaClassName="max-h-[min(calc(100svh-22rem),30rem)]"
+            />
+          </DialogBody>
+          <DialogFooter showCloseButton />
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog
         open={!!rowDeleteTarget}

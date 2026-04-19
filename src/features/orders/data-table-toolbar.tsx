@@ -30,7 +30,7 @@ interface DataTableToolbarProps<TData> {
   filterPlaceholder?: string
   facetedFilters?: FacetedFilterConfig[]
   intervalFilter?: { columnId: string; title?: string }
-  actions?: React.ReactNode
+  actions?: React.ReactNode | ((table: Table<TData>) => React.ReactNode)
 }
 
 export function DataTableToolbar<TData>({
@@ -57,6 +57,7 @@ export function DataTableToolbar<TData>({
   const isSorted = table.getState().sorting.length > 0
   const activeFiltersCount = table.getState().columnFilters.length
   const hasFiltersList = (facetedFilters && facetedFilters.length > 0) || intervalFilter
+  const renderedActions = typeof actions === "function" ? actions(table) : actions
 
   return (
     <div className="flex items-center gap-2">
@@ -209,7 +210,7 @@ export function DataTableToolbar<TData>({
         </Button>
       )}
 
-      {actions}
+      {renderedActions}
 
       <DataTableViewOptions table={table} tableId={tableId} />
     </div>

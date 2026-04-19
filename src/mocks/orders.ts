@@ -1,4 +1,5 @@
 import type { Order } from "@/features/orders/columns"
+import type { QueueOrder } from "@/features/orders/modal-columns"
 
 export const INITIAL_ORDERS: Order[] = [
   { date: "2026-04-01", customer: "Acme Corp", product: "Pro Plan License", category: "Software", time: "09:12 - 10:00", code: "ORD-A3F91", status: "delivered", channel: "Online", quantity: 3, amount: 1500.00 },
@@ -26,4 +27,32 @@ export const INITIAL_ORDERS: Order[] = [
   { date: "2026-04-23", customer: "Bluth Company", product: "Mechanical Switch Pack", category: "Hardware", time: "11:05 - 11:50", code: "ORD-W4F75", status: "delivered", channel: "Online", quantity: 30, amount: 900.00 },
   { date: "2026-04-24", customer: "Los Pollos Hermanos", product: "Growth Plan License", category: "Software", time: "17:40 - 18:25", code: "ORD-X1G03", status: "pending", channel: "Phone", quantity: 14, amount: 3360.00 },
   { date: "2026-04-25", customer: "Spacely Sprockets", product: "Ergonomic Office Chair", category: "Hardware", time: "12:00 - 12:45", code: "ORD-Y2H46", status: "shipped", channel: "Online", quantity: 4, amount: 1580.00 },
+]
+
+export const INITIAL_QUEUE_ORDERS: QueueOrder[] = [
+  { time: "08:20 - 09:00", code: "ORD-A3F91", customer: "Acme Corp", status: "queued", channel: "Online", agent: "M. Rivera", priority: true },
+  { time: "09:10 - 09:50", code: "ORD-B7K22", customer: "Globex Inc", status: "processing", channel: "Retail", agent: "L. Carter", priority: false },
+  { time: "10:00 - 10:45", code: "ORD-C1D08", customer: "Initech", status: "queued", channel: "Partner", agent: "A. Torres", priority: false },
+  { time: "10:55 - 11:35", code: "ORD-D9E47", customer: "Umbrella Co", status: "ready", channel: "Online", agent: "S. Kim", priority: true },
+  { time: "11:45 - 12:20", code: "ORD-E2M61", customer: "Stark Industries", status: "processing", channel: "Online", agent: "R. Vega", priority: false },
+  { time: "12:30 - 13:05", code: "ORD-F4N83", customer: "Wayne Enterprises", status: "ready", channel: "Phone", agent: "D. Alvarez", priority: false },
+  { time: "13:15 - 13:55", code: "ORD-G8P17", customer: "Hooli", status: "queued", channel: "Online", agent: "N. Silva", priority: true },
+  { time: "14:05 - 14:40", code: "ORD-H5Q04", customer: "Soylent Corp", status: "processing", channel: "Partner", agent: "J. Medina", priority: false },
+  { time: "14:50 - 15:30", code: "ORD-I6R55", customer: "Cyberdyne Systems", status: "queued", channel: "Retail", agent: "K. Flores", priority: true },
+  { time: "15:40 - 16:15", code: "ORD-J0S72", customer: "Oscorp", status: "ready", channel: "Online", agent: "P. Salazar", priority: false },
+  { time: "16:25 - 17:05", code: "ORD-K3T39", customer: "Tyrell Corp", status: "processing", channel: "Online", agent: "T. Paredes", priority: false },
+  { time: "17:15 - 17:55", code: "ORD-L7U26", customer: "Pied Piper", status: "delivered", channel: "Phone", agent: "C. Herrera", priority: false },
+  { time: "08:35 - 09:10", code: "ORD-M2V58", customer: "Massive Dynamic", status: "processing", channel: "Partner", agent: "F. Rojas", priority: true },
+  { time: "09:25 - 10:00", code: "ORD-N4W13", customer: "Aperture Science", status: "queued", channel: "Online", agent: "I. Navarro", priority: false },
+  { time: "10:15 - 11:00", code: "ORD-O1X96", customer: "Black Mesa", status: "ready", channel: "Phone", agent: "V. Acosta", priority: true },
+  { time: "11:10 - 11:50", code: "ORD-P7Y44", customer: "Weyland-Yutani", status: "processing", channel: "Online", agent: "G. Fuentes", priority: false },
+  { time: "12:00 - 12:40", code: "ORD-Q3Z81", customer: "Rekall Inc", status: "queued", channel: "Retail", agent: "O. Duarte", priority: true },
+  { time: "12:50 - 13:30", code: "ORD-R8A27", customer: "Nakatomi Trading", status: "delivered", channel: "Online", agent: "E. Campos", priority: false },
+  { time: "13:40 - 14:20", code: "ORD-S5B69", customer: "Gekko & Co", status: "ready", channel: "Partner", agent: "H. Leon", priority: false },
+  { time: "14:30 - 15:05", code: "ORD-T0C34", customer: "Dunder Mifflin", status: "processing", channel: "Retail", agent: "P. Molina", priority: false },
+  { time: "15:15 - 15:55", code: "ORD-U6D90", customer: "Wonka Industries", status: "queued", channel: "Phone", agent: "R. Aguirre", priority: true },
+  { time: "16:05 - 16:45", code: "ORD-V9E12", customer: "Vandelay Imports", status: "processing", channel: "Partner", agent: "D. Franco", priority: false },
+  { time: "16:55 - 17:35", code: "ORD-W4F75", customer: "Bluth Company", status: "ready", channel: "Online", agent: "Y. Solis", priority: false },
+  { time: "17:45 - 18:20", code: "ORD-X1G03", customer: "Los Pollos Hermanos", status: "queued", channel: "Phone", agent: "A. Mendez", priority: true },
+  { time: "18:25 - 19:00", code: "ORD-Y2H46", customer: "Spacely Sprockets", status: "delivered", channel: "Online", agent: "C. Nunez", priority: false },
 ]

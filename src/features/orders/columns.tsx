@@ -95,7 +95,7 @@ export function createColumns(
         const startHour = time.split(" - ")[0]?.trim().split(":")[0] ?? ""
         return filterValue.includes(startHour)
       },
-      cell: ({ row }) => <p className="w-30 text-center mx-auto font-mono">{row.getValue("time") as string}</p>,
+      cell: ({ row }) => <p className="w-30 text-center mx-auto">{row.getValue("time") as string}</p>,
     },
     {
       accessorKey: "code",
