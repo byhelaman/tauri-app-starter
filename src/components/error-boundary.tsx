@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react"
 import { AlertTriangleIcon } from "lucide-react"
 import { Shell } from "@/components/window-controls"
 import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Empty,
   EmptyContent,
@@ -38,32 +39,31 @@ export class ErrorBoundary extends Component<Props, State> {
     if (error) {
       return (
         <Shell>
-        <div className="flex min-h-full items-center justify-center p-6">
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <AlertTriangleIcon className="text-destructive" />
-              </EmptyMedia>
-              <EmptyTitle>Something went wrong</EmptyTitle>
-              <EmptyDescription>
-                An unexpected error occurred. You can try again or restart the app.
-              </EmptyDescription>
-            </EmptyHeader>
-            <EmptyContent>
-              <div className="w-full">
-                <div className="max-h-45 overflow-y-auto rounded-md border bg-muted/50 scrollbar">
-                  <pre className="px-3 py-2 whitespace-pre-wrap text-wrap text-xs text-left">
-                    {error.message}
-                  </pre>
+          <div className="flex min-h-full items-center justify-center p-6">
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <AlertTriangleIcon className="text-destructive" />
+                </EmptyMedia>
+                <EmptyTitle>Something went wrong</EmptyTitle>
+                <EmptyDescription>
+                  An unexpected error occurred. You can try again or restart the app.
+                </EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Textarea
+                  readOnly
+                  value={error.message}
+                  aria-label="Error details"
+                  className="min-h-0 max-h-45 resize-none text-xs scrollbar mb-2"
+                />
+                <div className="flex flex-row justify-center gap-2">
+                  <Button onClick={this.reset}>Try again</Button>
+                  <Button variant="outline" onClick={() => window.location.reload()}>Reload</Button>
                 </div>
-              </div>
-              <div className="flex gap-2">
-                <Button onClick={this.reset}>Try again</Button>
-                <Button variant="outline" onClick={this.reset}>Reload</Button>
-              </div>
-            </EmptyContent>
-          </Empty>
-        </div>
+              </EmptyContent>
+            </Empty>
+          </div>
         </Shell>
       )
     }

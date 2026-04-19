@@ -5,29 +5,29 @@ export interface Message {
     role: "user" | "assistant"
     content: string
     isError?: boolean
-    isStreaming?: boolean
 }
 
 const STORAGE_KEY_HISTORY = "ai_chat_history"
 const MAX_HISTORY = 100
 
-function loadHistory(): Message[] {
+export function chatHistoryKey(userId: string): string {
+    return `${STORAGE_KEY_HISTORY}:${userId}`
+}
+
+function loadHistory(userId: string | null): Message[] {
+    if (!userId) return []
     try {
-        const raw = localStorage.getItem(STORAGE_KEY_HISTORY)
-        if (!raw) return []
-        // Limpiar flags de streaming de sesiones interrumpidas
-        return (JSON.parse(raw) as Message[]).map(m => ({ ...m, isStreaming: undefined }))
+        const raw = localStorage.getItem(chatHistoryKey(userId))
+        return raw ? (JSON.parse(raw) as Message[]) : []
     } catch {
         return []
     }
 }
 
-function saveHistory(messages: Message[]) {
+function saveHistory(userId: string | null, messages: Message[]) {
+    if (!userId) return
     try {
-        localStorage.setItem(
-            STORAGE_KEY_HISTORY,
-            JSON.stringify(messages.filter(m => !m.isStreaming).slice(-MAX_HISTORY))
-        )
+        localStorage.setItem(chatHistoryKey(userId), JSON.stringify(messages.slice(-MAX_HISTORY)))
     } catch {
         // silencioso — localStorage puede estar lleno
     }
@@ -39,31 +39,48 @@ type SSEEvent =
     | { type: "done" }
     | { type: "error"; text: string }
 
-export function useChat(apiKey: string, model: string) {
-    const [messages, setMessages] = useState<Message[]>(loadHistory)
+export function useChat(apiKey: string, model: string, userId: string | null) {
+    const [messages, setMessages] = useState<Message[]>(() => loadHistory(userId))
     const [input, setInput] = useState("")
     const [loading, setLoading] = useState(false)
     const [statusText, setStatusText] = useState("")
+    const [streamingIdx, setStreamingIdx] = useState<number | null>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLTextAreaElement>(null)
+    const abortRef = useRef<AbortController | null>(null)
 
-    // Scroll automático al último mensaje
+    // Recargar historial cuando cambia el usuario (login/logout/cambio de cuenta)
+    useEffect(() => {
+        setMessages(loadHistory(userId))
+    }, [userId])
+
+    // Cancelar request en curso al desmontar — AbortController + chequeo de identidad bastan
+    useEffect(() => {
+        return () => {
+            abortRef.current?.abort()
+        }
+    }, [])
+
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
     }, [messages, loading, statusText])
 
-    // handleSend acepta overrides para implementar edición sin duplicar lógica
-    const handleSend = useCallback(async (overrideInput?: string, overrideHistory?: Message[]) => {
-        const content = (overrideInput ?? input).trim()
-        const history = overrideHistory ?? messages
-        if (!content || loading || !supabase) return
+    // Lógica central de envío — compartida entre handleSend y handleEdit
+    const sendMessage = useCallback(async (content: string, history: Message[]) => {
+        if (!supabase) return
+
+        abortRef.current?.abort()
+        const controller = new AbortController()
+        abortRef.current = controller
 
         const userMessage: Message = { role: "user", content }
         const updatedMessages = [...history, userMessage]
+        const streamingMsgIdx = updatedMessages.length
+
         setMessages(updatedMessages)
-        if (overrideInput === undefined) setInput("")
         setLoading(true)
         setStatusText("")
+        setStreamingIdx(null)
 
         try {
             const { data: { session } } = await supabase.auth.getSession()
@@ -73,6 +90,7 @@ export function useChat(apiKey: string, model: string) {
 
             const response = await fetch(`${url}/functions/v1/ai-chat`, {
                 method: "POST",
+                signal: controller.signal,
                 headers: {
                     "Content-Type": "application/json",
                     "Authorization": `Bearer ${session.access_token}`,
@@ -100,6 +118,7 @@ export function useChat(apiKey: string, model: string) {
             while (true) {
                 const { done, value } = await reader.read()
                 if (done) break
+                if (abortRef.current !== controller) return
 
                 buf += decoder.decode(value, { stream: true })
                 const lines = buf.split("\n")
@@ -110,12 +129,15 @@ export function useChat(apiKey: string, model: string) {
                     let event: SSEEvent
                     try { event = JSON.parse(line.slice(6)) } catch { continue }
 
+                    if (abortRef.current !== controller) return
+
                     if (event.type === "status") {
                         setStatusText(event.text)
 
                     } else if (event.type === "token") {
                         if (!assistantAdded) {
-                            setMessages(prev => [...prev, { role: "assistant", content: "", isStreaming: true }])
+                            setMessages(prev => [...prev, { role: "assistant", content: "" }])
+                            setStreamingIdx(streamingMsgIdx)
                             assistantAdded = true
                             setLoading(false)
                             setStatusText("")
@@ -128,26 +150,17 @@ export function useChat(apiKey: string, model: string) {
                         })
 
                     } else if (event.type === "done") {
-                        setMessages(prev => {
-                            const next = [...prev]
-                            if (next.length > 0) next[next.length - 1] = { ...next[next.length - 1], isStreaming: undefined }
-                            saveHistory(next)
-                            return next
-                        })
+                        setStreamingIdx(null)
+                        setMessages(prev => { saveHistory(userId, prev); return prev })
                         setLoading(false)
                         setStatusText("")
 
                     } else if (event.type === "error") {
-                        const errMsg: Message = {
-                            role: "assistant",
-                            content: `Error: ${event.text}`,
-                            isError: true,
-                        }
+                        const errMsg: Message = { role: "assistant", content: `Error: ${event.text}`, isError: true }
+                        setStreamingIdx(null)
                         setMessages(prev => {
-                            const next = assistantAdded
-                                ? [...prev.slice(0, -1), errMsg]
-                                : [...prev, errMsg]
-                            saveHistory(next)
+                            const next = assistantAdded ? [...prev.slice(0, -1), errMsg] : [...prev, errMsg]
+                            saveHistory(userId, next)
                             return next
                         })
                         setLoading(false)
@@ -159,26 +172,39 @@ export function useChat(apiKey: string, model: string) {
             if (!assistantAdded) {
                 setMessages(prev => {
                     const next = [...prev, { role: "assistant" as const, content: "No response", isError: true }]
-                    saveHistory(next)
+                    saveHistory(userId, next)
                     return next
                 })
             }
 
         } catch (err) {
+            if (err instanceof DOMException && err.name === "AbortError") return
+            if (abortRef.current !== controller) return
             setMessages(prev => {
                 const next = [...prev, {
                     role: "assistant" as const,
                     content: `Error: ${err instanceof Error ? err.message : String(err)}`,
                     isError: true,
                 }]
-                saveHistory(next)
+                saveHistory(userId, next)
                 return next
             })
         } finally {
-            setLoading(false)
-            setStatusText("")
+            if (abortRef.current === controller) {
+                abortRef.current = null
+                setLoading(false)
+                setStatusText("")
+                setStreamingIdx(null)
+            }
         }
-    }, [input, loading, messages, apiKey, model])
+    }, [apiKey, model, userId])
+
+    const handleSend = useCallback(async () => {
+        if (!input.trim() || loading) return
+        const content = input.trim()
+        setInput("")
+        await sendMessage(content, messages)
+    }, [input, loading, messages, sendMessage])
 
     function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
         if (e.key === "Enter" && !e.shiftKey) {
@@ -187,11 +213,9 @@ export function useChat(apiKey: string, model: string) {
         }
     }
 
-    // Editar un mensaje de usuario: trunca el historial desde idx y reenvía
     function handleEdit(idx: number, newContent: string) {
-        if (!newContent.trim()) return
-        const truncated = messages.slice(0, idx)
-        void handleSend(newContent.trim(), truncated)
+        if (!newContent.trim() || loading) return
+        void sendMessage(newContent.trim(), messages.slice(0, idx))
     }
 
     function copyToClipboard(text: string) {
@@ -207,11 +231,10 @@ export function useChat(apiKey: string, model: string) {
 
     function clearMessages() {
         setMessages([])
-        saveHistory([])
+        saveHistory(userId, [])
     }
 
     function handleRetry() {
-        // Elimina el último error y restaura el input con el último mensaje del usuario
         const lastUserMsg = [...messages].reverse().find(m => m.role === "user")
         if (!lastUserMsg) return
         setMessages(prev => prev.slice(0, -1))
@@ -219,9 +242,9 @@ export function useChat(apiKey: string, model: string) {
     }
 
     return {
-        messages, setMessages,
+        messages,
         input, setInput,
-        loading, statusText,
+        loading, statusText, streamingIdx,
         messagesEndRef, inputRef,
         handleSend, handleKeyDown, handleEdit,
         copyToClipboard, copyChat, clearMessages, handleRetry,

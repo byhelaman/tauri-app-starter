@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Session, User } from "@supabase/supabase-js"
 import { z } from "zod"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
+import { chatHistoryKey } from "@/components/use-chat"
 
 type AuthClaims = {
   userRole: string
@@ -33,7 +34,9 @@ function parseClaims(session: Session | null): AuthClaims {
     if (!payload) return EMPTY_CLAIMS
     const normalized = payload.replace(/-/g, "+").replace(/_/g, "/")
     const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4)
-    const raw: unknown = JSON.parse(atob(padded))
+    // atob produce bytes, no UTF-8 — decodificar explícitamente para soportar caracteres no-ASCII
+    const bytes = Uint8Array.from(atob(padded), (c) => c.charCodeAt(0))
+    const raw: unknown = JSON.parse(new TextDecoder().decode(bytes))
     const parsed = jwtClaimsSchema.parse(raw)
 
     return {
@@ -191,7 +194,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signOut = async () => {
+    // Capturar el userId antes de cerrar sesión para limpiar PII del historial de chat local
+    const userId = session?.user?.id
     await supabase?.auth.signOut()
+    if (userId) {
+      try { localStorage.removeItem(chatHistoryKey(userId)) } catch { /* ignore */ }
+    }
   }
 
   return (

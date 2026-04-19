@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { BellIcon, CheckCheckIcon, XIcon } from "lucide-react"
 import { supabase } from "@/lib/supabase"
@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/item"
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -90,9 +91,12 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
   const [notifications, setNotifications] = useState<Notification[]>([])
   const unreadCount = notifications.filter((n) => !n.read).length
 
+  // Callback ref para evitar re-disparos cuando el padre redefine la función inline en cada render
+  const onUnreadCountChangeRef = useRef(onUnreadCountChange)
+  useEffect(() => { onUnreadCountChangeRef.current = onUnreadCountChange })
   useEffect(() => {
-    onUnreadCountChange?.(unreadCount)
-  }, [unreadCount, onUnreadCountChange])
+    onUnreadCountChangeRef.current?.(unreadCount)
+  }, [unreadCount])
 
   const fetchNotifications = useCallback(async () => {
     if (!supabase) return
@@ -151,13 +155,6 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
     channel.subscribe()
     return () => { void supabase!.removeChannel(channel) }
   }, [])
-
-  // Periodic refresh (every 60s) for badge accuracy
-  useEffect(() => {
-    if (!supabase) return
-    const interval = setInterval(() => void fetchNotifications(), 60_000)
-    return () => clearInterval(interval)
-  }, [fetchNotifications])
 
   async function markAllRead() {
     if (!supabase) return
@@ -222,6 +219,11 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
                   You'll see updates here when something happens.
                 </EmptyDescription>
               </EmptyHeader>
+              <EmptyContent className="flex-row justify-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => void fetchNotifications()}>
+                  Refresh
+                </Button>
+              </EmptyContent>
             </Empty>
           ) : (
             <ItemGroup>

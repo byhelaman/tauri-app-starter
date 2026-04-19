@@ -16,6 +16,10 @@ const configuredOrigins = (Deno.env.get("CORS_ALLOWED_ORIGINS") ?? "")
 
 const allowedOrigins = new Set(configuredOrigins.length > 0 ? configuredOrigins : defaultAllowedOrigins)
 
+export function isAllowedOrigin(origin: string | null): boolean {
+    return !origin || allowedOrigins.has(origin)
+}
+
 export function corsHeaders(origin: string | null): Record<string, string> {
     const headers: Record<string, string> = {
         "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -72,7 +76,7 @@ export type AdminContext = ActorContext & {
 export async function buildActorContext(req: Request): Promise<ActorContext | Response> {
     const origin = req.headers.get("Origin")
 
-    if (origin && !allowedOrigins.has(origin)) {
+    if (!isAllowedOrigin(origin)) {
         return json(403, { success: false, message: "Origin not allowed" }, null)
     }
 

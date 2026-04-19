@@ -35,6 +35,7 @@ import {
     InputGroupButton,
     InputGroupTextarea,
 } from "@/components/ui/input-group"
+import { Textarea } from "@/components/ui/textarea"
 import type { Scope } from "./table-formats"
 import { getScopeRows } from "./table-formats"
 import {
@@ -137,7 +138,8 @@ function parseFormat(value: string | undefined): BulkCopyFormat {
 }
 
 export function BulkCopyDialog<TData>({ table, tableId, scope, open, onOpenChange }: BulkCopyDialogProps<TData>) {
-    const savedSettings = readBulkCopySettings(tableId)
+    // Solo se lee una vez por tableId — los inicializadores lazy de useState lo consumen una sola vez
+    const savedSettings = useMemo(() => readBulkCopySettings(tableId), [tableId])
     const [format, setFormat] = useState<BulkCopyFormat>(() => parseFormat(savedSettings?.format))
     const [headers, setHeaders] = useState<boolean>(() => savedSettings?.headers ?? true)
     const [template, setTemplate] = useState<string>(() => savedSettings?.template ?? BULK_COPY_DEFAULT_TEMPLATE)
@@ -336,12 +338,14 @@ export function BulkCopyDialog<TData>({ table, tableId, scope, open, onOpenChang
                             </>
                         )}
 
-                        <Field className="min-w-0">
+                        <Field>
                             <FieldLabel>Preview</FieldLabel>
-                            <pre className="block max-h-25 max-w-full overflow-auto rounded-md border bg-muted/40 p-2 py-1.5 text-sm whitespace-pre
-                            text-muted-foreground scrollbar">
-                                {previewText.trim() ? previewText : "-"}
-                            </pre>
+                            <Textarea
+                                readOnly
+                                value={previewText.trim() ? previewText : "-"}
+                                aria-label="Preview"
+                                className="min-h-0 max-h-25 resize-none text-sm text-muted-foreground scrollbar font-mono py-1.5"
+                            />
                         </Field>
                     </FieldSet>
                 </DialogBody>

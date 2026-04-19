@@ -89,21 +89,24 @@ if (supabase && typeof window !== "undefined") {
   const client = supabase
   startSessionRefresh()
 
-  document.addEventListener("visibilitychange", async () => {
-    if (document.visibilityState === "visible") {
-      startSessionRefresh()
-      const { data: { session } } = await client.auth.getSession()
-      if (session?.expires_at) {
-        const secondsUntilExpiry = session.expires_at - Math.floor(Date.now() / 1000)
-        if (secondsUntilExpiry < 5 * 60) {
-          await client.auth.refreshSession()
-        }
+  // Reanudar refresh y verificar expiración cuando la app vuelve a primer plano (focus o visibilidad).
+  // Pausar cuando la app pasa a segundo plano para no consumir tokens innecesariamente.
+  const handleResume = async () => {
+    startSessionRefresh()
+    const { data: { session } } = await client.auth.getSession()
+    if (session?.expires_at) {
+      const secondsUntilExpiry = session.expires_at - Math.floor(Date.now() / 1000)
+      if (secondsUntilExpiry < 5 * 60) {
+        await client.auth.refreshSession()
       }
-    } else {
-      stopSessionRefresh()
     }
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void handleResume()
+    else stopSessionRefresh()
   })
 
-  window.addEventListener("focus", startSessionRefresh)
+  window.addEventListener("focus", () => void handleResume())
   window.addEventListener("blur", stopSessionRefresh)
 }

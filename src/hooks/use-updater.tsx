@@ -116,6 +116,8 @@ export function useUpdater(): UseUpdaterReturn {
   }, [])
 
   const simulateUpdate = useCallback(() => {
+    // Solo disponible en dev — evita bundlear/expoonr este flujo en producción
+    if (!import.meta.env.DEV) return
     setIsSimulated(true)
     const mock: SimulatedUpdate = {
       version: "9.9.9",

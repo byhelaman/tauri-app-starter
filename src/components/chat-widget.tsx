@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { MessageCircle, X, Settings, Send, ChevronLeft, Bot, Copy, Check, RefreshCw, Trash2, ClipboardCopy, Pencil } from "lucide-react"
@@ -11,11 +11,12 @@ import {
     InputGroupTextarea,
 } from "@/components/ui/input-group"
 import { Spinner } from "@/components/ui/spinner"
-import { Empty, EmptyMedia, EmptyDescription } from "@/components/ui/empty"
+import { Empty, EmptyHeader, EmptyMedia, EmptyDescription, EmptyTitle } from "@/components/ui/empty"
 import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { useChat } from "@/components/use-chat"
 import { ChatSettingsForm, DEFAULT_MODEL } from "@/components/chat-settings-form"
+import { useAuth } from "@/contexts/auth-context"
 
 const STORAGE_KEY_API_KEY = "ai_api_key"
 const STORAGE_KEY_MODEL = "ai_model"
@@ -23,6 +24,7 @@ const STORAGE_KEY_MODEL = "ai_model"
 type WidgetView = "chat" | "setup" | "settings"
 
 export function ChatWidget() {
+    const { user } = useAuth()
     const [open, setOpen] = useState(false)
     const [view, setView] = useState<WidgetView>("chat")
     const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
@@ -37,11 +39,11 @@ export function ChatWidget() {
     const {
         messages,
         input, setInput,
-        loading, statusText,
+        loading, statusText, streamingIdx,
         messagesEndRef, inputRef,
         handleSend, handleKeyDown, handleEdit,
         copyToClipboard, copyChat, clearMessages, handleRetry,
-    } = useChat(apiKey, model)
+    } = useChat(apiKey, model, user?.id ?? null)
 
     // Focus al input al entrar en vista chat
     useEffect(() => {
@@ -79,11 +81,11 @@ export function ChatWidget() {
         setView("setup")
     }
 
-    const handleCopyMessage = useCallback((text: string, idx: number) => {
+    function handleCopyMessage(text: string, idx: number) {
         copyToClipboard(text)
         setCopiedIdx(idx)
         setTimeout(() => setCopiedIdx(null), 1500)
-    }, [copyToClipboard])
+    }
 
     function handleCopyChat() {
         copyChat()
@@ -196,12 +198,15 @@ export function ChatWidget() {
                     <CardContent className="flex-1 min-h-0 overflow-y-auto px-3 py-2 flex flex-col gap-2 scrollbar">
                         {messages.length === 0 && (
                             <Empty className="border-none">
-                                <EmptyMedia variant="icon">
-                                    <MessageCircle />
-                                </EmptyMedia>
-                                <EmptyDescription>
-                                    Ask questions about your data. The assistant queries the database in real time.
-                                </EmptyDescription>
+                                <EmptyHeader>
+                                    <EmptyMedia variant="icon">
+                                        <MessageCircle />
+                                    </EmptyMedia>
+                                    <EmptyTitle>No Messages Yet</EmptyTitle>
+                                    <EmptyDescription>
+                                        Ask questions about your data. The assistant queries the database in real time.
+                                    </EmptyDescription>
+                                </EmptyHeader>
                             </Empty>
                         )}
                         {messages.map((msg, i) => (
@@ -221,7 +226,7 @@ export function ChatWidget() {
                                             onChange={e => setEditContent(e.target.value)}
                                             onKeyDown={handleEditKeyDown}
                                             rows={Math.min(editContent.split("\n").length, 5)}
-                                            className="text-sm resize-none min-h-0 py-1 scrollbar"
+                                            className="text-sm resize-none min-h-0 py-1.5 scrollbar"
                                         />
                                         <div className="flex gap-1.5 justify-end">
                                             <Button size="xs" variant="outline" onClick={cancelEdit}>Cancel</Button>
@@ -257,7 +262,7 @@ export function ChatWidget() {
                                             {msg.content}
                                         </ReactMarkdown>
                                         {/* Cursor de streaming mientras llegan tokens */}
-                                        {msg.isStreaming && (
+                                        {msg.role === "assistant" && streamingIdx === i && (
                                             <span className="inline-block w-0.5 h-3.5 bg-current align-middle ml-0.5 animate-pulse" />
                                         )}
                                     </div>
@@ -273,7 +278,7 @@ export function ChatWidget() {
                                             onClick={() => handleCopyMessage(msg.content, i)}
                                             aria-label="Copy message"
                                         >
-                                            {copiedIdx === i ? <Check className="size-3" /> : <Copy className="size-3" />}
+                                            {copiedIdx === i ? <Check /> : <Copy />}
                                         </Button>
                                         {msg.role === "user" && !loading && (
                                             <Button
@@ -283,7 +288,7 @@ export function ChatWidget() {
                                                 onClick={() => startEdit(i, msg.content)}
                                                 aria-label="Edit message"
                                             >
-                                                <Pencil className="size-3" />
+                                                <Pencil />
                                             </Button>
                                         )}
                                         {msg.isError && i === messages.length - 1 && (
@@ -294,7 +299,7 @@ export function ChatWidget() {
                                                 onClick={handleRetry}
                                                 aria-label="Retry"
                                             >
-                                                <RefreshCw className="size-3" />
+                                                <RefreshCw />
                                             </Button>
                                         )}
                                     </div>

@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { corsHeaders, json } from "../_shared/admin-handler.ts"
+import { corsHeaders, json, isAllowedOrigin } from "../_shared/admin-handler.ts"
 
 const VERCEL_AI_GATEWAY = "https://ai-gateway.vercel.sh/v1"
 
@@ -97,20 +97,27 @@ Security rules (non-negotiable):
 - Never expose internal table structure, credentials, or configuration beyond what is needed to answer the user's question.`
 
 type ToolCall = { id: string; type: "function"; function: { name: string; arguments: string } }
-type ChatMessage = { role: string; content: string | null; tool_calls?: ToolCall[]; tool_call_id?: string }
+type ChatMessage =
+    | { role: "system"; content: string }
+    | { role: "user"; content: string }
+    | { role: "assistant"; content: string | null; tool_calls?: ToolCall[] }
+    | { role: "tool"; tool_call_id: string; content: string }
 type FilterArg = { column: string; op: string; value: unknown }
 type QueryTableArgs = { table: string; select?: string; filters?: FilterArg[]; order?: string; limit?: number }
 
 // Mensaje de estado visible durante tool calls
-function toolStatusText(name: string): string {
-    if (name === "get_schema") return "Analyzing schema..."
-    if (name === "query_table") return "Querying data..."
-    if (name === "execute_query") return "Running query..."
-    return "Processing..."
+const TOOL_STATUS_TEXT: Record<string, string> = {
+    get_schema: "Analyzing schema...",
+    query_table: "Querying data...",
+    execute_query: "Running query...",
 }
 
 Deno.serve(async (req: Request) => {
     const origin = req.headers.get("Origin")
+
+    if (!isAllowedOrigin(origin)) {
+        return json(403, { success: false, message: "Origin not allowed" }, null)
+    }
 
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders(origin) })
@@ -306,7 +313,7 @@ Deno.serve(async (req: Request) => {
 
                     // Ejecutar cada tool call y enviar estado al cliente
                     for (const tc of toolCallsList) {
-                        send({ type: "status", text: toolStatusText(tc.function.name) })
+                        send({ type: "status", text: TOOL_STATUS_TEXT[tc.function.name] ?? "Processing..." })
 
                         let toolResult: unknown
                         try {
@@ -321,11 +328,20 @@ Deno.serve(async (req: Request) => {
                                 const { table, select = "*", filters = [], order, limit = 50 } = args as QueryTableArgs
                                 const safeLimit = Math.min(Math.max(1, limit ?? 50), 200)
 
-                                // deno-lint-ignore no-explicit-any
-                                let q: any = supabaseUser.from(table).select(select).limit(safeLimit)
+                                let q = supabaseUser.from(table).select(select).limit(safeLimit)
                                 for (const f of filters) {
-                                    if (!ALLOWED_FILTER_OPS.has(f.op)) continue
-                                    q = q[f.op](f.column, f.value)
+                                    switch (f.op) {
+                                        case "eq":    q = q.eq(f.column, f.value as string); break
+                                        case "neq":   q = q.neq(f.column, f.value as string); break
+                                        case "gt":    q = q.gt(f.column, f.value as string); break
+                                        case "gte":   q = q.gte(f.column, f.value as string); break
+                                        case "lt":    q = q.lt(f.column, f.value as string); break
+                                        case "lte":   q = q.lte(f.column, f.value as string); break
+                                        case "like":  q = q.like(f.column, f.value as string); break
+                                        case "ilike": q = q.ilike(f.column, f.value as string); break
+                                        case "in":    q = q.in(f.column, f.value as string[]); break
+                                        case "is":    q = q.is(f.column, f.value as boolean | null); break
+                                    }
                                 }
                                 if (order) {
                                     const [col, dir] = order.split(":")
