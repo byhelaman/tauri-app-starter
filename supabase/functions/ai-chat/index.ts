@@ -370,7 +370,8 @@ Deno.serve(async (req: Request) => {
                             const fnName = tc.function.name
 
                             if (fnName === "get_schema") {
-                                const { data, error } = await supabaseUser.rpc("get_ai_schema")
+                                const allowedArray = ALLOWED_TABLES ? Array.from(ALLOWED_TABLES) : null
+                                const { data, error } = await supabaseUser.rpc("get_ai_schema", { p_allowed_tables: allowedArray })
                                 toolResult = error ? { error: sanitizeToolError(error.message) } : data
 
                             } else if (fnName === "query_table") {

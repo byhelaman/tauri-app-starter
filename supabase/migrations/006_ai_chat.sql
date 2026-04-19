@@ -32,7 +32,7 @@ ON CONFLICT DO NOTHING;
 -- Devuelve columnas y relaciones FK de las tablas de usuario.
 -- Excluye tablas de infraestructura RBAC para no exponer la
 -- arquitectura de seguridad al modelo de IA.
-CREATE OR REPLACE FUNCTION public.get_ai_schema()
+CREATE OR REPLACE FUNCTION public.get_ai_schema(p_allowed_tables TEXT[] DEFAULT NULL)
 RETURNS JSONB
 LANGUAGE plpgsql
 STABLE
@@ -86,13 +86,14 @@ BEGIN
                 FROM information_schema.columns
                 WHERE table_schema = 'public'
                   AND table_name != ALL(excluded_tables)
+                  AND (p_allowed_tables IS NULL OR table_name = ANY(p_allowed_tables))
             ) c
         ) sub
     );
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.get_ai_schema() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_ai_schema(TEXT[]) TO authenticated;
 
 -- ============================================================
 -- 3. EXECUTE QUERY (solo lectura garantizada por BD)
