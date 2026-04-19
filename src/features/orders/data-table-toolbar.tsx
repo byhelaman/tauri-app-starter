@@ -21,7 +21,7 @@ import {
 import { DataTableFacetedFilter } from "./data-table-faceted-filter"
 import { DataTableIntervalFilter, getAvailableHours } from "./data-table-interval-filter"
 import { DataTableViewOptions } from "./data-table-view-options"
-import type { FacetedFilterConfig } from "./data-table-types"
+import type { FacetedFilterConfig, IntervalFilterConfig } from "./data-table-types"
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>
@@ -29,8 +29,10 @@ interface DataTableToolbarProps<TData> {
   filterColumn?: string
   filterPlaceholder?: string
   facetedFilters?: FacetedFilterConfig[]
-  intervalFilter?: { columnId: string; title?: string }
+  intervalFilter?: IntervalFilterConfig
   actions?: React.ReactNode | ((table: Table<TData>) => React.ReactNode)
+  searchDebounceMs?: number
+  showViewOptions?: boolean
 }
 
 export function DataTableToolbar<TData>({
@@ -41,17 +43,24 @@ export function DataTableToolbar<TData>({
   facetedFilters,
   intervalFilter,
   actions,
+  searchDebounceMs = 300,
+  showViewOptions = true,
 }: DataTableToolbarProps<TData>) {
   const currentFilterValue = (table.getColumn(filterColumn)?.getFilterValue() as string) ?? ""
   const [searchInput, setSearchInput] = useState(currentFilterValue)
+
+  // Mantiene el input sincronizado cuando el filtro cambia externamente (reset table, presets, etc.)
+  useEffect(() => {
+    setSearchInput(currentFilterValue)
+  }, [currentFilterValue])
 
   // Debounce en la búsqueda — evita ejecutar el filtro en cada pulsación de tecla
   useEffect(() => {
     const timer = setTimeout(() => {
       table.getColumn(filterColumn)?.setFilterValue(searchInput || undefined)
-    }, 300)
+    }, searchDebounceMs)
     return () => clearTimeout(timer)
-  }, [searchInput, filterColumn, table])
+  }, [searchInput, filterColumn, table, searchDebounceMs])
 
   const isFiltered = table.getState().columnFilters.length > 0
   const isSorted = table.getState().sorting.length > 0
@@ -212,7 +221,7 @@ export function DataTableToolbar<TData>({
 
       {renderedActions}
 
-      <DataTableViewOptions table={table} tableId={tableId} />
+      {showViewOptions && <DataTableViewOptions table={table} tableId={tableId} />}
     </div>
   )
 }

@@ -79,14 +79,14 @@ export function createQueueColumns(
     {
       accessorKey: "time",
       header: ({ column, table }) => (
-        <DataTableColumnHeader table={table} column={column} title="Slot" className="justify-center" />
+        <DataTableColumnHeader table={table} column={column} title="Time" className="justify-center" />
       ),
       cell: ({ row }) => <p className="mx-auto w-30 text-center">{row.getValue("time") as string}</p>,
     },
     {
       accessorKey: "code",
       header: ({ column, table }) => (
-        <DataTableColumnHeader table={table} column={column} title="Order" className="justify-center" />
+        <DataTableColumnHeader table={table} column={column} title="Code" className="justify-center" />
       ),
       cell: ({ row }) => <p className="mx-auto w-25 text-center font-mono text-muted-foreground">{row.getValue("code") as string}</p>,
     },
@@ -156,7 +156,7 @@ export function createQueueColumns(
                 <span className="sr-only">Open menu</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-fit">
               <DropdownMenuItem onClick={() => navigator.clipboard.writeText(order.code)}>
                 Copy code
               </DropdownMenuItem>

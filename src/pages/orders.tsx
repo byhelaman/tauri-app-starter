@@ -5,6 +5,7 @@ import {
   Clock,
   Globe,
   Handshake,
+  ListTodo,
   LoaderCircle,
   Phone,
   Store,
@@ -22,6 +23,7 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
 } from "@/components/ui/context-menu"
+import { ToggleActionButtons } from "@/components/toggle-action-buttons"
 import { PageHeader } from "@/components/page-header"
 import { useTableHighlights } from "@/features/orders/table-highlights"
 import { Button } from "@/components/ui/button"
@@ -132,7 +134,8 @@ export function OrdersPage() {
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setTableModalOpen(true)}>
-              View table
+              <ListTodo data-icon="inline-start" />
+              Queue
             </Button>
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <Upload data-icon="inline-start" />
@@ -146,13 +149,17 @@ export function OrdersPage() {
         columns={columns}
         data={orders}
         tableId="orders"
-        filterColumn="customer"
-        filterPlaceholder="Search..."
-        facetedFilters={[
-          { columnId: "status", title: "Status", options: STATUS_FILTER_OPTIONS },
-          { columnId: "channel", title: "Channel", options: CHANNEL_FILTER_OPTIONS },
-        ]}
-        intervalFilter={{ columnId: "time", title: "Interval" }}
+        toolbar={{
+          filterColumn: "customer",
+          filterPlaceholder: "Search...",
+          facetedFilters: [
+            { columnId: "status", title: "Status", options: STATUS_FILTER_OPTIONS },
+            { columnId: "channel", title: "Channel", options: CHANNEL_FILTER_OPTIONS },
+          ],
+          intervalFilter: { columnId: "time", title: "Interval" },
+          actions: toolbarActions,
+          searchDebounceMs: 300,
+        }}
         rowContextMenu={(order) => (
           <>
             <ContextMenuItem onSelect={() => copyCode(order)}>Copy code</ContextMenuItem>
@@ -194,7 +201,6 @@ export function OrdersPage() {
             </Button>
           </>
         )}
-        toolbarActions={toolbarActions}
         rowClassName={rowClassName}
         defaultPageSize={25}
       />
@@ -202,38 +208,42 @@ export function OrdersPage() {
       <Dialog open={tableModalOpen} onOpenChange={setTableModalOpen}>
         <DialogContent className="w-[95vw]! h-auto! max-w-310! max-h-205!">
           <DialogHeader>
-            <DialogTitle>Orders table</DialogTitle>
-            <DialogDescription>Operational queue view with simplified columns.</DialogDescription>
+            <DialogTitle>Connected queue</DialogTitle>
+            <DialogDescription>Live queue linked to your current orders.</DialogDescription>
           </DialogHeader>
           <DialogBody className="py-1 overflow-y-hidden">
             <DataTable
               columns={queueColumns}
               data={queueOrders}
               tableId="orders-queue"
-              filterColumn="customer"
-              filterPlaceholder="Search queue..."
-              facetedFilters={[
-                { columnId: "status", title: "Status", options: QUEUE_STATUS_FILTER_OPTIONS },
-                { columnId: "channel", title: "Channel", options: CHANNEL_FILTER_OPTIONS },
-              ]}
-              toolbarActions={(table) => {
-                const priorityColumn = table.getColumn("priority")
-                if (!priorityColumn) return null
-                const priorityOnly = priorityColumn.getFilterValue() === true
+              toolbar={{
+                filterColumn: "customer",
+                filterPlaceholder: "Search queue...",
+                facetedFilters: [
+                  { columnId: "status", title: "Status", options: QUEUE_STATUS_FILTER_OPTIONS },
+                  { columnId: "channel", title: "Channel", options: CHANNEL_FILTER_OPTIONS },
+                ],
+                actions: (table) => {
+                  const priorityColumn = table.getColumn("priority")
+                  if (!priorityColumn) return null
+                  const priorityOnly = priorityColumn.getFilterValue() === true
 
-                return (
-                  <Button
-                    variant="outline"
-                    onClick={() => priorityColumn.setFilterValue(priorityOnly ? undefined : true)}
-                    className={priorityOnly
-                      ? "border-dashed border-red-400 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-600 dark:border-red-500 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 dark:hover:text-red-400"
-                      : "border-dashed"
-                    }
-                  >
-                    <Clock data-icon="inline-start" />
-                    Priority only
-                  </Button>
-                )
+                  return (
+                    <ToggleActionButtons
+                      items={[
+                        {
+                          id: "priority-only",
+                          label: "Priority only",
+                          icon: Clock,
+                          theme: "red",
+                          active: priorityOnly,
+                          onToggle: () => priorityColumn.setFilterValue(priorityOnly ? undefined : true),
+                        },
+                      ]}
+                    />
+                  )
+                },
+                searchDebounceMs: 300,
               }}
               rowContextMenu={(order) => (
                 <>
@@ -248,7 +258,10 @@ export function OrdersPage() {
                 </>
               )}
               defaultPageSize={25}
-              scrollAreaClassName="max-h-[min(calc(100svh-22rem),30rem)]"
+              layout={{
+                scrollAreaClassName: "max-h-[min(calc(100svh-22rem),30rem)]",
+                tableHeaderClassName: "bg-card",
+              }}
             />
           </DialogBody>
           <DialogFooter showCloseButton />

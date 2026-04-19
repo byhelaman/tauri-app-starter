@@ -4,7 +4,6 @@ import {
   type ColumnDef,
   type ColumnFiltersState,
   type SortingState,
-  type Table as TanStackTable,
   type VisibilityState,
   flexRender,
   getFacetedRowModel,
@@ -28,19 +27,29 @@ import {
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { DataTableToolbar } from "./data-table-toolbar"
 import { DataTablePagination } from "./data-table-pagination"
-import type { FacetedFilterConfig } from "./data-table-types"
+import type {
+  DataTableLayoutConfig,
+  DataTableToolbarConfig,
+  FacetedFilterConfig,
+  IntervalFilterConfig,
+  ToolbarActionsRenderer,
+} from "./data-table-types"
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   tableId: string
+  toolbar?: DataTableToolbarConfig<TData>
+  layout?: DataTableLayoutConfig
+
+  // Compatibilidad con API previa
   filterColumn?: string
   filterPlaceholder?: string
   facetedFilters?: FacetedFilterConfig[]
-  intervalFilter?: { columnId: string; title?: string }
+  intervalFilter?: IntervalFilterConfig
   className?: string
   bulkActions?: (selectedRows: TData[], clearSelection: () => void) => ReactNode
-  toolbarActions?: ReactNode | ((table: TanStackTable<TData>) => ReactNode)
+  toolbarActions?: ToolbarActionsRenderer<TData>
   rowContextMenu?: (row: TData) => ReactNode
   defaultPageSize?: number
   pageSizeOptions?: number[]
@@ -53,6 +62,8 @@ export function DataTable<TData, TValue>({
   columns,
   data,
   tableId,
+  toolbar,
+  layout,
   filterColumn = "title",
   filterPlaceholder = "Filter...",
   facetedFilters,
@@ -73,6 +84,18 @@ export function DataTable<TData, TValue>({
   const [rowSelection, setRowSelection] = useState({})
 
   const clearSelection = () => setRowSelection({})
+
+  const resolvedFilterColumn = toolbar?.filterColumn ?? filterColumn
+  const resolvedFilterPlaceholder = toolbar?.filterPlaceholder ?? filterPlaceholder
+  const resolvedFacetedFilters = toolbar?.facetedFilters ?? facetedFilters
+  const resolvedIntervalFilter = toolbar?.intervalFilter ?? intervalFilter
+  const resolvedToolbarActions = toolbar?.actions ?? toolbarActions
+  const resolvedSearchDebounceMs = toolbar?.searchDebounceMs
+  const resolvedShowViewOptions = toolbar?.showViewOptions
+
+  const resolvedFitHeight = layout?.fitHeight ?? fitHeight
+  const resolvedScrollAreaClassName = layout?.scrollAreaClassName ?? scrollAreaClassName
+  const resolvedTableHeaderClassName = layout?.tableHeaderClassName
 
   const table = useReactTable({
     data,
@@ -95,20 +118,22 @@ export function DataTable<TData, TValue>({
   })
 
   return (
-    <div className={cn("relative flex flex-col gap-4", fitHeight && "h-full min-h-0", className)}>
+    <div className={cn("relative flex flex-col gap-4", resolvedFitHeight && "h-full min-h-0", className)}>
       <DataTableToolbar
         table={table}
         tableId={tableId}
-        filterColumn={filterColumn}
-        filterPlaceholder={filterPlaceholder}
-        facetedFilters={facetedFilters}
-        intervalFilter={intervalFilter}
-        actions={toolbarActions}
+        filterColumn={resolvedFilterColumn}
+        filterPlaceholder={resolvedFilterPlaceholder}
+        facetedFilters={resolvedFacetedFilters}
+        intervalFilter={resolvedIntervalFilter}
+        actions={resolvedToolbarActions}
+        searchDebounceMs={resolvedSearchDebounceMs}
+        showViewOptions={resolvedShowViewOptions}
       />
 
-      <div className={cn("overflow-auto rounded-md border scrollbar", fitHeight ? "min-h-0 flex-1" : "max-h-[calc(100svh-17rem)]", scrollAreaClassName)}>
+      <div className={cn("overflow-auto rounded-md border scrollbar", resolvedFitHeight ? "min-h-0 flex-1" : "max-h-[calc(100svh-17rem)]", resolvedScrollAreaClassName)}>
         <Table containerClassName="overflow-visible">
-          <TableHeader className="sticky top-0 z-10 bg-background">
+          <TableHeader className={cn("sticky top-0 z-10 bg-background", resolvedTableHeaderClassName)}>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
