@@ -100,7 +100,7 @@ async function syncGeneralSettings(settings: AppSettings) {
 export function AppLayout() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const { claims, hasPermission } = useAuth()
+  const { user, claims, hasPermission } = useAuth()
   const [modal, setModal] = useState<ModalType>(null)
   const [settings, setSettings] = useState<AppSettings>(loadSettings)
   const canOpenSystem =
@@ -271,7 +271,7 @@ export function AppLayout() {
         open={modal === "shortcuts"}
         onOpenChange={(open) => setModal(open ? "shortcuts" : null)}
       />
-      {hasPermission("ai.chat") && <ChatWidget />}
+      {hasPermission("ai.chat") && <ChatWidget key={user?.id ?? "anon"} />}
     </div>
   )
 }

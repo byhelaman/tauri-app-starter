@@ -3,6 +3,7 @@ import type { Session, User } from "@supabase/supabase-js"
 import { z } from "zod"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 import { chatHistoryKey } from "@/components/use-chat"
+import { apiKeyStorageKey, modelStorageKey } from "@/components/chat-storage"
 
 type AuthClaims = {
   userRole: string
@@ -194,11 +195,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signOut = async () => {
-    // Capturar el userId antes de cerrar sesión para limpiar PII del historial de chat local
+    // Capturar el userId antes de cerrar sesión para limpiar PII y credenciales locales
     const userId = session?.user?.id
     await supabase?.auth.signOut()
     if (userId) {
       try { localStorage.removeItem(chatHistoryKey(userId)) } catch { /* ignore */ }
+      try { localStorage.removeItem(apiKeyStorageKey(userId)) } catch { /* ignore */ }
+      try { localStorage.removeItem(modelStorageKey(userId)) } catch { /* ignore */ }
     }
   }
 

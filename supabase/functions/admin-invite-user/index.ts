@@ -33,8 +33,19 @@ Deno.serve(async (req: Request) => {
 
         if (roleError) {
             console.error("Role assignment failed:", roleError.message)
-            await supabaseAdmin.rpc("delete_user", { target_user_id: invitedUserId })
-            return json(500, { success: false, message: "Could not assign role — invitation cancelled" }, origin)
+            const { error: rollbackError } = await supabaseAdmin.rpc("delete_user", {
+                target_user_id: invitedUserId,
+            })
+
+            if (rollbackError) {
+                console.error("Rollback failed after role assignment error:", rollbackError.message)
+                return json(500, {
+                    success: false,
+                    message: "Could not assign role, and rollback failed. Please remove the invited user manually.",
+                }, origin)
+            }
+
+            return json(500, { success: false, message: "Could not assign role - invitation cancelled" }, origin)
         }
     }
 

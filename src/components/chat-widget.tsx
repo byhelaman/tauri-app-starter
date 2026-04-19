@@ -16,15 +16,14 @@ import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { useChat } from "@/components/use-chat"
 import { ChatSettingsForm, DEFAULT_MODEL } from "@/components/chat-settings-form"
+import { apiKeyStorageKey, modelStorageKey } from "@/components/chat-storage"
 import { useAuth } from "@/contexts/auth-context"
-
-const STORAGE_KEY_API_KEY = "ai_api_key"
-const STORAGE_KEY_MODEL = "ai_model"
 
 type WidgetView = "chat" | "setup" | "settings"
 
 export function ChatWidget() {
     const { user } = useAuth()
+    const userId = user?.id ?? null
     const [open, setOpen] = useState(false)
     const [view, setView] = useState<WidgetView>("chat")
     const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
@@ -33,8 +32,14 @@ export function ChatWidget() {
     const [editContent, setEditContent] = useState("")
     const editRef = useRef<HTMLTextAreaElement>(null)
 
-    const [apiKey, setApiKey] = useState(() => localStorage.getItem(STORAGE_KEY_API_KEY) ?? "")
-    const [model, setModel] = useState(() => localStorage.getItem(STORAGE_KEY_MODEL) ?? DEFAULT_MODEL)
+    // Single source of truth: el padre remonta el widget con `key={userId}` al
+    // cambiar de cuenta, así que useState inicializa fresco desde localStorage.
+    const [apiKey, setApiKey] = useState(() =>
+        userId ? (localStorage.getItem(apiKeyStorageKey(userId)) ?? "") : ""
+    )
+    const [model, setModel] = useState(() =>
+        userId ? (localStorage.getItem(modelStorageKey(userId)) ?? DEFAULT_MODEL) : DEFAULT_MODEL
+    )
 
     const {
         messages,
@@ -43,7 +48,7 @@ export function ChatWidget() {
         messagesEndRef, inputRef,
         handleSend, handleKeyDown, handleEdit,
         copyToClipboard, copyChat, clearMessages, handleRetry,
-    } = useChat(apiKey, model, user?.id ?? null)
+    } = useChat(apiKey, model, userId)
 
     // Focus al input al entrar en vista chat
     useEffect(() => {
@@ -67,14 +72,18 @@ export function ChatWidget() {
     function handleSave(newApiKey: string, newModel: string) {
         setApiKey(newApiKey)
         setModel(newModel)
-        localStorage.setItem(STORAGE_KEY_API_KEY, newApiKey)
-        localStorage.setItem(STORAGE_KEY_MODEL, newModel)
+        if (userId) {
+            localStorage.setItem(apiKeyStorageKey(userId), newApiKey)
+            localStorage.setItem(modelStorageKey(userId), newModel)
+        }
         setView("chat")
     }
 
     function handleReset() {
-        localStorage.removeItem(STORAGE_KEY_API_KEY)
-        localStorage.removeItem(STORAGE_KEY_MODEL)
+        if (userId) {
+            localStorage.removeItem(apiKeyStorageKey(userId))
+            localStorage.removeItem(modelStorageKey(userId))
+        }
         setApiKey("")
         setModel(DEFAULT_MODEL)
         clearMessages()
