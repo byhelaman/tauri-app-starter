@@ -480,14 +480,33 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-    caller_level      int;
-    target_role_level int;
-    target_email      text;
+    caller_level         int;
+    target_role_level    int;
+    target_current_role  text;
+    target_current_level int;
+    target_email         text;
 BEGIN
     caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
 
     IF NOT public.has_permission('users.manage') THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
+    END IF;
+
+    SELECT p.role, r.hierarchy_level
+    INTO target_current_role, target_current_level
+    FROM public.profiles p
+    JOIN public.roles r ON p.role = r.name
+    WHERE p.id = target_user_id;
+
+    IF target_current_role IS NULL THEN
+        RAISE EXCEPTION 'Usuario no encontrado: %', target_user_id;
+    END IF;
+
+    -- Solo aplica a usuarios guest para evitar bypass de update_user_role.
+    IF target_current_level > 0 THEN
+        RAISE EXCEPTION
+            'set_new_user_role solo aplica a usuarios guest. Usa update_user_role() para el usuario %',
+            target_user_id;
     END IF;
 
     SELECT hierarchy_level INTO target_role_level
@@ -502,8 +521,6 @@ BEGIN
     UPDATE public.profiles
     SET role = target_role
     WHERE id = target_user_id;
-
-    IF NOT FOUND THEN RAISE EXCEPTION 'Usuario no encontrado: %', target_user_id; END IF;
 
     SELECT email INTO target_email FROM public.profiles WHERE id = target_user_id;
 
@@ -742,12 +759,11 @@ BEGIN
     INTO fallback_role
     FROM public.roles r
     WHERE r.name <> role_name
-      AND r.hierarchy_level < target_role_level
-    ORDER BY r.hierarchy_level DESC
+    ORDER BY r.hierarchy_level ASC
     LIMIT 1;
 
     IF fallback_role IS NULL THEN
-        RAISE EXCEPTION 'No existe un rol inferior para reasignar usuarios antes de eliminar: %', role_name;
+        RAISE EXCEPTION 'No se encontró un rol de fallback para reasignar usuarios';
     END IF;
 
     UPDATE public.profiles
@@ -792,6 +808,7 @@ AS $$
 DECLARE
     caller_level      int;
     target_role_level int;
+    perm_min_level    int;
 BEGIN
     caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
 
@@ -810,8 +827,17 @@ BEGIN
     IF target_role_level >= caller_level THEN
         RAISE EXCEPTION 'Permiso denegado: no puedes modificar un rol con igual o mayor nivel';
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM public.permissions WHERE name = permission_name) THEN
+    SELECT min_role_level INTO perm_min_level
+    FROM public.permissions
+    WHERE name = permission_name;
+
+    IF perm_min_level IS NULL THEN
         RAISE EXCEPTION 'Permiso no encontrado: %', permission_name;
+    END IF;
+    IF target_role_level < perm_min_level THEN
+        RAISE EXCEPTION
+            'El rol "%" (nivel %) no cumple el nivel mínimo % requerido por el permiso "%"',
+            target_role, target_role_level, perm_min_level, permission_name;
     END IF;
 
     INSERT INTO public.role_permissions (role, permission)

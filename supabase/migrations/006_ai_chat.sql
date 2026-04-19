@@ -41,7 +41,7 @@ SET search_path = ''
 AS $$
 DECLARE
     excluded_tables TEXT[] := ARRAY[
-        'permissions', 'roles', 'role_permissions', 'audit_log'
+        'permissions', 'roles', 'role_permissions', 'audit_log', 'rate_limits'
     ];
 BEGIN
     IF NOT public.has_permission('ai.chat') THEN
@@ -106,7 +106,8 @@ GRANT EXECUTE ON FUNCTION public.get_ai_schema() TO authenticated;
 CREATE OR REPLACE FUNCTION public.execute_ai_query(query TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
-STABLE
+VOLATILE
+SECURITY INVOKER
 SET search_path = 'public'
 AS $$
 DECLARE
@@ -120,9 +121,11 @@ BEGIN
     -- Cualquier intento de INSERT/UPDATE/DELETE falla con "cannot execute X
     -- in a read-only transaction" antes de que se ejecute.
     PERFORM set_config('transaction_read_only', 'on', true);
+    -- Corta queries largas para evitar saturar el pool.
+    PERFORM set_config('statement_timeout', '5000', true);
 
     EXECUTE format(
-        'SELECT jsonb_agg(row_to_json(q)) FROM (%s) q LIMIT 500',
+        'SELECT jsonb_agg(row_to_json(q)) FROM (SELECT * FROM (%s) inner_q LIMIT 500) q',
         query
     ) INTO result;
 

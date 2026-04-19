@@ -224,7 +224,7 @@ DECLARE
     user_permissions jsonb;
 BEGIN
     user_permissions := (auth.jwt() -> 'permissions')::jsonb;
-    RETURN user_permissions ? required_permission;
+    RETURN COALESCE(user_permissions ? required_permission, false);
 EXCEPTION WHEN OTHERS THEN
     -- Emite un WARNING visible en los logs de Supabase para facilitar el diagnóstico,
     -- sin exponer información al cliente.
@@ -360,13 +360,29 @@ ALTER TABLE public.profiles FORCE ROW LEVEL SECURITY;
 
 -- Todos los usuarios autenticados pueden leer roles/permisos (necesario para la UI)
 CREATE POLICY "roles_select" ON public.roles
-    FOR SELECT TO authenticated USING (true);
+    FOR SELECT TO authenticated
+    USING (
+        name = (SELECT auth.jwt() ->> 'user_role')
+        OR COALESCE(((SELECT auth.jwt()) ->> 'hierarchy_level')::int, 0) >= 80
+    );
 
 CREATE POLICY "permissions_select" ON public.permissions
-    FOR SELECT TO authenticated USING (true);
+    FOR SELECT TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM public.role_permissions rp
+            WHERE rp.permission = permissions.name
+              AND rp.role = (SELECT auth.jwt() ->> 'user_role')
+        )
+        OR COALESCE(((SELECT auth.jwt()) ->> 'hierarchy_level')::int, 0) >= 80
+    );
 
 CREATE POLICY "role_permissions_select" ON public.role_permissions
-    FOR SELECT TO authenticated USING (true);
+    FOR SELECT TO authenticated
+    USING (
+        role = (SELECT auth.jwt() ->> 'user_role')
+        OR COALESCE(((SELECT auth.jwt()) ->> 'hierarchy_level')::int, 0) >= 80
+    );
 
 -- Perfiles: fila propia O admin (nivel >= 80)
 CREATE POLICY "profiles_select" ON public.profiles

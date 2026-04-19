@@ -474,17 +474,17 @@ BEGIN
         RAISE EXCEPTION 'Permiso denegado: no puedes eliminar un rol con igual o mayor nivel';
     END IF;
 
-    -- Downgrade automático: busca el rol más alto inmediatamente inferior.
+    -- Fallback al rol más bajo disponible (típicamente 'guest').
+    -- Decisión intencional: caer al mínimo evita promover usuarios accidentalmente.
     SELECT r.name
     INTO fallback_role
     FROM public.roles r
     WHERE r.name <> role_name
-      AND r.hierarchy_level < target_role_level
-    ORDER BY r.hierarchy_level DESC
+    ORDER BY r.hierarchy_level ASC
     LIMIT 1;
 
     IF fallback_role IS NULL THEN
-        RAISE EXCEPTION 'No existe un rol inferior para reasignar usuarios antes de eliminar: %', role_name;
+        RAISE EXCEPTION 'No se encontró un rol de fallback para reasignar usuarios';
     END IF;
 
     UPDATE public.profiles
@@ -549,6 +549,7 @@ AS $$
 DECLARE
     caller_level      int;
     target_role_level int;
+    perm_min_level    int;
 BEGIN
     caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
 
@@ -567,8 +568,17 @@ BEGIN
     IF target_role_level >= caller_level THEN
         RAISE EXCEPTION 'Permiso denegado: no puedes modificar un rol con igual o mayor nivel';
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM public.permissions WHERE name = permission_name) THEN
+    SELECT min_role_level INTO perm_min_level
+    FROM public.permissions
+    WHERE name = permission_name;
+
+    IF perm_min_level IS NULL THEN
         RAISE EXCEPTION 'Permiso no encontrado: %', permission_name;
+    END IF;
+    IF target_role_level < perm_min_level THEN
+        RAISE EXCEPTION
+            'El rol "%" (nivel %) no cumple el nivel mínimo % requerido por el permiso "%"',
+            target_role, target_role_level, perm_min_level, permission_name;
     END IF;
 
     INSERT INTO public.role_permissions (role, permission)
