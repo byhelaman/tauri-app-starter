@@ -200,8 +200,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase?.auth.signOut()
     if (userId) {
       try { localStorage.removeItem(chatHistoryKey(userId)) } catch { /* ignore */ }
-      try { localStorage.removeItem(apiKeyStorageKey(userId)) } catch { /* ignore */ }
-      try { localStorage.removeItem(modelStorageKey(userId)) } catch { /* ignore */ }
+      // Hemos removido la limpieza artificial de apiKeyStorageKey y modelStorageKey
+      // para que el usuario no pierda su configuración local al cerrar su sesión.
     }
   }
 

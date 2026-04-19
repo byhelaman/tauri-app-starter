@@ -795,6 +795,77 @@ BEGIN
 END;
 $$;
 
+-- 5.8.5 duplicate_role
+CREATE OR REPLACE FUNCTION public.duplicate_role(
+    p_source_role TEXT,
+    p_new_name    TEXT
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    caller_level      int;
+    source_role_desc  text;
+    source_role_level int;
+    perms_copied      int := 0;
+BEGIN
+    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+
+    IF caller_level < 100 THEN
+        RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
+    END IF;
+
+    SELECT r.description, r.hierarchy_level
+    INTO source_role_desc, source_role_level
+    FROM public.roles r
+    WHERE r.name = p_source_role;
+
+    IF source_role_level IS NULL THEN RAISE EXCEPTION 'Rol origen no encontrado: %', p_source_role; END IF;
+    IF source_role_level >= caller_level THEN
+        RAISE EXCEPTION 'Permiso denegado: no puedes duplicar un rol con igual o mayor nivel';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM public.roles r WHERE r.name = p_new_name) THEN
+        RAISE EXCEPTION 'Ya existe un rol con el nombre: %', p_new_name;    
+    END IF;
+
+    -- Creamos el nuevo rol manteniendo el nivel del original
+    INSERT INTO public.roles (name, description, hierarchy_level)
+    VALUES (p_new_name, format('%s (Copia de %s)', COALESCE(source_role_desc, ''), p_source_role), source_role_level);
+
+    -- Copiamos los permisos en bloque y contamos inserciones reales.
+    INSERT INTO public.role_permissions (role, permission)
+    SELECT p_new_name, rp.permission
+    FROM public.role_permissions rp
+    WHERE rp.role = p_source_role
+    ON CONFLICT (role, permission) DO NOTHING;
+
+    GET DIAGNOSTICS perms_copied = ROW_COUNT;
+
+    -- Audit + Notify
+    PERFORM public.log_audit_event(
+        'role_duplicated',
+        format('Duplicated role "%s" into "%s" (%s permissions copied)', p_source_role, p_new_name, perms_copied),
+        NULL, NULL, NULL,
+        jsonb_build_object('source_role', p_source_role, 'new_name', p_new_name, 'permissions_copied', perms_copied)
+    );
+    PERFORM public.notify_admins(
+        'Role duplicated',
+        format('Role "%s" has been duplicated as "%s"', p_source_role, p_new_name),
+        'info'
+    );
+
+    RETURN json_build_object(
+        'success', true,
+        'source_role', p_source_role,
+        'new_role', p_new_name,
+        'permissions_copied', perms_copied
+    );
+END;
+$$;
+
 -- 5.9 assign_role_permission
 CREATE OR REPLACE FUNCTION public.assign_role_permission(
     target_role     TEXT,
@@ -930,6 +1001,8 @@ REVOKE ALL ON FUNCTION public.mark_all_notifications_read() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.mark_all_notifications_read() TO authenticated;
 REVOKE ALL ON FUNCTION public.dismiss_notification(bigint) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.dismiss_notification(bigint) TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.duplicate_role(text, text) TO authenticated;
 
 -- Internal helpers (no direct access from frontend)
 REVOKE ALL ON FUNCTION public.log_audit_event(text, text, uuid, text, uuid, jsonb) FROM PUBLIC, anon, authenticated;

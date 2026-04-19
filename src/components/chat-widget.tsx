@@ -50,6 +50,8 @@ export function ChatWidget() {
         copyToClipboard, copyChat, clearMessages, handleRetry,
     } = useChat(apiKey, model, userId)
 
+    const lastUserMsgIdx = messages.map(m => m.role).lastIndexOf("user")
+
     // Focus al input al entrar en vista chat
     useEffect(() => {
         if (view === "chat" && open) {
@@ -289,7 +291,7 @@ export function ChatWidget() {
                                         >
                                             {copiedIdx === i ? <Check /> : <Copy />}
                                         </Button>
-                                        {msg.role === "user" && !loading && (
+                                        {msg.role === "user" && !loading && i === lastUserMsgIdx && (
                                             <Button
                                                 variant="ghost"
                                                 size="icon-xs"
