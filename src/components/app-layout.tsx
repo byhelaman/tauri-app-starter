@@ -111,7 +111,12 @@ export function AppLayout() {
     hasPermission("users.manage")
 
   useEffect(() => {
-    try { localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings)) } catch { /* noop */ }
+    try {
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
+      window.dispatchEvent(new Event("app-settings-changed"))
+    } catch {
+      /* noop */
+    }
     syncGeneralSettings(settings)
   }, [settings])
 

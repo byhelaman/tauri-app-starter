@@ -213,16 +213,16 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
                 <Separator />
                 <Field orientation="horizontal">
                   <FieldContent>
-                    <FieldLabel>Restore defaults</FieldLabel>
-                    <FieldDescription>Reset theme and display preferences to their defaults.</FieldDescription>
+                      <FieldLabel>Reset preferences</FieldLabel>
+                    <FieldDescription>Reset preferences to their default values.</FieldDescription>
                   </FieldContent>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="outline" size="sm">Restore</Button>
+                      <Button variant="outline" size="sm">Reset</Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Restore default settings?</AlertDialogTitle>
+                        <AlertDialogTitle>Reset profile preferences?</AlertDialogTitle>
                         <AlertDialogDescription>
                           All preferences will be reset to their default values.
                           This action cannot be undone.
@@ -230,7 +230,7 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleRestoreDefaults}>Restore defaults</AlertDialogAction>
+                        <AlertDialogAction onClick={handleRestoreDefaults}>Reset</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>

@@ -70,6 +70,7 @@ export function SettingsModal({ open, onOpenChange, settings, onSettingsChange }
   const { checkForUpdates, isChecking, simulateUpdate } = useUpdaterContext()
   const [appVersion, setAppVersion] = useState("")
   const [tauriVersion, setTauriVersion] = useState("")
+  const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
 
   useEffect(() => {
     getVersion().then(setAppVersion).catch(() => { })
@@ -78,6 +79,31 @@ export function SettingsModal({ open, onOpenChange, settings, onSettingsChange }
 
   function toggle(key: keyof AppSettings) {
     onSettingsChange({ ...settings, [key]: !settings[key] })
+  }
+
+  async function clearNativeSettingsStore() {
+    if (!isTauri) return
+
+    try {
+      const { load } = await import("@tauri-apps/plugin-store")
+      const store = await load("settings.json", { autoSave: true, defaults: {} })
+      await store.clear()
+      await store.save()
+    } catch (error) {
+      console.error("Failed to clear the native Tauri store:", error)
+    }
+  }
+
+  async function handleResetToDefaults() {
+    const supabaseUrl = localStorage.getItem(STORAGE_KEY_URL)
+    const supabaseAnon = localStorage.getItem(STORAGE_KEY_ANON)
+
+    localStorage.clear()
+    if (supabaseUrl) localStorage.setItem(STORAGE_KEY_URL, supabaseUrl)
+    if (supabaseAnon) localStorage.setItem(STORAGE_KEY_ANON, supabaseAnon)
+
+    await clearNativeSettingsStore()
+    window.location.reload()
   }
 
   return (
@@ -206,7 +232,7 @@ export function SettingsModal({ open, onOpenChange, settings, onSettingsChange }
                   <Field orientation="horizontal">
                     <FieldContent>
                       <FieldLabel>Reset to defaults</FieldLabel>
-                      <FieldDescription>Clears all local data and restores preferences to their defaults</FieldDescription>
+                      <FieldDescription>Clear local data and reset app settings.</FieldDescription>
                     </FieldContent>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
@@ -216,18 +242,14 @@ export function SettingsModal({ open, onOpenChange, settings, onSettingsChange }
                         <AlertDialogHeader>
                           <AlertDialogTitle>Reset to defaults?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            This will clear all local data and restore all preferences to their defaults. The app will reload.
+                            This clears local app data on this device.
+                            The app will reload.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
                           <AlertDialogAction onClick={() => {
-                            const supabaseUrl = localStorage.getItem(STORAGE_KEY_URL)
-                            const supabaseAnon = localStorage.getItem(STORAGE_KEY_ANON)
-                            localStorage.clear()
-                            if (supabaseUrl) localStorage.setItem(STORAGE_KEY_URL, supabaseUrl)
-                            if (supabaseAnon) localStorage.setItem(STORAGE_KEY_ANON, supabaseAnon)
-                            window.location.reload()
+                            void handleResetToDefaults()
                           }}>
                             Reset
                           </AlertDialogAction>

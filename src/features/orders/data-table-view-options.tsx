@@ -5,6 +5,8 @@ import {
   ChevronDownIcon,
   ClipboardCopyIcon,
   DownloadIcon,
+  Files,
+  Layers,
   ListTodo,
   PrinterIcon,
   RotateCcwIcon,
@@ -88,7 +90,7 @@ export function DataTableViewOptions<TData>({ table, tableId }: DataTableViewOpt
   const filteredCount = table.getFilteredRowModel().rows.length
   const totalCount = table.getCoreRowModel().rows.length
 
-  const [scope, setScope] = useState<Scope>("filtered")
+  const [scope, setScope] = useState<Scope>("all")
   const [bulkCopyOpen, setBulkCopyOpen] = useState(false)
   const effectiveScope: Scope = scope === "selected" && selectedCount === 0 ? "filtered" : scope
 
@@ -171,7 +173,7 @@ export function DataTableViewOptions<TData>({ table, tableId }: DataTableViewOpt
             disabled={scopeCounts[effectiveScope] === 0}
             onClick={() => setBulkCopyOpen(true)}
           >
-            <ListTodo/>
+            <Layers />
             Bulk copy
           </DropdownMenuItem>
 

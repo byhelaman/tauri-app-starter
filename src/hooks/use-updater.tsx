@@ -29,6 +29,20 @@ interface UseUpdaterReturn {
 }
 
 const POLL_INTERVAL = 4 * 60 * 60 * 1000 // 4 horas
+const SETTINGS_STORAGE_KEY = "app-settings"
+
+function readAutoUpdateSetting(): boolean {
+  if (typeof window === "undefined") return false
+
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY)
+    if (!raw) return false
+    const parsed = JSON.parse(raw) as { autoUpdate?: unknown }
+    return parsed.autoUpdate === true
+  } catch {
+    return false
+  }
+}
 
 export function useUpdater(): UseUpdaterReturn {
   const [update, setUpdate] = useState<Update | null>(null)
@@ -36,6 +50,7 @@ export function useUpdater(): UseUpdaterReturn {
   const [isDownloading, setIsDownloading] = useState(false)
   const [progress, setProgress] = useState<UpdateProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(readAutoUpdateSetting)
 
   const checkForUpdates = useCallback(async (): Promise<Update | null> => {
     setIsChecking(true)
@@ -53,12 +68,32 @@ export function useUpdater(): UseUpdaterReturn {
     }
   }, [])
 
-  // Check on mount, then every 4 hours
+  // Mantiene el updater sincronizado con cambios de Settings en esta ventana y entre pestañas.
   useEffect(() => {
+    function refreshAutoUpdateSetting() {
+      setAutoUpdateEnabled(readAutoUpdateSetting())
+    }
+
+    window.addEventListener("storage", refreshAutoUpdateSetting)
+    window.addEventListener("app-settings-changed", refreshAutoUpdateSetting)
+
+    return () => {
+      window.removeEventListener("storage", refreshAutoUpdateSetting)
+      window.removeEventListener("app-settings-changed", refreshAutoUpdateSetting)
+    }
+  }, [])
+
+  // Verifica al montar y cada 4 horas solo cuando auto-update está habilitado.
+  useEffect(() => {
+    if (!autoUpdateEnabled) {
+      setUpdate(null)
+      return
+    }
+
     checkForUpdates()
     const id = setInterval(checkForUpdates, POLL_INTERVAL)
     return () => clearInterval(id)
-  }, [checkForUpdates])
+  }, [autoUpdateEnabled, checkForUpdates])
 
   const [isSimulated, setIsSimulated] = useState(false)
 
