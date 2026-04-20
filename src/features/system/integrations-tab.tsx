@@ -150,7 +150,7 @@ export function IntegrationsTab() {
         open={!!configIntegrationId}
         onOpenChange={(open) => !open && setConfigIntegrationId(null)}
       >
-        <DialogContent>
+        <DialogContent onInteractOutside={(event) => event.preventDefault()}>
           <DialogHeader>
               <DialogTitle>Configure Integration</DialogTitle>
               <DialogDescription>

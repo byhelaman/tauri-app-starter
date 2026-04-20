@@ -45,7 +45,10 @@ export function ResetPasswordDialog({ user, onOpenChange, onConfirm, busy }: Res
 
     return (
         <Dialog open={!!user} onOpenChange={handleClose}>
-            <DialogContent className="max-w-sm">
+            <DialogContent
+                className="max-w-sm"
+                onInteractOutside={(event) => event.preventDefault()}
+            >
                 <DialogHeader>
                     <DialogTitle>Reset password</DialogTitle>
                     <DialogDescription>

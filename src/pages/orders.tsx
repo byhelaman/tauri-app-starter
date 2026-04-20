@@ -206,7 +206,11 @@ export function OrdersPage() {
       />
 
       <Dialog open={tableModalOpen} onOpenChange={setTableModalOpen}>
-        <DialogContent className="w-[95vw]! h-auto! max-w-310! max-h-205!">
+        <DialogContent
+          className="w-[95vw]! h-auto! max-w-310! max-h-205!"
+          onInteractOutside={(event) => event.preventDefault()}
+          // onEscapeKeyDown={(event) => event.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>Connected queue</DialogTitle>
             <DialogDescription>Live queue linked to your current orders.</DialogDescription>
@@ -233,7 +237,7 @@ export function OrdersPage() {
                       items={[
                         {
                           id: "priority-only",
-                          label: "Priority only",
+                          label: "Priority",
                           icon: Clock,
                           theme: "red",
                           active: priorityOnly,

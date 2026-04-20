@@ -63,12 +63,21 @@ function WindowControlsLayer() {
   if (typeof document === "undefined") return null
 
   return createPortal(
-    <div
-      className="fixed top-2 right-2 pointer-events-auto"
-      style={{ zIndex: 70 }}
-    >
-      <WindowControls isElevated={isElevated} />
-    </div>,
+    <>
+      {isElevated ? (
+        <div
+          data-tauri-drag-region
+          className="fixed inset-x-0 top-0 h-12 pointer-events-auto"
+          style={{ zIndex: 69 }}
+        />
+      ) : null}
+      <div
+        className="fixed top-2 right-2 pointer-events-auto"
+        style={{ zIndex: 70 }}
+      >
+        <WindowControls isElevated={isElevated} />
+      </div>
+    </>,
     document.body,
   )
 }

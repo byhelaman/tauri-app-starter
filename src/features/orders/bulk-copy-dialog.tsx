@@ -220,7 +220,10 @@ export function BulkCopyDialog<TData>({ table, tableId, scope, open, onOpenChang
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="max-w-sm">
+            <DialogContent
+                className="max-w-sm"
+                onInteractOutside={(event) => event.preventDefault()}
+            >
                 <DialogHeader>
                     <DialogTitle>Bulk Copy</DialogTitle>
                     <DialogDescription>

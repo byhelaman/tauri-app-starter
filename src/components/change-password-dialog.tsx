@@ -99,7 +99,10 @@ export function ChangePasswordDialog() {
       <DialogTrigger asChild>
         <Button variant="outline" className="w-full">Change password</Button>
       </DialogTrigger>
-      <DialogContent className="max-w-sm">
+      <DialogContent
+        className="max-w-sm"
+        onInteractOutside={(event) => event.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Change password</DialogTitle>
           <DialogDescription>

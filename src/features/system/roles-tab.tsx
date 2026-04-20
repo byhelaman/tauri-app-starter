@@ -103,7 +103,10 @@ function NewRoleDialog({ open, onOpenChange, onSubmit, disabled }: NewRoleDialog
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="max-w-sm">
+            <DialogContent
+                className="max-w-sm"
+                onInteractOutside={(event) => event.preventDefault()}
+            >
                 <DialogHeader>
                     <DialogTitle>New role</DialogTitle>
                     <DialogDescription>Define a name, level, and description for the new role.</DialogDescription>
@@ -177,7 +180,10 @@ function EditRoleDialog({ role, onOpenChange, onSubmit, disabled }: EditRoleDial
 
     return (
         <Dialog open={!!role} onOpenChange={handleClose}>
-            <DialogContent className="max-w-sm">
+            <DialogContent
+                className="max-w-sm"
+                onInteractOutside={(event) => event.preventDefault()}
+            >
                 <DialogHeader>
                     <DialogTitle>Edit role</DialogTitle>
                     <DialogDescription>

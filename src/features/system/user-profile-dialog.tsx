@@ -74,7 +74,10 @@ function EditDisplayNameDialog({ open, onOpenChange, userId, currentName, onSave
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="max-w-sm">
+            <DialogContent
+                className="max-w-sm"
+                onInteractOutside={(event) => event.preventDefault()}
+            >
                 <DialogHeader>
                     <DialogTitle>Edit display name</DialogTitle>
                     <DialogDescription>This name is shown across the workspace.</DialogDescription>
@@ -134,7 +137,10 @@ function EditEmailDialog({ open, onOpenChange, userId, currentEmail, onSave }: E
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="max-w-sm">
+            <DialogContent
+                className="max-w-sm"
+                onInteractOutside={(event) => event.preventDefault()}
+            >
                 <DialogHeader>
                     <DialogTitle>Edit email</DialogTitle>
                     <DialogDescription>The user will need to verify their new email address.</DialogDescription>
@@ -213,7 +219,10 @@ export function ViewProfileDialog({ user, roles, actorLevel, onOpenChange, onUpd
                 </>
             )}
             <Dialog open={!!user} onOpenChange={onOpenChange}>
-                <DialogContent className="max-w-sm">
+                <DialogContent
+                    className="max-w-sm"
+                    onInteractOutside={(event) => event.preventDefault()}
+                >
                     <DialogHeader>
                         <DialogTitle>Profile</DialogTitle>
                         <DialogDescription>User details and account information.</DialogDescription>

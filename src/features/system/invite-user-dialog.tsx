@@ -56,7 +56,10 @@ export function InviteUserDialog({ open, onOpenChange, onInviteUser, roles, canM
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="max-w-sm">
+            <DialogContent
+                className="max-w-sm"
+                onInteractOutside={(event) => event.preventDefault()}
+            >
                 <DialogHeader>
                     <DialogTitle>Invite user</DialogTitle>
                     <DialogDescription>Create the account and send an onboarding email.</DialogDescription>
