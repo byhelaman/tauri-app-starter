@@ -95,8 +95,13 @@ function getPinnedColumnStyle<TData, TValue>(
     ? "inset -1px 0 0 var(--border), 6px 0 8px -8px var(--border)"
     : "inset 1px 0 0 var(--border), -6px 0 8px -8px var(--border)"
 
+  const size = column.getSize()
+
   return {
     position: "sticky",
+    width: `${size}px`,
+    minWidth: `${size}px`,
+    maxWidth: `${size}px`,
     left: pin === "left" ? `${offset}px` : undefined,
     right: pin === "right" ? `${offset}px` : undefined,
     zIndex: isHeader ? 11 : 1,
@@ -193,7 +198,7 @@ export function DataTable<TData, TValue>({
                         "bg-background transition-colors group-hover:bg-muted-hover",
                     )}
                     style={{
-                      ...getColumnSizeStyle(header.column.columnDef),
+                      ...(header.column.getIsPinned() ? undefined : getColumnSizeStyle(header.column.columnDef)),
                       ...getPinnedColumnStyle(
                         header.column,
                         true,
@@ -225,7 +230,7 @@ export function DataTable<TData, TValue>({
                             "bg-background transition-colors group-hover:bg-muted-hover group-data-[state=selected]:bg-muted",
                         )}
                         style={{
-                          ...getColumnSizeStyle(cell.column.columnDef),
+                          ...(cell.column.getIsPinned() ? undefined : getColumnSizeStyle(cell.column.columnDef)),
                           ...getPinnedColumnStyle(
                             cell.column,
                             false,
