@@ -18,7 +18,7 @@ export function Titlebar({ children, className }: TitlebarProps) {
       <div
         data-tauri-drag-region
         className={cn(
-          "z-50 flex shrink-0 items-center justify-between backdrop-blur p-2 gap-4",
+          "z-50 flex shrink-0 min-h-12 items-center justify-between backdrop-blur p-2 gap-4",
           className,
         )}
       >
