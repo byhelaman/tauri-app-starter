@@ -86,16 +86,26 @@ function getColumnSizeStyle<TData, TValue>(columnDef: ColumnDef<TData, TValue>):
 function getPinnedColumnStyle<TData, TValue>(
   column: Column<TData, TValue>,
   isHeader: boolean,
+  isEdge: boolean,
+  isFirst: boolean,
 ): CSSProperties | undefined {
   const pin = column.getIsPinned()
   if (!pin) return undefined
 
   const offset = pin === "left" ? column.getStart("left") : column.getAfter("right")
-  const edgeShadow = pin === "left"
-    ? "inset -1px 0 0 var(--border), 6px 0 8px -8px var(--border)"
-    : "inset 1px 0 0 var(--border), -6px 0 8px -8px var(--border)"
-
   const size = column.getSize()
+
+  const accentShadow = isFirst && pin === "left" && !isHeader
+    ? "inset 2px 0 0 0 var(--highlight-accent, transparent)"
+    : undefined
+
+  const edgeShadow = isEdge
+    ? pin === "left"
+      ? "inset -1px 0 0 var(--border), 6px 0 8px -8px var(--border)"
+      : "inset 1px 0 0 var(--border), -6px 0 8px -8px var(--border)"
+    : undefined
+
+  const shadows = [accentShadow, edgeShadow].filter(Boolean).join(", ") || undefined
 
   return {
     position: "sticky",
@@ -105,7 +115,7 @@ function getPinnedColumnStyle<TData, TValue>(
     left: pin === "left" ? `${offset}px` : undefined,
     right: pin === "right" ? `${offset}px` : undefined,
     zIndex: isHeader ? 11 : 1,
-    boxShadow: edgeShadow,
+    boxShadow: shadows,
   }
 }
 
@@ -132,7 +142,7 @@ export function DataTable<TData, TValue>({
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
-  const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({ left: [], right: [] })
+  const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({ left: ["select"], right: [] })
   const [rowSelection, setRowSelection] = useState({})
 
   const clearSelection = () => setRowSelection({})
@@ -188,9 +198,21 @@ export function DataTable<TData, TValue>({
       <div className={cn("overflow-auto rounded-md border scrollbar", resolvedFitHeight ? "min-h-0 flex-1" : "max-h-[calc(100svh-17rem)]", resolvedScrollAreaClassName)}>
         <Table containerClassName="overflow-visible">
           <TableHeader className={cn("sticky top-0 z-10 bg-background", resolvedTableHeaderClassName)}>
-            {table.getHeaderGroups().map((headerGroup) => (
+            {table.getHeaderGroups().map((headerGroup) => {
+              const { left: leftPinned = [], right: rightPinned = [] } = table.getState().columnPinning
+              const leftEdgeId = [...leftPinned].reverse().find(id => table.getColumn(id)?.getCanPin())
+              const rightEdgeId = [...rightPinned].reverse().find(id => table.getColumn(id)?.getCanPin())
+              return (
               <TableRow key={headerGroup.id} className="group">
-                {headerGroup.headers.map((header) => (
+                {headerGroup.headers.map((header) => {
+                  const pin = header.column.getIsPinned()
+                  const isFirst = pin === "left" && header.column.getStart("left") === 0
+                  const isEdge = pin === "left"
+                    ? header.column.id === leftEdgeId
+                    : pin === "right"
+                      ? header.column.id === rightEdgeId
+                      : false
+                  return (
                   <TableHead
                     key={header.id}
                     className={cn(
@@ -202,6 +224,8 @@ export function DataTable<TData, TValue>({
                       ...getPinnedColumnStyle(
                         header.column,
                         true,
+                        isEdge,
+                        isFirst,
                       ),
                     }}
                   >
@@ -209,9 +233,11 @@ export function DataTable<TData, TValue>({
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
                   </TableHead>
-                ))}
+                  )
+                })}
               </TableRow>
-            ))}
+              )
+            })}
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows?.length ? (
@@ -222,24 +248,38 @@ export function DataTable<TData, TValue>({
                     className={cn("group", rowClassName?.(row.original))}
                     data-state={row.getIsSelected() && "selected"}
                   >
-                    {row.getVisibleCells().map((cell) => (
+                    {row.getVisibleCells().map((cell) => {
+                      const pin = cell.column.getIsPinned()
+                      const { left: leftPinned = [], right: rightPinned = [] } = table.getState().columnPinning
+                      const leftEdgeId = [...leftPinned].reverse().find(id => table.getColumn(id)?.getCanPin())
+                      const rightEdgeId = [...rightPinned].reverse().find(id => table.getColumn(id)?.getCanPin())
+                      const isFirst = pin === "left" && cell.column.getStart("left") === 0
+                      const isEdge = pin === "left"
+                        ? cell.column.id === leftEdgeId
+                        : pin === "right"
+                          ? cell.column.id === rightEdgeId
+                          : false
+                      return (
                       <TableCell
                         key={cell.id}
                         className={cn(
                           cell.column.getIsPinned() &&
-                            "bg-background transition-colors group-hover:bg-muted-hover group-data-[state=selected]:bg-muted",
+                            "bg-[var(--highlight-bg,var(--color-background))] transition-colors group-hover:bg-[var(--highlight-bg-hover,var(--color-muted-hover))] group-data-[state=selected]:bg-muted",
                         )}
                         style={{
                           ...(cell.column.getIsPinned() ? undefined : getColumnSizeStyle(cell.column.columnDef)),
                           ...getPinnedColumnStyle(
                             cell.column,
                             false,
+                            isEdge,
+                            isFirst,
                           ),
                         }}
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
-                    ))}
+                      )
+                    })}
                   </TableRow>
                 )
                 if (!rowContextMenu) return rowEl

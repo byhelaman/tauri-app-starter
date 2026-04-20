@@ -77,6 +77,7 @@ export function createQueueColumns(
       ),
       enableSorting: false,
       enableHiding: false,
+      enablePinning: false,
     },
     {
       accessorKey: "time",

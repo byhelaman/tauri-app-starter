@@ -54,7 +54,8 @@ export function DataTableColumnHeader<TData, TValue>({
         <div className={cn("flex items-center gap-2", className)}>
           <Button
             variant="ghost"
-            className={cn("-ml-3", pinState && "ml-0 pl-2")}
+            className="-ml-0.5"
+            // className={cn("ml-0", pinState && "-ml-3")}
             onClick={handleSortToggle}
           >
             <span>{title}</span>

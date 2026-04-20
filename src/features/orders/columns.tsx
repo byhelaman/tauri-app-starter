@@ -30,7 +30,7 @@ export interface Order {
 
 const STATUSES: Status[] = ["pending", "processing", "shipped", "delivered", "cancelled"]
 
-const cellInputClass = "border-transparent bg-transparent shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30 text-left"
+const cellInputClass = "border-transparent bg-transparent shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-background text-left"
 
 function renderReadOnlyCell(value: string | number, className?: string) {
   return <Input readOnly defaultValue={value} className={cn(cellInputClass, className)} />
@@ -66,6 +66,7 @@ export function createColumns(
       ),
       enableSorting: false,
       enableHiding: false,
+      enablePinning: false,
     },
     {
       accessorKey: "date",
