@@ -181,6 +181,13 @@ export function DataTable<TData, TValue>({
     state: { sorting, columnFilters, columnPinning, columnVisibility, rowSelection },
   })
 
+  const cellPadding = 8 // p-2
+  const leftPinnedWidth = (table.getState().columnPinning.left ?? [])
+    .reduce((sum, id) => sum + (table.getColumn(id)?.getSize() ?? 0), 0) + cellPadding
+  const rightPinnedWidth = (table.getState().columnPinning.right ?? [])
+    .reduce((sum, id) => sum + (table.getColumn(id)?.getSize() ?? 0), 0) + cellPadding
+  const headerHeight = 40 + cellPadding // h-10 sticky header
+
   return (
     <div className={cn("relative flex flex-col gap-4", resolvedFitHeight && "h-full min-h-0", className)}>
       <DataTableToolbar
@@ -195,7 +202,10 @@ export function DataTable<TData, TValue>({
         showViewOptions={resolvedShowViewOptions}
       />
 
-      <div className={cn("overflow-auto rounded-md border scrollbar", resolvedFitHeight ? "min-h-0 flex-1" : "max-h-[calc(100svh-17rem)]", resolvedScrollAreaClassName)}>
+      <div
+        className={cn("overflow-auto rounded-md border scrollbar", resolvedFitHeight ? "min-h-0 flex-1" : "max-h-[calc(100svh-17rem)]", resolvedScrollAreaClassName)}
+        style={{ scrollPadding: `${headerHeight}px ${rightPinnedWidth}px ${cellPadding}px ${leftPinnedWidth}px` }}
+      >
         <Table containerClassName="overflow-visible">
           <TableHeader className={cn("sticky top-0 z-10 bg-background", resolvedTableHeaderClassName)}>
             {table.getHeaderGroups().map((headerGroup) => {
