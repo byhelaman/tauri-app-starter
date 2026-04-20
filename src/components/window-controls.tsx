@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react"
+import { createPortal } from "react-dom"
 import { Minus, X, Maximize, Minimize } from "lucide-react"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { cn } from "@/lib/utils"
@@ -13,18 +14,62 @@ interface TitlebarProps {
 
 export function Titlebar({ children, className }: TitlebarProps) {
   return (
-    <div
-      data-tauri-drag-region
-      className={cn(
-        "z-50 flex shrink-0 items-center justify-between backdrop-blur p-2 gap-4",
-        className,
-      )}
-    >
-      <div data-tauri-drag-region className="flex-1 flex items-center min-w-0 justify-between">
-        {children}
+    <>
+      <div
+        data-tauri-drag-region
+        className={cn(
+          "z-50 flex shrink-0 items-center justify-between backdrop-blur p-2 gap-4",
+          className,
+        )}
+      >
+        <div
+          data-tauri-drag-region
+          className={cn("flex-1 flex items-center min-w-0 justify-between", isTauri && "pr-28")}
+        >
+          {children}
+        </div>
       </div>
-      {isTauri && <WindowControls />}
-    </div>
+      {isTauri && <WindowControlsLayer />}
+    </>
+  )
+}
+
+function WindowControlsLayer() {
+  const [isElevated, setIsElevated] = useState(false)
+
+  useEffect(() => {
+    if (typeof document === "undefined") return
+
+    const updateElevationState = () => {
+      const hasOpenDialogOverlay = Boolean(
+        document.querySelector('[data-slot="dialog-overlay"][data-state="open"]')
+      )
+      setIsElevated((prev) => prev === hasOpenDialogOverlay ? prev : hasOpenDialogOverlay)
+    }
+
+    updateElevationState()
+
+    const observer = new MutationObserver(updateElevationState)
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-state"],
+    })
+
+    return () => observer.disconnect()
+  }, [])
+
+  if (typeof document === "undefined") return null
+
+  return createPortal(
+    <div
+      className="fixed top-2 right-2 pointer-events-auto"
+      style={{ zIndex: 70 }}
+    >
+      <WindowControls isElevated={isElevated} />
+    </div>,
+    document.body,
   )
 }
 
@@ -43,7 +88,11 @@ export function Shell({ children }: ShellProps) {
   )
 }
 
-function WindowControls() {
+interface WindowControlsProps {
+  isElevated?: boolean
+}
+
+function WindowControls({ isElevated = false }: WindowControlsProps) {
   const appWindow = getCurrentWindow()
   const [maximized, setMaximized] = useState(false)
 
@@ -61,7 +110,7 @@ function WindowControls() {
         variant="ghost"
         size="icon"
         aria-label="Minimize"
-        className="text-muted-foreground"
+        className={cn(!isElevated && "text-muted-foreground")}
         onClick={() => appWindow.minimize()}
       >
         <Minus />
@@ -70,7 +119,7 @@ function WindowControls() {
         variant="ghost"
         size="icon"
         aria-label={maximized ? "Restore" : "Maximize"}
-        className="text-muted-foreground"
+        className={cn(!isElevated && "text-muted-foreground")}
         onClick={() => appWindow.toggleMaximize()}
       >
         {maximized ? <Minimize /> : <Maximize />}
@@ -79,7 +128,7 @@ function WindowControls() {
         variant="ghost"
         size="icon"
         aria-label="Close"
-        className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+        className={cn(!isElevated && "text-muted-foreground", "hover:bg-destructive/10 hover:text-destructive")}
         onClick={() => appWindow.close()}
       >
         <X />
