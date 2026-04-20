@@ -1,8 +1,10 @@
 import { useState, type CSSProperties, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import {
+  type Column,
   type ColumnDef,
   type ColumnFiltersState,
+  type ColumnPinningState,
   type SortingState,
   type VisibilityState,
   flexRender,
@@ -58,12 +60,14 @@ interface DataTableProps<TData, TValue> {
   scrollAreaClassName?: string
 }
 
+type SizableColumnDef<TData, TValue> = ColumnDef<TData, TValue> & {
+  size?: number
+  minSize?: number
+  maxSize?: number
+}
+
 function getColumnSizeStyle<TData, TValue>(columnDef: ColumnDef<TData, TValue>): CSSProperties | undefined {
-  const sizing = columnDef as ColumnDef<TData, TValue> & {
-    size?: number
-    minSize?: number
-    maxSize?: number
-  }
+  const sizing = columnDef as SizableColumnDef<TData, TValue>
 
   const hasSizing =
     typeof sizing.size === "number" ||
@@ -76,6 +80,27 @@ function getColumnSizeStyle<TData, TValue>(columnDef: ColumnDef<TData, TValue>):
     width: typeof sizing.size === "number" ? `${sizing.size}px` : undefined,
     minWidth: typeof sizing.minSize === "number" ? `${sizing.minSize}px` : undefined,
     maxWidth: typeof sizing.maxSize === "number" ? `${sizing.maxSize}px` : undefined,
+  }
+}
+
+function getPinnedColumnStyle<TData, TValue>(
+  column: Column<TData, TValue>,
+  isHeader: boolean,
+): CSSProperties | undefined {
+  const pin = column.getIsPinned()
+  if (!pin) return undefined
+
+  const offset = pin === "left" ? column.getStart("left") : column.getAfter("right")
+  const edgeShadow = pin === "left"
+    ? "inset -1px 0 0 var(--border), 6px 0 8px -8px var(--border)"
+    : "inset 1px 0 0 var(--border), -6px 0 8px -8px var(--border)"
+
+  return {
+    position: "sticky",
+    left: pin === "left" ? `${offset}px` : undefined,
+    right: pin === "right" ? `${offset}px` : undefined,
+    zIndex: isHeader ? 11 : 1,
+    boxShadow: edgeShadow,
   }
 }
 
@@ -102,6 +127,7 @@ export function DataTable<TData, TValue>({
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
+  const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({ left: [], right: [] })
   const [rowSelection, setRowSelection] = useState({})
 
   const clearSelection = () => setRowSelection({})
@@ -121,6 +147,7 @@ export function DataTable<TData, TValue>({
   const table = useReactTable({
     data,
     columns,
+    enableColumnPinning: true,
     enableMultiSort: true,
     enableSortingRemoval: false,
     isMultiSortEvent: () => true,
@@ -132,10 +159,11 @@ export function DataTable<TData, TValue>({
     getFilteredRowModel: getFilteredRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
+    onColumnPinningChange: setColumnPinning,
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
     initialState: { pagination: { pageSize: defaultPageSize } },
-    state: { sorting, columnFilters, columnVisibility, rowSelection },
+    state: { sorting, columnFilters, columnPinning, columnVisibility, rowSelection },
   })
 
   return (
@@ -156,9 +184,22 @@ export function DataTable<TData, TValue>({
         <Table containerClassName="overflow-visible">
           <TableHeader className={cn("sticky top-0 z-10 bg-background", resolvedTableHeaderClassName)}>
             {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
+              <TableRow key={headerGroup.id} className="group">
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} style={getColumnSizeStyle(header.column.columnDef)}>
+                  <TableHead
+                    key={header.id}
+                    className={cn(
+                      header.column.getIsPinned() &&
+                        "bg-background transition-colors group-hover:bg-muted-hover",
+                    )}
+                    style={{
+                      ...getColumnSizeStyle(header.column.columnDef),
+                      ...getPinnedColumnStyle(
+                        header.column,
+                        true,
+                      ),
+                    }}
+                  >
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
@@ -173,11 +214,24 @@ export function DataTable<TData, TValue>({
                 const rowEl = (
                   <TableRow 
                     key={row.id} 
-                    className={rowClassName?.(row.original)}
+                    className={cn("group", rowClassName?.(row.original))}
                     data-state={row.getIsSelected() && "selected"}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} style={getColumnSizeStyle(cell.column.columnDef)}>
+                      <TableCell
+                        key={cell.id}
+                        className={cn(
+                          cell.column.getIsPinned() &&
+                            "bg-background transition-colors group-hover:bg-muted-hover group-data-[state=selected]:bg-muted",
+                        )}
+                        style={{
+                          ...getColumnSizeStyle(cell.column.columnDef),
+                          ...getPinnedColumnStyle(
+                            cell.column,
+                            false,
+                          ),
+                        }}
+                      >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     ))}

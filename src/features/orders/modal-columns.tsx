@@ -89,7 +89,7 @@ export function createQueueColumns(
       accessorKey: "code",
       minSize: 120,
       maxSize: 180,
-      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Code" />,
+      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Code" className="justify-center" />,
       cell: ({ row }) => renderReadOnlyCell(row.getValue("code") as string, "font-mono"),
     },
     {
@@ -144,7 +144,7 @@ export function createQueueColumns(
       accessorKey: "priority",
       minSize: 120,
       maxSize: 180,
-      header: "Priority",
+      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Priority" />,
       filterFn: priorityFilter,
       cell: ({ row }) => {
         const isPriority = row.getValue("priority") as boolean

@@ -1,7 +1,8 @@
 import type { Column, Table } from "@tanstack/react-table"
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpDown, PinIcon, PinOffIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 
 interface DataTableColumnHeaderProps<TData, TValue>
   extends React.ComponentProps<"div"> {
@@ -16,45 +17,95 @@ export function DataTableColumnHeader<TData, TValue>({
   title,
   className,
 }: DataTableColumnHeaderProps<TData, TValue>) {
-  if (!column.getCanSort()) {
-    return <div className={cn(className)}>{title}</div>
-  }
-
   const sorted = column.getIsSorted()
+  const canSort = column.getCanSort()
+  const canPin = column.getCanPin()
+  const pinState = column.getIsPinned()
 
-  function handleSort() {
+  function handleSortToggle() {
+    if (!canSort) return
+
     table.setSorting((prev) => {
       const existing = prev.find((s) => s.id === column.id)
       const others = prev.filter((s) => s.id !== column.id)
-      if (!existing) {
-        return [{ id: column.id, desc: false }, ...others]
-      }
-      if (!existing.desc) {
-        return [{ id: column.id, desc: true }, ...others]
-      }
+      if (!existing) return [{ id: column.id, desc: false }, ...others]
+      if (!existing.desc) return [{ id: column.id, desc: true }, ...others]
       return others
     })
   }
 
+  function setSort(mode: "asc" | "desc" | "none") {
+    if (!canSort) return
+
+    table.setSorting((prev) => {
+      const others = prev.filter((s) => s.id !== column.id)
+      if (mode === "none") return others
+      return [{ id: column.id, desc: mode === "desc" }, ...others]
+    })
+  }
+
+  if (!canSort && !canPin) {
+    return <div className={cn(className)}>{title}</div>
+  }
+
   return (
-    <div className={cn("flex items-center gap-2", className)}>
-      <Button
-        variant="ghost"
-        className="-ml-3"
-        onClick={handleSort}
-      >
-        <span>{title}</span>
-        {sorted === "desc" ? (
-          <ArrowDown />
-        ) : sorted === "asc" ? (
-          <ArrowUp />
-        ) : (
-          <ArrowUpDown />
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div className={cn("flex items-center gap-2", className)}>
+          <Button
+            variant="ghost"
+            className={cn("-ml-3", pinState && "ml-0 pl-2")}
+            onClick={handleSortToggle}
+          >
+            <span>{title}</span>
+            {sorted === "desc" ? (
+              <ArrowDown />
+            ) : sorted === "asc" ? (
+              <ArrowUp />
+            ) : (
+              <ArrowUpDown />
+            )}
+          </Button>
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-auto min-w-44">
+        {canSort && (
+          <>
+            <ContextMenuItem onSelect={() => setSort("asc")}>
+              <ArrowUp data-icon="inline-start" />
+              Sort ascending
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={() => setSort("desc")}>
+              <ArrowDown data-icon="inline-start" />
+              Sort descending
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={() => setSort("none")}>
+              <ArrowUpDown data-icon="inline-start" />
+              {/* <PinOffIcon data-icon="inline-start" /> */}
+              Clear sorting
+            </ContextMenuItem>
+          </>
         )}
-        {/* {sortIndex > 0 && (
-          <span className="ml-0.5 text-xs text-muted-foreground">{sortIndex + 1}</span>
-        )} */}
-      </Button>
-    </div>
+
+        {canSort && canPin && <ContextMenuSeparator />}
+
+        {canPin && (
+          <>
+            <ContextMenuItem onSelect={() => column.pin("left")}>
+              <PinIcon data-icon="inline-start" />
+              Pin left
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={() => column.pin("right")}>
+              <PinIcon data-icon="inline-start" />
+              Pin right
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={() => column.pin(false)} disabled={!pinState}>
+              <PinOffIcon data-icon="inline-start" />
+              Unpin
+            </ContextMenuItem>
+          </>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }

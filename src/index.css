@@ -29,6 +29,7 @@
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
   --color-muted: var(--muted);
+  --color-muted-hover: var(--muted-hover);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
@@ -50,6 +51,7 @@
 
 :root {
   --background: oklch(1 0 0);
+  --muted-hover: color-mix(in oklch, var(--muted) 50%, var(--background));
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
@@ -85,6 +87,7 @@
 
 .dark {
   --background: oklch(0.145 0 0);
+  --muted-hover: color-mix(in oklch, var(--muted) 50%, var(--background));
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
