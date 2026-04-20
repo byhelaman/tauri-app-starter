@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { useState, type CSSProperties, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import {
   type ColumnDef,
@@ -56,6 +56,27 @@ interface DataTableProps<TData, TValue> {
   rowClassName?: (row: TData) => string | undefined
   fitHeight?: boolean
   scrollAreaClassName?: string
+}
+
+function getColumnSizeStyle<TData, TValue>(columnDef: ColumnDef<TData, TValue>): CSSProperties | undefined {
+  const sizing = columnDef as ColumnDef<TData, TValue> & {
+    size?: number
+    minSize?: number
+    maxSize?: number
+  }
+
+  const hasSizing =
+    typeof sizing.size === "number" ||
+    typeof sizing.minSize === "number" ||
+    typeof sizing.maxSize === "number"
+
+  if (!hasSizing) return undefined
+
+  return {
+    width: typeof sizing.size === "number" ? `${sizing.size}px` : undefined,
+    minWidth: typeof sizing.minSize === "number" ? `${sizing.minSize}px` : undefined,
+    maxWidth: typeof sizing.maxSize === "number" ? `${sizing.maxSize}px` : undefined,
+  }
 }
 
 export function DataTable<TData, TValue>({
@@ -137,7 +158,7 @@ export function DataTable<TData, TValue>({
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
+                  <TableHead key={header.id} style={getColumnSizeStyle(header.column.columnDef)}>
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
@@ -156,7 +177,7 @@ export function DataTable<TData, TValue>({
                     data-state={row.getIsSelected() && "selected"}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
+                      <TableCell key={cell.id} style={getColumnSizeStyle(cell.column.columnDef)}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     ))}

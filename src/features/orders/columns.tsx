@@ -30,9 +30,9 @@ export interface Order {
 
 const STATUSES: Status[] = ["pending", "processing", "shipped", "delivered", "cancelled"]
 
-const cellInputClass = "border-transparent bg-transparent shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30 w-fit"
+const cellInputClass = "border-transparent bg-transparent shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30 text-left"
 
-function ReadOnlyCell({ value, className }: { value: string | number; className?: string }) {
+function renderReadOnlyCell(value: string | number, className?: string) {
   return <Input readOnly defaultValue={value} className={cn(cellInputClass, className)} />
 }
 
@@ -48,6 +48,8 @@ export function createColumns(
   return [
     {
       id: "select",
+      minSize: 36,
+      maxSize: 36,
       header: ({ table }) => (
         <Checkbox
           checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
@@ -67,27 +69,37 @@ export function createColumns(
     },
     {
       accessorKey: "date",
+      minSize: 120,
+      maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Date" className="justify-center" />,
-      cell: ({ row }) => <p className="w-25 text-center mx-auto">{row.getValue("date") as string}</p>,
+      cell: ({ row }) => renderReadOnlyCell(row.getValue("date") as string),
     },
     {
       accessorKey: "customer",
+      minSize: 160,
+      maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Customer" />,
-      cell: ({ row }) => <ReadOnlyCell value={row.getValue("customer") as string} className="w-40" />,
+      cell: ({ row }) => renderReadOnlyCell(row.getValue("customer") as string),
     },
     {
       accessorKey: "product",
+      minSize: 240,
+      maxSize: 600,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Product" />,
-      cell: ({ row }) => <ReadOnlyCell value={row.getValue("product") as string} />,
+      cell: ({ row }) => renderReadOnlyCell(row.getValue("product") as string),
     },
     {
       accessorKey: "category",
+      minSize: 120,
+      maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Category" />,
       filterFn: multiValueFilter,
-      cell: ({ row }) => <ReadOnlyCell value={row.getValue("category") as string} className="w-30" />,
+      cell: ({ row }) => renderReadOnlyCell(row.getValue("category") as string),
     },
     {
       accessorKey: "time",
+      minSize: 140,
+      maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Time" className="justify-center" />,
       filterFn: (row, _columnId, filterValue: string[]) => {
         if (!Array.isArray(filterValue) || filterValue.length === 0) return true
@@ -95,15 +107,19 @@ export function createColumns(
         const startHour = time.split(" - ")[0]?.trim().split(":")[0] ?? ""
         return filterValue.includes(startHour)
       },
-      cell: ({ row }) => <p className="w-30 text-center mx-auto">{row.getValue("time") as string}</p>,
+      cell: ({ row }) => renderReadOnlyCell(row.getValue("time") as string),
     },
     {
       accessorKey: "code",
-      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Code" className="justify-center"/>,
-      cell: ({ row }) => <p className="font-mono text-muted-foreground mx-auto w-25 text-center">{row.getValue("code") as string}</p>,
+      minSize: 120,
+      maxSize: 180,
+      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Code" />,
+      cell: ({ row }) => renderReadOnlyCell(row.getValue("code") as string, "font-mono"),
     },
     {
       accessorKey: "status",
+      minSize: 120,
+      maxSize: 180,
       header: "Status",
       filterFn: multiValueFilter,
       cell: ({ row }) => (
@@ -126,26 +142,34 @@ export function createColumns(
     },
     {
       accessorKey: "channel",
+      minSize: 120,
+      maxSize: 180,
       header: "Channel",
       filterFn: multiValueFilter,
-      cell: ({ row }) => <ReadOnlyCell value={row.getValue("channel") as string} className="w-30" />,
+      cell: ({ row }) => renderReadOnlyCell(row.getValue("channel") as string),
     },
     {
       accessorKey: "quantity",
-      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Qty" className="justify-end" />,
-      cell: ({ row }) => <ReadOnlyCell value={row.getValue("quantity") as number} className="text-right font-mono w-15" />,
+      minSize: 120,
+      maxSize: 180,
+      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Qty" />,
+      cell: ({ row }) => renderReadOnlyCell(row.getValue("quantity") as number, "font-mono"),
     },
     {
       accessorKey: "amount",
-      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Amount" className="justify-end" />,
+      minSize: 130,
+      maxSize: 180,
+      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Amount" />,
       cell: ({ row }) => {
         const value = row.getValue("amount") as number
         const formatted = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
-        return <p className="text-right font-mono">{formatted}</p>
+        return renderReadOnlyCell(formatted, "font-mono")
       },
     },
     {
       id: "actions",
+      minSize: 44,
+      maxSize: 44,
       enableHiding: false,
       cell: ({ row }) => (
         <DataTableRowActions order={row.original} onDelete={onDelete} />

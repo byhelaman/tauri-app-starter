@@ -35,9 +35,9 @@ export interface QueueOrder {
 }
 
 const QUEUE_STATUSES: QueueStatus[] = ["queued", "processing", "ready", "delivered"]
-const cellInputClass = "border-transparent bg-transparent shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30 w-fit"
+const cellInputClass = "border-transparent bg-transparent shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30 text-left"
 
-function ReadOnlyCell({ value, className }: { value: string | number; className?: string }) {
+function renderReadOnlyCell(value: string | number, className?: string) {
   return <Input readOnly defaultValue={value} className={cn(cellInputClass, className)} />
 }
 
@@ -59,6 +59,8 @@ export function createQueueColumns(
   return [
     {
       id: "select",
+      minSize: 36,
+      maxSize: 36,
       header: ({ table }) => (
         <Checkbox
           checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
@@ -78,25 +80,29 @@ export function createQueueColumns(
     },
     {
       accessorKey: "time",
-      header: ({ column, table }) => (
-        <DataTableColumnHeader table={table} column={column} title="Time" className="justify-center" />
-      ),
-      cell: ({ row }) => <p className="mx-auto w-30 text-center">{row.getValue("time") as string}</p>,
+      minSize: 120,
+      maxSize: 180,
+      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Time" className="justify-center" />,
+      cell: ({ row }) => renderReadOnlyCell(row.getValue("time") as string),
     },
     {
       accessorKey: "code",
-      header: ({ column, table }) => (
-        <DataTableColumnHeader table={table} column={column} title="Code" className="justify-center" />
-      ),
-      cell: ({ row }) => <p className="mx-auto w-25 text-center font-mono text-muted-foreground">{row.getValue("code") as string}</p>,
+      minSize: 120,
+      maxSize: 180,
+      header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Code" />,
+      cell: ({ row }) => renderReadOnlyCell(row.getValue("code") as string, "font-mono"),
     },
     {
       accessorKey: "customer",
+      minSize: 120,
+      maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Customer" />,
-      cell: ({ row }) => <ReadOnlyCell value={row.getValue("customer") as string} className="w-40" />,
+      cell: ({ row }) => renderReadOnlyCell(row.getValue("customer") as string),
     },
     {
       accessorKey: "status",
+      minSize: 120,
+      maxSize: 180,
       header: "Status",
       filterFn: multiValueFilter,
       cell: ({ row }) => (
@@ -104,7 +110,7 @@ export function createQueueColumns(
           value={row.getValue("status") as string}
           onValueChange={(value) => onStatusChange(row.original.code, value as QueueStatus)}
         >
-          <SelectTrigger className="w-34 capitalize">
+          <SelectTrigger className="w-32 capitalize">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -121,17 +127,23 @@ export function createQueueColumns(
     },
     {
       accessorKey: "channel",
+      minSize: 120,
+      maxSize: 180,
       header: "Channel",
       filterFn: multiValueFilter,
-      cell: ({ row }) => <ReadOnlyCell value={row.getValue("channel") as string} className="w-22" />,
+      cell: ({ row }) => renderReadOnlyCell(row.getValue("channel") as string),
     },
     {
       accessorKey: "agent",
+      minSize: 120,
+      maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Assigned" />,
-      cell: ({ row }) => <ReadOnlyCell value={row.getValue("agent") as string} className="w-30" />,
+      cell: ({ row }) => renderReadOnlyCell(row.getValue("agent") as string),
     },
     {
       accessorKey: "priority",
+      minSize: 120,
+      maxSize: 180,
       header: "Priority",
       filterFn: priorityFilter,
       cell: ({ row }) => {
@@ -145,6 +157,8 @@ export function createQueueColumns(
     },
     {
       id: "actions",
+      minSize: 44,
+      maxSize: 44,
       enableHiding: false,
       cell: ({ row }) => {
         const order = row.original
