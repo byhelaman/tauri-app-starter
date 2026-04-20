@@ -189,7 +189,14 @@ export function ChatWidget() {
                 <CardContent className="flex flex-col flex-1 min-h-0 p-4 gap-4 overflow-y-auto">
                     {view === "setup" && (
                         <p className="text-sm text-muted-foreground">
-                            Enter your Vercel AI Gateway API key to enable the chat.
+                            Enter your {" "}<a
+                                href="https://vercel.com/ai-gateway"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-foreground underline underline-offset-4"
+                            >
+                                Vercel AI Gateway
+                            </a>{" "} key to enable the chat.
                         </p>
                     )}
                     <ChatSettingsForm

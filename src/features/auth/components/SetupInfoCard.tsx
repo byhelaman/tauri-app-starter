@@ -31,7 +31,7 @@ const STEPS: Step[] = [
     description: (
       <>
         Sign up at{" "}
-        <a href="https://supabase.com" target="_blank" rel="noreferrer" className="text-foreground underline underline-offset-2">
+        <a href="https://supabase.com" target="_blank" rel="noreferrer" className="text-foreground underline underline-offset-4">
           supabase.com
         </a>{" "}
         and create a new project.
@@ -91,7 +91,7 @@ export function SetupInfoCard({ onBack }: SetupInfoCardProps) {
       <CardFooter className="justify-center">
         <p className="text-center text-muted-foreground">
           Need help?{" "}
-          <a href="https://supabase.com/docs" target="_blank" rel="noreferrer" className="text-foreground underline underline-offset-2">
+          <a href="https://supabase.com/docs" target="_blank" rel="noreferrer" className="text-foreground underline underline-offset-4">
             Read the docs
           </a>.
         </p>
