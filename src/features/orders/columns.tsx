@@ -30,7 +30,7 @@ export interface Order {
 
 const STATUSES: Status[] = ["pending", "processing", "shipped", "delivered", "cancelled"]
 
-const cellInputClass = "border-transparent bg-transparent shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-background text-left"
+const cellInputClass = "border-transparent bg-transparent shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background/30 dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-background/30 text-left"
 
 function renderReadOnlyCell(value: string | number, className?: string) {
   return <Input readOnly defaultValue={value} className={cn(cellInputClass, className)} />
