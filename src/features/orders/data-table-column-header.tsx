@@ -78,7 +78,7 @@ export function DataTableColumnHeader<TData, TValue>({
               <ArrowDown data-icon="inline-start" />
               Sort descending
             </ContextMenuItem>
-            <ContextMenuItem onSelect={() => setSort("none")}>
+            <ContextMenuItem onSelect={() => setSort("none")} disabled={!column.getIsSorted()}>
               <ArrowUpDown data-icon="inline-start" />
               Clear sorting
             </ContextMenuItem>

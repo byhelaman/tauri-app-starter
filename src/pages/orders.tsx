@@ -263,7 +263,8 @@ export function OrdersPage() {
               defaultPageSize={25}
               layout={{
                 scrollAreaClassName: "max-h-[min(calc(100svh-22rem),30rem)]",
-                tableHeaderClassName: "bg-card",
+                tableBgClassName: "bg-popover",
+                tableBgHoverClassName: "group-hover:bg-[color-mix(in_oklch,var(--color-muted)_50%,var(--color-popover))]",
               }}
             />
           </DialogBody>

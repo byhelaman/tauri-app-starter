@@ -131,6 +131,8 @@ export function DataTable<TData, TValue>({
   const fitHeight = layout?.fitHeight ?? false
   const scrollAreaClassName = layout?.scrollAreaClassName
   const tableHeaderClassName = layout?.tableHeaderClassName
+  const tableBgClassName = layout?.tableBgClassName ?? "bg-background"
+  const tableBgHoverClassName = layout?.tableBgHoverClassName ?? "group-hover:bg-[var(--highlight-bg-hover,var(--color-muted-hover))]"
 
   const table = useReactTable({
     data,
@@ -183,7 +185,7 @@ export function DataTable<TData, TValue>({
         style={{ scrollPadding: `${headerHeight}px ${rightPinnedWidth}px ${cellPadding}px ${leftPinnedWidth}px` }}
       >
         <Table containerClassName="overflow-visible">
-          <TableHeader className={cn("sticky top-0 z-10 bg-background", tableHeaderClassName)}>
+          <TableHeader className={cn("sticky top-0 z-10", tableBgClassName, tableHeaderClassName)}>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="group">
                 {headerGroup.headers.map((header) => {
@@ -199,7 +201,7 @@ export function DataTable<TData, TValue>({
                     key={header.id}
                     className={cn(
                       header.column.getIsPinned() &&
-                        "bg-background transition-colors group-hover:bg-muted-hover",
+                        cn(tableBgClassName, "transition-colors", tableBgHoverClassName),
                     )}
                     style={{
                       ...(header.column.getIsPinned() ? undefined : getColumnSizeStyle(header.column.columnDef)),
@@ -242,7 +244,7 @@ export function DataTable<TData, TValue>({
                         key={cell.id}
                         className={cn(
                           cell.column.getIsPinned() &&
-                            "bg-[var(--highlight-bg,var(--color-background))] transition-colors group-hover:bg-[var(--highlight-bg-hover,var(--color-muted-hover))] group-data-[state=selected]:bg-muted",
+                            cn(tableBgClassName, "transition-colors group-data-[state=selected]:bg-muted", tableBgHoverClassName),
                         )}
                         style={{
                           ...(cell.column.getIsPinned() ? undefined : getColumnSizeStyle(cell.column.columnDef)),

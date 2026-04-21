@@ -48,7 +48,7 @@ export function createQueueColumns(
     createSelectColumn<QueueOrder>(),
     {
       accessorKey: "time",
-      minSize: 120,
+      minSize: 140,
       maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Time" className="justify-center" />,
       cell: ({ row }) => renderReadOnlyCell(row.getValue("time") as string),
