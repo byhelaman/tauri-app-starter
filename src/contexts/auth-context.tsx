@@ -3,7 +3,6 @@ import type { Session, User } from "@supabase/supabase-js"
 import { z } from "zod"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 import { chatHistoryKey } from "@/components/use-chat"
-import { apiKeyStorageKey, modelStorageKey } from "@/components/chat-storage"
 
 type AuthClaims = {
   userRole: string

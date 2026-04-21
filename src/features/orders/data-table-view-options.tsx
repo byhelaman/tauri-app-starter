@@ -5,9 +5,7 @@ import {
   ChevronDownIcon,
   ClipboardCopyIcon,
   DownloadIcon,
-  Files,
   Layers,
-  ListTodo,
   PrinterIcon,
   RotateCcwIcon,
 } from "lucide-react"
@@ -149,9 +147,6 @@ export function DataTableViewOptions<TData>({ table, tableId }: DataTableViewOpt
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-40">
-          {/* <DropdownMenuLabel>
-            Scope
-          </DropdownMenuLabel> */}
           <DropdownMenuRadioGroup value={scope} onValueChange={(v) => setScope(v as Scope)}>
             {(["selected", "filtered", "all"] as Scope[]).map((s) => (
               <DropdownMenuRadioItem
@@ -166,9 +161,6 @@ export function DataTableViewOptions<TData>({ table, tableId }: DataTableViewOpt
 
           <DropdownMenuSeparator />
 
-          {/* <DropdownMenuLabel>
-            Actions
-          </DropdownMenuLabel> */}
           <DropdownMenuItem
             disabled={scopeCounts[effectiveScope] === 0}
             onClick={() => setBulkCopyOpen(true)}

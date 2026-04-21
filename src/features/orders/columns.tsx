@@ -1,7 +1,4 @@
-import type { ColumnDef, FilterFn } from "@tanstack/react-table"
-import { cn } from "@/lib/utils"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Input } from "@/components/ui/input"
+import type { ColumnDef } from "@tanstack/react-table"
 import {
   Select,
   SelectContent,
@@ -12,6 +9,7 @@ import {
 } from "@/components/ui/select"
 import { DataTableColumnHeader } from "./data-table-column-header"
 import { DataTableRowActions } from "./data-table-row-actions"
+import { createSelectColumn, multiValueFilter, renderReadOnlyCell } from "./data-table-cells"
 
 export type Status = "pending" | "processing" | "shipped" | "delivered" | "cancelled"
 
@@ -30,44 +28,12 @@ export interface Order {
 
 const STATUSES: Status[] = ["pending", "processing", "shipped", "delivered", "cancelled"]
 
-const cellInputClass = "border-transparent bg-transparent shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background/30 dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-background/30 text-left"
-
-function renderReadOnlyCell(value: string | number, className?: string) {
-  return <Input readOnly defaultValue={value} className={cn(cellInputClass, className)} />
-}
-
-const multiValueFilter: FilterFn<Order> = (row, columnId, filterValue) => {
-  if (!Array.isArray(filterValue) || filterValue.length === 0) return true
-  return filterValue.includes(row.getValue(columnId))
-}
-
 export function createColumns(
   onDelete: (code: string) => void,
   onStatusChange: (code: string, status: Status) => void,
 ): ColumnDef<Order>[] {
   return [
-    {
-      id: "select",
-      minSize: 36,
-      maxSize: 36,
-      header: ({ table }) => (
-        <Checkbox
-          checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
-      enablePinning: false,
-    },
+    createSelectColumn<Order>(),
     {
       accessorKey: "date",
       minSize: 124,

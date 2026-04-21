@@ -10,13 +10,6 @@ const ORDER_HIGHLIGHTS: HighlightConfig<Order>[] = [
     theme: "green",
     condition: (row) => row.channel?.toLowerCase() === "online",
   },
-  // {
-  //   id: "cancelled",
-  //   label: "Cancelled",
-  //   icon: XCircle,
-  //   theme: "red",
-  //   condition: (row) => row.status?.toLowerCase() === "cancelled",
-  // }
 ]
 
 export function useTableHighlights() {

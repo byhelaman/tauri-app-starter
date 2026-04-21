@@ -1,6 +1,5 @@
 import type { ColumnDef, FilterFn } from "@tanstack/react-table"
 import { MoreHorizontalIcon } from "lucide-react"
-import { cn } from "@/lib/utils"
 import {
   Select,
   SelectContent,
@@ -10,8 +9,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -21,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { DataTableColumnHeader } from "./data-table-column-header"
+import { createSelectColumn, multiValueFilter, renderReadOnlyCell } from "./data-table-cells"
 
 export type QueueStatus = "queued" | "processing" | "ready" | "delivered"
 
@@ -35,16 +33,6 @@ export interface QueueOrder {
 }
 
 const QUEUE_STATUSES: QueueStatus[] = ["queued", "processing", "ready", "delivered"]
-const cellInputClass = "border-transparent bg-transparent shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30 text-left"
-
-function renderReadOnlyCell(value: string | number, className?: string) {
-  return <Input readOnly defaultValue={value} className={cn(cellInputClass, className)} />
-}
-
-const multiValueFilter: FilterFn<QueueOrder> = (row, columnId, filterValue) => {
-  if (!Array.isArray(filterValue) || filterValue.length === 0) return true
-  return filterValue.includes(row.getValue(columnId))
-}
 
 const priorityFilter: FilterFn<QueueOrder> = (row, columnId, filterValue) => {
   if (filterValue !== true) return true
@@ -57,28 +45,7 @@ export function createQueueColumns(
   onRemoveFromQueue: (code: string) => void,
 ): ColumnDef<QueueOrder>[] {
   return [
-    {
-      id: "select",
-      minSize: 36,
-      maxSize: 36,
-      header: ({ table }) => (
-        <Checkbox
-          checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
-      enablePinning: false,
-    },
+    createSelectColumn<QueueOrder>(),
     {
       accessorKey: "time",
       minSize: 120,

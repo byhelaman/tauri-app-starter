@@ -32,9 +32,6 @@ import { DataTablePagination } from "./data-table-pagination"
 import type {
   DataTableLayoutConfig,
   DataTableToolbarConfig,
-  FacetedFilterConfig,
-  IntervalFilterConfig,
-  ToolbarActionsRenderer,
 } from "./data-table-types"
 
 interface DataTableProps<TData, TValue> {
@@ -43,21 +40,12 @@ interface DataTableProps<TData, TValue> {
   tableId: string
   toolbar?: DataTableToolbarConfig<TData>
   layout?: DataTableLayoutConfig
-
-  // Compatibilidad con API previa
-  filterColumn?: string
-  filterPlaceholder?: string
-  facetedFilters?: FacetedFilterConfig[]
-  intervalFilter?: IntervalFilterConfig
   className?: string
   bulkActions?: (selectedRows: TData[], clearSelection: () => void) => ReactNode
-  toolbarActions?: ToolbarActionsRenderer<TData>
   rowContextMenu?: (row: TData) => ReactNode
   defaultPageSize?: number
   pageSizeOptions?: number[]
   rowClassName?: (row: TData) => string | undefined
-  fitHeight?: boolean
-  scrollAreaClassName?: string
 }
 
 type SizableColumnDef<TData, TValue> = ColumnDef<TData, TValue> & {
@@ -125,19 +113,12 @@ export function DataTable<TData, TValue>({
   tableId,
   toolbar,
   layout,
-  filterColumn = "title",
-  filterPlaceholder = "Filter...",
-  facetedFilters,
-  intervalFilter,
   className,
   bulkActions,
-  toolbarActions,
   rowContextMenu,
   defaultPageSize = 10,
   pageSizeOptions,
   rowClassName,
-  fitHeight = false,
-  scrollAreaClassName,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -147,17 +128,9 @@ export function DataTable<TData, TValue>({
 
   const clearSelection = () => setRowSelection({})
 
-  const resolvedFilterColumn = toolbar?.filterColumn ?? filterColumn
-  const resolvedFilterPlaceholder = toolbar?.filterPlaceholder ?? filterPlaceholder
-  const resolvedFacetedFilters = toolbar?.facetedFilters ?? facetedFilters
-  const resolvedIntervalFilter = toolbar?.intervalFilter ?? intervalFilter
-  const resolvedToolbarActions = toolbar?.actions ?? toolbarActions
-  const resolvedSearchDebounceMs = toolbar?.searchDebounceMs
-  const resolvedShowViewOptions = toolbar?.showViewOptions
-
-  const resolvedFitHeight = layout?.fitHeight ?? fitHeight
-  const resolvedScrollAreaClassName = layout?.scrollAreaClassName ?? scrollAreaClassName
-  const resolvedTableHeaderClassName = layout?.tableHeaderClassName
+  const fitHeight = layout?.fitHeight ?? false
+  const scrollAreaClassName = layout?.scrollAreaClassName
+  const tableHeaderClassName = layout?.tableHeaderClassName
 
   const table = useReactTable({
     data,
@@ -192,25 +165,25 @@ export function DataTable<TData, TValue>({
   const rightEdgeId = [...rightPinned].reverse().find(id => table.getColumn(id)?.getCanPin())
 
   return (
-    <div className={cn("relative flex flex-col gap-4", resolvedFitHeight && "h-full min-h-0", className)}>
+    <div className={cn("relative flex flex-col gap-4", fitHeight && "h-full min-h-0", className)}>
       <DataTableToolbar
         table={table}
         tableId={tableId}
-        filterColumn={resolvedFilterColumn}
-        filterPlaceholder={resolvedFilterPlaceholder}
-        facetedFilters={resolvedFacetedFilters}
-        intervalFilter={resolvedIntervalFilter}
-        actions={resolvedToolbarActions}
-        searchDebounceMs={resolvedSearchDebounceMs}
-        showViewOptions={resolvedShowViewOptions}
+        filterColumn={toolbar?.filterColumn}
+        filterPlaceholder={toolbar?.filterPlaceholder}
+        facetedFilters={toolbar?.facetedFilters}
+        intervalFilter={toolbar?.intervalFilter}
+        actions={toolbar?.actions}
+        searchDebounceMs={toolbar?.searchDebounceMs}
+        showViewOptions={toolbar?.showViewOptions}
       />
 
       <div
-        className={cn("overflow-auto rounded-md border scrollbar", resolvedFitHeight ? "min-h-0 flex-1" : "max-h-[calc(100svh-17rem)]", resolvedScrollAreaClassName)}
+        className={cn("overflow-auto rounded-md border scrollbar", fitHeight ? "min-h-0 flex-1" : "max-h-[calc(100svh-17rem)]", scrollAreaClassName)}
         style={{ scrollPadding: `${headerHeight}px ${rightPinnedWidth}px ${cellPadding}px ${leftPinnedWidth}px` }}
       >
         <Table containerClassName="overflow-visible">
-          <TableHeader className={cn("sticky top-0 z-10 bg-background", resolvedTableHeaderClassName)}>
+          <TableHeader className={cn("sticky top-0 z-10 bg-background", tableHeaderClassName)}>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="group">
                 {headerGroup.headers.map((header) => {

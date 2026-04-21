@@ -36,12 +36,10 @@ import {
     InputGroupTextarea,
 } from "@/components/ui/input-group"
 import { Textarea } from "@/components/ui/textarea"
-import type { Scope } from "./table-formats"
-import { getScopeRows } from "./table-formats"
+import { csvEscape, getScopeRows, type Scope } from "./table-formats"
 import {
     BULK_COPY_DEFAULT_TEMPLATE,
     bulkCopySettingsKey,
-    csvEscape,
     parseBulkCopyTemplate,
     readBulkCopySettings,
     type BulkCopyFormat,

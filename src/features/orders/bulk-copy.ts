@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { csvEscape } from "./table-formats"
 
 export type BulkCopyFormat = "lines" | "csv" | "tsv" | "json" | "custom"
 
@@ -62,9 +63,6 @@ export function parseBulkCopyTemplate(template: string, fieldSet: Set<string>): 
     return tokens
 }
 
-export function csvEscape(value: string): string {
-    return /[,"\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
-}
 
 export function readBulkCopySettings(tableId: string): Partial<BulkCopySettings> | null {
     if (typeof window === "undefined") return null

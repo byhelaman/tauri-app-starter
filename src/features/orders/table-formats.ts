@@ -26,7 +26,7 @@ function cellValue<T>(row: Row<T>, column: Column<T, unknown>): string {
   return v == null ? "" : String(v)
 }
 
-function csvEscape(s: string): string {
+export function csvEscape(s: string): string {
   return /[,"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
