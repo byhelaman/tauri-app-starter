@@ -58,7 +58,7 @@ import {
     CollapsibleTrigger,
     CollapsibleContent,
 } from "@/components/ui/collapsible"
-import { cn } from "@/lib/utils"
+import { cn, filterByMultiSearch } from "@/lib/utils"
 import type { PermissionDefinition, PermissionMatrix, RoleDefinition } from "./types"
 
 const roleFormSchema = z.object({
@@ -273,11 +273,10 @@ export function RolesTab({
 
     const deferredSearch = useDeferredValue(search)
 
-    const filtered = useMemo(() => roles.filter(
-        (r) =>
-            r.name.toLowerCase().includes(deferredSearch.toLowerCase()) ||
-            r.description.toLowerCase().includes(deferredSearch.toLowerCase())
-    ), [roles, deferredSearch])
+    const filtered = useMemo(
+        () => filterByMultiSearch(roles, deferredSearch, (r) => [r.name, r.description, r.level]),
+        [roles, deferredSearch],
+    )
 
     async function togglePermission(role: string, permission: string) {
         const enabled = !(matrix[role]?.[permission] ?? false)

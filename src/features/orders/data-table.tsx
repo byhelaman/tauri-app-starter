@@ -1,10 +1,11 @@
-import { useState, type CSSProperties, type ReactNode } from "react"
-import { cn } from "@/lib/utils"
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react"
+import { cn, joinSearchValues, matchesSearchGroups, normalizeSearchGroups } from "@/lib/utils"
 import {
   type Column,
   type ColumnDef,
   type ColumnFiltersState,
   type ColumnPinningState,
+  type FilterFn,
   type SortingState,
   type VisibilityState,
   flexRender,
@@ -122,6 +123,7 @@ export function DataTable<TData, TValue>({
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [globalFilter, setGlobalFilter] = useState("")
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({ left: ["select"], right: [] })
   const [rowSelection, setRowSelection] = useState({})
@@ -132,26 +134,64 @@ export function DataTable<TData, TValue>({
   const scrollAreaClassName = layout?.scrollAreaClassName
   const tableHeaderClassName = layout?.tableHeaderClassName
 
+  const multiColumnGlobalFilter = useMemo<FilterFn<TData>>(() => {
+    let lastQuery = ""
+    let lastGroups: string[][] = []
+    let searchableColumnIds: string[] | null = null
+
+    return (row, _columnId, filterValue) => {
+      const query = typeof filterValue === "string" ? filterValue : ""
+      if (!query.trim()) return true
+
+      if (query !== lastQuery) {
+        lastQuery = query
+        lastGroups = normalizeSearchGroups(query)
+      }
+
+      if (lastGroups.length === 0) return true
+
+      if (!searchableColumnIds) {
+        searchableColumnIds = row
+          .getAllCells()
+          .filter((cell) => cell.column.getCanGlobalFilter())
+          .map((cell) => cell.column.id)
+      }
+
+      if (searchableColumnIds.length === 0) return true
+
+      const haystack = joinSearchValues(
+        searchableColumnIds.map((columnId) => row.getValue(columnId)),
+      )
+
+      return matchesSearchGroups(haystack, lastGroups)
+    }
+  }, [])
+
   const table = useReactTable({
     data,
     columns,
+    defaultColumn: {
+      enableGlobalFilter: false,
+    },
     enableColumnPinning: true,
     enableMultiSort: true,
     enableSortingRemoval: false,
     isMultiSortEvent: () => true,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
+    onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
+    globalFilterFn: multiColumnGlobalFilter,
     onColumnPinningChange: setColumnPinning,
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
     initialState: { pagination: { pageSize: defaultPageSize } },
-    state: { sorting, columnFilters, columnPinning, columnVisibility, rowSelection },
+    state: { sorting, columnFilters, globalFilter, columnPinning, columnVisibility, rowSelection },
   })
 
   const cellPadding = 8 // p-2
@@ -169,7 +209,6 @@ export function DataTable<TData, TValue>({
       <DataTableToolbar
         table={table}
         tableId={tableId}
-        filterColumn={toolbar?.filterColumn}
         filterPlaceholder={toolbar?.filterPlaceholder}
         facetedFilters={toolbar?.facetedFilters}
         intervalFilter={toolbar?.intervalFilter}

@@ -36,6 +36,7 @@ import { ViewProfileDialog } from "./user-profile-dialog"
 import { InviteUserDialog } from "./invite-user-dialog"
 import { RemoveUserAlert } from "./remove-user-alert"
 import { ResetPasswordDialog } from "./reset-password-dialog"
+import { filterByMultiSearch } from "@/lib/utils"
 
 interface UsersTabProps {
     users: SystemUser[]
@@ -69,11 +70,10 @@ export function UsersTab({ users, roles, actorLevel, onUpdateRole, onUpdateDispl
 
     const deferredSearch = useDeferredValue(search)
 
-    const filtered = useMemo(() => users.filter(
-        (u) =>
-            u.displayName.toLowerCase().includes(deferredSearch.toLowerCase()) ||
-            u.email.toLowerCase().includes(deferredSearch.toLowerCase())
-    ), [users, deferredSearch])
+    const filtered = useMemo(
+        () => filterByMultiSearch(users, deferredSearch, (u) => [u.displayName, u.email, u.role, u.status]),
+        [users, deferredSearch],
+    )
 
     async function handleRoleChange(userId: string, role: string) {
         setRoleBusy(true)

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/input-group"
 import { AUDIT_ACTION_META } from "./data"
 import type { AuditEntry } from "./types"
+import { filterByMultiSearch } from "@/lib/utils"
 
 function formatRelativeTime(iso: string): string {
   const now = Date.now()
@@ -47,11 +48,10 @@ export function AuditTab({ entries }: AuditTabProps) {
 
   const deferredSearch = useDeferredValue(search)
 
-  const filtered = useMemo(() => entries.filter(
-    (e) =>
-      e.description.toLowerCase().includes(deferredSearch.toLowerCase()) ||
-      e.actorEmail.toLowerCase().includes(deferredSearch.toLowerCase())
-  ), [entries, deferredSearch])
+  const filtered = useMemo(
+    () => filterByMultiSearch(entries, deferredSearch, (e) => [e.description, e.actorEmail, e.action]),
+    [entries, deferredSearch],
+  )
 
   return (
     <div className="flex flex-col gap-3">

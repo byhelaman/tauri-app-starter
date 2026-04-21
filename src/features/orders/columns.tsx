@@ -43,6 +43,7 @@ export function createColumns(
     },
     {
       accessorKey: "customer",
+      enableGlobalFilter: true,
       minSize: 160,
       maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Customer" />,
@@ -50,6 +51,7 @@ export function createColumns(
     },
     {
       accessorKey: "product",
+      enableGlobalFilter: true,
       minSize: 240,
       maxSize: 600,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Product" />,
@@ -57,6 +59,7 @@ export function createColumns(
     },
     {
       accessorKey: "category",
+      enableGlobalFilter: true,
       minSize: 120,
       maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Category" />,
@@ -78,6 +81,7 @@ export function createColumns(
     },
     {
       accessorKey: "code",
+      enableGlobalFilter: true,
       minSize: 120,
       maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Code" />,
@@ -85,6 +89,7 @@ export function createColumns(
     },
     {
       accessorKey: "status",
+      enableGlobalFilter: true,
       minSize: 120,
       maxSize: 180,
       header: "Status",
@@ -109,6 +114,7 @@ export function createColumns(
     },
     {
       accessorKey: "channel",
+      enableGlobalFilter: true,
       minSize: 120,
       maxSize: 180,
       header: "Channel",

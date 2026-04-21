@@ -21,7 +21,6 @@ export interface IntervalFilterConfig {
 export type ToolbarActionsRenderer<TData> = ReactNode | ((table: Table<TData>) => ReactNode)
 
 export interface DataTableToolbarConfig<TData> {
-  filterColumn?: string
   filterPlaceholder?: string
   facetedFilters?: FacetedFilterConfig[]
   intervalFilter?: IntervalFilterConfig

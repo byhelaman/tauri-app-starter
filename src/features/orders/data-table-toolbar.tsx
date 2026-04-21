@@ -26,7 +26,6 @@ import type { FacetedFilterConfig, IntervalFilterConfig } from "./data-table-typ
 interface DataTableToolbarProps<TData> {
   table: Table<TData>
   tableId: string
-  filterColumn?: string
   filterPlaceholder?: string
   facetedFilters?: FacetedFilterConfig[]
   intervalFilter?: IntervalFilterConfig
@@ -38,7 +37,6 @@ interface DataTableToolbarProps<TData> {
 export function DataTableToolbar<TData>({
   table,
   tableId,
-  filterColumn = "title",
   filterPlaceholder = "Search...",
   facetedFilters,
   intervalFilter,
@@ -46,7 +44,12 @@ export function DataTableToolbar<TData>({
   searchDebounceMs = 300,
   showViewOptions = true,
 }: DataTableToolbarProps<TData>) {
-  const currentFilterValue = (table.getColumn(filterColumn)?.getFilterValue() as string) ?? ""
+  const hasSearchTarget = table
+    .getAllLeafColumns()
+    .some((column) => column.getCanGlobalFilter())
+
+  const currentFilterValue = (table.getState().globalFilter as string) ?? ""
+
   const [searchInput, setSearchInput] = useState(currentFilterValue)
 
   // Mantiene el input sincronizado cuando el filtro cambia externamente (reset table, presets, etc.)
@@ -57,12 +60,14 @@ export function DataTableToolbar<TData>({
   // Debounce en la búsqueda — evita ejecutar el filtro en cada pulsación de tecla
   useEffect(() => {
     const timer = setTimeout(() => {
-      table.getColumn(filterColumn)?.setFilterValue(searchInput || undefined)
+      table.setGlobalFilter(searchInput || undefined)
     }, searchDebounceMs)
     return () => clearTimeout(timer)
-  }, [searchInput, filterColumn, table, searchDebounceMs])
+  }, [searchInput, table, searchDebounceMs])
 
-  const isFiltered = table.getState().columnFilters.length > 0
+  const hasSearchFilter = Boolean((table.getState().globalFilter as string)?.trim())
+
+  const isFiltered = table.getState().columnFilters.length > 0 || hasSearchFilter
   const isSorted = table.getState().sorting.length > 0
   const activeFiltersCount = table.getState().columnFilters.length
   const hasFiltersList = (facetedFilters && facetedFilters.length > 0) || intervalFilter
@@ -70,7 +75,7 @@ export function DataTableToolbar<TData>({
 
   return (
     <div className="flex items-center gap-2">
-      {table.getColumn(filterColumn) && (
+      {hasSearchTarget && (
         <InputGroup className="max-w-xs shrink-0">
           <InputGroupAddon>
             <SearchIcon />
@@ -208,7 +213,15 @@ export function DataTableToolbar<TData>({
       </div>
 
       {isFiltered && (
-        <Button variant="ghost" size="sm" onClick={() => { table.resetColumnFilters(); setSearchInput("") }}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            table.resetColumnFilters()
+            table.setGlobalFilter(undefined)
+            setSearchInput("")
+          }}
+        >
           Reset <X data-icon="inline-end" />
         </Button>
       )}

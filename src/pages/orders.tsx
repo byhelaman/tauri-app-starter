@@ -151,7 +151,6 @@ export function OrdersPage() {
         data={orders}
         tableId="orders"
         toolbar={{
-          filterColumn: "customer",
           filterPlaceholder: "Search...",
           facetedFilters: [
             { columnId: "status", title: "Status", options: STATUS_FILTER_OPTIONS },
@@ -221,7 +220,6 @@ export function OrdersPage() {
               data={queueOrders}
               tableId="orders-queue"
               toolbar={{
-                filterColumn: "customer",
                 filterPlaceholder: "Search queue...",
                 facetedFilters: [
                   { columnId: "status", title: "Status", options: QUEUE_STATUS_FILTER_OPTIONS },

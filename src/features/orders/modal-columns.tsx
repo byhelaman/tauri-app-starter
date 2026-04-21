@@ -55,6 +55,7 @@ export function createQueueColumns(
     },
     {
       accessorKey: "code",
+      enableGlobalFilter: true,
       minSize: 120,
       maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Code" className="justify-center" />,
@@ -62,6 +63,7 @@ export function createQueueColumns(
     },
     {
       accessorKey: "customer",
+      enableGlobalFilter: true,
       minSize: 120,
       maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Customer" />,
@@ -69,6 +71,7 @@ export function createQueueColumns(
     },
     {
       accessorKey: "status",
+      enableGlobalFilter: true,
       minSize: 120,
       maxSize: 180,
       header: "Status",
@@ -95,6 +98,7 @@ export function createQueueColumns(
     },
     {
       accessorKey: "channel",
+      enableGlobalFilter: true,
       minSize: 120,
       maxSize: 180,
       header: "Channel",
@@ -103,6 +107,7 @@ export function createQueueColumns(
     },
     {
       accessorKey: "agent",
+      enableGlobalFilter: true,
       minSize: 120,
       maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Assigned" />,
