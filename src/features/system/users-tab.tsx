@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useDeferredValue, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { MoreHorizontalIcon, SearchIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -67,11 +67,13 @@ export function UsersTab({ users, roles, actorLevel, onUpdateRole, onUpdateDispl
     // Deriva el usuario del diálogo desde el array vivo para reflejar cambios optimistas.
     const profileUserLive = profileUser ? (users.find(u => u.id === profileUser.id) ?? null) : null
 
-    const filtered = users.filter(
+    const deferredSearch = useDeferredValue(search)
+
+    const filtered = useMemo(() => users.filter(
         (u) =>
-            u.displayName.toLowerCase().includes(search.toLowerCase()) ||
-            u.email.toLowerCase().includes(search.toLowerCase())
-    )
+            u.displayName.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+            u.email.toLowerCase().includes(deferredSearch.toLowerCase())
+    ), [users, deferredSearch])
 
     async function handleRoleChange(userId: string, role: string) {
         setRoleBusy(true)

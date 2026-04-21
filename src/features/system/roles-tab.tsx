@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useDeferredValue, useMemo, useState } from "react"
 import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -271,11 +271,13 @@ export function RolesTab({
     const [removeTarget, setRemoveTarget] = useState<RoleDefinition | null>(null)
     const [busy, setBusy] = useState(false)
 
-    const filtered = roles.filter(
+    const deferredSearch = useDeferredValue(search)
+
+    const filtered = useMemo(() => roles.filter(
         (r) =>
-            r.name.toLowerCase().includes(search.toLowerCase()) ||
-            r.description.toLowerCase().includes(search.toLowerCase())
-    )
+            r.name.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+            r.description.toLowerCase().includes(deferredSearch.toLowerCase())
+    ), [roles, deferredSearch])
 
     async function togglePermission(role: string, permission: string) {
         const enabled = !(matrix[role]?.[permission] ?? false)

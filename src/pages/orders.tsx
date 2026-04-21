@@ -317,8 +317,8 @@ export function OrdersPage() {
               variant="destructive"
               onClick={() => {
                 if (!bulkDeleteTarget) return
-                const codes = bulkDeleteTarget.selected.map((o) => o.code)
-                setOrders((prev) => prev.filter((o) => !codes.includes(o.code)))
+                const codes = new Set(bulkDeleteTarget.selected.map((o) => o.code))
+                setOrders((prev) => prev.filter((o) => !codes.has(o.code)))
                 toast.success(`${bulkDeleteTarget.selected.length} orders deleted`)
                 bulkDeleteTarget.clearSelection()
                 setBulkDeleteTarget(null)

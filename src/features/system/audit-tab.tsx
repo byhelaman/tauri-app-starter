@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useDeferredValue, useMemo, useState } from "react"
 import { SearchIcon } from "lucide-react"
 import {
   Item,
@@ -45,11 +45,13 @@ interface AuditTabProps {
 export function AuditTab({ entries }: AuditTabProps) {
   const [search, setSearch] = useState("")
 
-  const filtered = entries.filter(
+  const deferredSearch = useDeferredValue(search)
+
+  const filtered = useMemo(() => entries.filter(
     (e) =>
-      e.description.toLowerCase().includes(search.toLowerCase()) ||
-      e.actorEmail.toLowerCase().includes(search.toLowerCase())
-  )
+      e.description.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+      e.actorEmail.toLowerCase().includes(deferredSearch.toLowerCase())
+  ), [entries, deferredSearch])
 
   return (
     <div className="flex flex-col gap-3">
