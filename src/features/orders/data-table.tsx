@@ -182,11 +182,14 @@ export function DataTable<TData, TValue>({
   })
 
   const cellPadding = 8 // p-2
-  const leftPinnedWidth = (table.getState().columnPinning.left ?? [])
+  const { left: leftPinned = [], right: rightPinned = [] } = table.getState().columnPinning
+  const leftPinnedWidth = leftPinned
     .reduce((sum, id) => sum + (table.getColumn(id)?.getSize() ?? 0), 0) + cellPadding
-  const rightPinnedWidth = (table.getState().columnPinning.right ?? [])
+  const rightPinnedWidth = rightPinned
     .reduce((sum, id) => sum + (table.getColumn(id)?.getSize() ?? 0), 0) + cellPadding
-  const headerHeight = 40 + cellPadding // h-10 sticky header
+  const headerHeight = 2.5 * 16 + cellPadding // h-10 (2.5rem) sticky header
+  const leftEdgeId = [...leftPinned].reverse().find(id => table.getColumn(id)?.getCanPin())
+  const rightEdgeId = [...rightPinned].reverse().find(id => table.getColumn(id)?.getCanPin())
 
   return (
     <div className={cn("relative flex flex-col gap-4", resolvedFitHeight && "h-full min-h-0", className)}>
@@ -208,11 +211,7 @@ export function DataTable<TData, TValue>({
       >
         <Table containerClassName="overflow-visible">
           <TableHeader className={cn("sticky top-0 z-10 bg-background", resolvedTableHeaderClassName)}>
-            {table.getHeaderGroups().map((headerGroup) => {
-              const { left: leftPinned = [], right: rightPinned = [] } = table.getState().columnPinning
-              const leftEdgeId = [...leftPinned].reverse().find(id => table.getColumn(id)?.getCanPin())
-              const rightEdgeId = [...rightPinned].reverse().find(id => table.getColumn(id)?.getCanPin())
-              return (
+            {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="group">
                 {headerGroup.headers.map((header) => {
                   const pin = header.column.getIsPinned()
@@ -246,8 +245,7 @@ export function DataTable<TData, TValue>({
                   )
                 })}
               </TableRow>
-              )
-            })}
+            ))}
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows?.length ? (
@@ -260,9 +258,6 @@ export function DataTable<TData, TValue>({
                   >
                     {row.getVisibleCells().map((cell) => {
                       const pin = cell.column.getIsPinned()
-                      const { left: leftPinned = [], right: rightPinned = [] } = table.getState().columnPinning
-                      const leftEdgeId = [...leftPinned].reverse().find(id => table.getColumn(id)?.getCanPin())
-                      const rightEdgeId = [...rightPinned].reverse().find(id => table.getColumn(id)?.getCanPin())
                       const isFirst = pin === "left" && cell.column.getStart("left") === 0
                       const isEdge = pin === "left"
                         ? cell.column.id === leftEdgeId

@@ -20,7 +20,6 @@ export function DataTableColumnHeader<TData, TValue>({
   const sorted = column.getIsSorted()
   const canSort = column.getCanSort()
   const canPin = column.getCanPin()
-  const pinState = column.getIsPinned()
 
   function handleSortToggle() {
     if (!canSort) return
@@ -55,7 +54,6 @@ export function DataTableColumnHeader<TData, TValue>({
           <Button
             variant="ghost"
             className="-ml-0.5"
-            // className={cn("ml-0", pinState && "-ml-3")}
             onClick={handleSortToggle}
           >
             <span>{title}</span>
@@ -82,7 +80,6 @@ export function DataTableColumnHeader<TData, TValue>({
             </ContextMenuItem>
             <ContextMenuItem onSelect={() => setSort("none")}>
               <ArrowUpDown data-icon="inline-start" />
-              {/* <PinOffIcon data-icon="inline-start" /> */}
               Clear sorting
             </ContextMenuItem>
           </>
@@ -100,7 +97,7 @@ export function DataTableColumnHeader<TData, TValue>({
               <PinIcon data-icon="inline-start" />
               Pin right
             </ContextMenuItem>
-            <ContextMenuItem onSelect={() => column.pin(false)} disabled={!pinState}>
+            <ContextMenuItem onSelect={() => column.pin(false)} disabled={!column.getIsPinned()}>
               <PinOffIcon data-icon="inline-start" />
               Unpin
             </ContextMenuItem>

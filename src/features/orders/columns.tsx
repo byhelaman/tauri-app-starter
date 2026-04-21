@@ -70,7 +70,7 @@ export function createColumns(
     },
     {
       accessorKey: "date",
-      minSize: 120,
+      minSize: 124,
       maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Date" className="justify-center" />,
       cell: ({ row }) => renderReadOnlyCell(row.getValue("date") as string),
