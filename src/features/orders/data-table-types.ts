@@ -34,6 +34,4 @@ export interface DataTableLayoutConfig {
   fitHeight?: boolean
   scrollAreaClassName?: string
   tableHeaderClassName?: string
-  tableBgClassName?: string
-  tableBgHoverClassName?: string
 }

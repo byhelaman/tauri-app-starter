@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/context-menu"
 import { ToggleActionButtons } from "@/components/toggle-action-buttons"
 import { PageHeader } from "@/components/page-header"
-import { useTableHighlights } from "@/features/orders/table-highlights"
+import { useQueueHighlights, useTableHighlights } from "@/features/orders/table-highlights"
 import { Button } from "@/components/ui/button"
 import {
   AlertDialog,
@@ -84,6 +84,7 @@ export function OrdersPage() {
   const [tableModalOpen, setTableModalOpen] = useState(false)
 
   const { toolbarActions, rowClassName } = useTableHighlights()
+  const { toolbarActions: queueToolbarActions, rowClassName: queueRowClassName } = useQueueHighlights()
 
   const handleDeleteRequest = useCallback((order: Order) => {
     setRowDeleteTarget(order)
@@ -232,22 +233,26 @@ export function OrdersPage() {
                   const priorityOnly = priorityColumn.getFilterValue() === true
 
                   return (
-                    <ToggleActionButtons
-                      items={[
-                        {
-                          id: "priority-only",
-                          label: "Priority",
-                          icon: Clock,
-                          theme: "red",
-                          active: priorityOnly,
-                          onToggle: () => priorityColumn.setFilterValue(priorityOnly ? undefined : true),
-                        },
-                      ]}
-                    />
+                    <>
+                      <ToggleActionButtons
+                        items={[
+                          {
+                            id: "priority-only",
+                            label: "Priority",
+                            icon: Clock,
+                            theme: "red",
+                            active: priorityOnly,
+                            onToggle: () => priorityColumn.setFilterValue(priorityOnly ? undefined : true),
+                          },
+                        ]}
+                      />
+                      {queueToolbarActions}
+                    </>
                   )
                 },
                 searchDebounceMs: 300,
               }}
+              rowClassName={queueRowClassName}
               rowContextMenu={(order) => (
                 <>
                   <ContextMenuItem onSelect={() => copyQueueCode(order)}>Copy code</ContextMenuItem>
@@ -262,9 +267,7 @@ export function OrdersPage() {
               )}
               defaultPageSize={25}
               layout={{
-                scrollAreaClassName: "max-h-[min(calc(100svh-22rem),30rem)]",
-                tableBgClassName: "bg-popover",
-                tableBgHoverClassName: "group-hover:bg-[color-mix(in_oklch,var(--color-muted)_50%,var(--color-popover))]",
+                scrollAreaClassName: "max-h-[min(calc(100svh-22rem),30rem)] [--table-bg:var(--color-popover)]",
               }}
             />
           </DialogBody>

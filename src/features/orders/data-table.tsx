@@ -131,8 +131,6 @@ export function DataTable<TData, TValue>({
   const fitHeight = layout?.fitHeight ?? false
   const scrollAreaClassName = layout?.scrollAreaClassName
   const tableHeaderClassName = layout?.tableHeaderClassName
-  const tableBgClassName = layout?.tableBgClassName ?? "bg-background"
-  const tableBgHoverClassName = layout?.tableBgHoverClassName ?? "group-hover:bg-[var(--highlight-bg-hover,var(--color-muted-hover))]"
 
   const table = useReactTable({
     data,
@@ -185,7 +183,7 @@ export function DataTable<TData, TValue>({
         style={{ scrollPadding: `${headerHeight}px ${rightPinnedWidth}px ${cellPadding}px ${leftPinnedWidth}px` }}
       >
         <Table containerClassName="overflow-visible">
-          <TableHeader className={cn("sticky top-0 z-10", tableBgClassName, tableHeaderClassName)}>
+          <TableHeader className={cn("sticky top-0 z-10 bg-[var(--table-bg,var(--color-background))]", tableHeaderClassName)}>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="group">
                 {headerGroup.headers.map((header) => {
@@ -201,7 +199,7 @@ export function DataTable<TData, TValue>({
                     key={header.id}
                     className={cn(
                       header.column.getIsPinned() &&
-                        cn(tableBgClassName, "transition-colors", tableBgHoverClassName),
+                        "bg-[var(--table-bg,var(--color-background))] transition-colors group-hover:bg-[color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))]",
                     )}
                     style={{
                       ...(header.column.getIsPinned() ? undefined : getColumnSizeStyle(header.column.columnDef)),
@@ -228,7 +226,7 @@ export function DataTable<TData, TValue>({
                 const rowEl = (
                   <TableRow 
                     key={row.id} 
-                    className={cn("group", rowClassName?.(row.original))}
+                    className={cn("group/row group", rowClassName?.(row.original))}
                     data-state={row.getIsSelected() && "selected"}
                   >
                     {row.getVisibleCells().map((cell) => {
@@ -244,7 +242,7 @@ export function DataTable<TData, TValue>({
                         key={cell.id}
                         className={cn(
                           cell.column.getIsPinned() &&
-                            cn(tableBgClassName, "transition-colors group-data-[state=selected]:bg-muted", tableBgHoverClassName),
+                            "border-b group-last/row:border-b-0 bg-[var(--highlight-bg,var(--table-bg,var(--color-background)))] transition-colors group-hover:bg-[var(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background))))] group-data-[state=selected]:bg-muted",
                         )}
                         style={{
                           ...(cell.column.getIsPinned() ? undefined : getColumnSizeStyle(cell.column.columnDef)),
