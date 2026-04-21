@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Session, User } from "@supabase/supabase-js"
 import { z } from "zod"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
-import { chatHistoryKey } from "@/components/use-chat"
+import { chatHistoryKey } from "@/features/chat/use-chat"
 
 type AuthClaims = {
   userRole: string

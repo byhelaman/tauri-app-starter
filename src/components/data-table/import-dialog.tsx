@@ -58,9 +58,11 @@ type FormValues = z.infer<typeof schema>
 interface ImportDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  title?: string
+  description?: React.ReactNode
 }
 
-export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
+export function ImportDialog({ open, onOpenChange, title = "Import data", description }: ImportDialogProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
 
@@ -128,9 +130,9 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
         onInteractOutside={(event) => event.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>Import orders</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Drag and drop CSV or Excel files, or click to browse. Up to {MAX_FILES} files, 10 MB each.
+            {description ?? `Drag and drop CSV or Excel files, or click to browse. Up to ${MAX_FILES} files, 10 MB each.`}
           </DialogDescription>
         </DialogHeader>
 

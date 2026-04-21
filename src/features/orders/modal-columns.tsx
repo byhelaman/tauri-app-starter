@@ -17,8 +17,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { DataTableColumnHeader } from "./data-table-column-header"
-import { createSelectColumn, multiValueFilter, renderReadOnlyCell } from "./data-table-cells"
+import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header"
+import { createSelectColumn, multiValueFilter, renderReadOnlyCell } from "@/components/data-table/data-table-cells"
 
 export type QueueStatus = "queued" | "processing" | "ready" | "delivered"
 

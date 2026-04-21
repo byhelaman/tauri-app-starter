@@ -7,9 +7,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { DataTableColumnHeader } from "./data-table-column-header"
+import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header"
 import { DataTableRowActions } from "./data-table-row-actions"
-import { createSelectColumn, multiValueFilter, renderReadOnlyCell } from "./data-table-cells"
+import { createSelectColumn, multiValueFilter, renderReadOnlyCell } from "@/components/data-table/data-table-cells"
 
 export type Status = "pending" | "processing" | "shipped" | "delivered" | "cancelled"
 

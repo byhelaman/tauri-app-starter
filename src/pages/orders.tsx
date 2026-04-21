@@ -20,10 +20,10 @@ import {
   type Status,
 } from "@/features/orders/columns"
 import { INITIAL_ORDERS } from "@/mocks/orders"
-import { DataTable } from "@/features/orders/data-table"
-import type { FacetedFilterOption } from "@/features/orders/data-table-types"
-import { ImportDialog } from "@/features/orders/import-dialog"
-import { buildBulkCopyText } from "@/features/orders/bulk-copy"
+import { DataTable } from "@/components/data-table/data-table"
+import type { FacetedFilterOption } from "@/components/data-table/data-table-types"
+import { ImportDialog } from "@/components/data-table/import-dialog"
+import { buildBulkCopyText } from "@/components/data-table/bulk-copy"
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -210,7 +210,7 @@ export function OrdersPage() {
           </div>
         }
       />
-      <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
+      <ImportDialog open={importOpen} onOpenChange={setImportOpen} title="Import orders" />
       <DataTable
         columns={columns}
         data={orders}

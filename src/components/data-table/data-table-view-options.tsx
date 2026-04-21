@@ -102,7 +102,7 @@ export function DataTableViewOptions<TData>({ table, tableId }: DataTableViewOpt
     const rows = getScopeRows(table, effectiveScope)
     const content = formatRows(table, rows, format, true)
     const meta = FORMAT_META[format]
-    const ok = await saveFile(content, `orders-${effectiveScope}.${meta.ext}`, meta.mime, meta.ext)
+    const ok = await saveFile(content, `${tableId}-${effectiveScope}.${meta.ext}`, meta.mime, meta.ext)
     if (ok) toast.success(`Exported ${rows.length} rows as ${meta.label}`)
   }
 
