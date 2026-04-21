@@ -13,7 +13,12 @@ import {
   Upload,
   XCircle,
 } from "lucide-react"
-import { createColumns, type Order, type Status } from "@/features/orders/columns"
+import {
+  createColumns,
+  type EditableOrderField,
+  type Order,
+  type Status,
+} from "@/features/orders/columns"
 import { INITIAL_ORDERS } from "@/mocks/orders"
 import { DataTable } from "@/features/orders/data-table"
 import type { FacetedFilterOption } from "@/features/orders/data-table-types"
@@ -76,7 +81,12 @@ const QUEUE_STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
 ]
 
 export function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS)
+  const [orders, setOrders] = useState<Order[]>(() => (
+    INITIAL_ORDERS.map((order, index) => ({
+      ...order,
+      id: order.id ?? `${order.code}-${index + 1}`,
+    }))
+  ))
   const [queueOrders, setQueueOrders] = useState<QueueOrder[]>(INITIAL_QUEUE_ORDERS)
   const [bulkDeleteTarget, setBulkDeleteTarget] = useState<{ selected: Order[], clearSelection: () => void } | null>(null)
   const [rowDeleteTarget, setRowDeleteTarget] = useState<Order | null>(null)
@@ -90,17 +100,69 @@ export function OrdersPage() {
     setRowDeleteTarget(order)
   }, [])
 
-  const handleStatusChange = useCallback((code: string, status: Status) => {
-    setOrders((prev) => prev.map((o) => o.code === code ? { ...o, status } : o))
+  const updateOrderById = useCallback((orderId: string, updater: (order: Order) => Order) => {
+    setOrders((prev) => {
+      const index = prev.findIndex((order) => (order.id ?? order.code) === orderId)
+      if (index === -1) return prev
+
+      const current = prev[index]
+      const updated = updater(current)
+      if (updated === current) return prev
+
+      const next = [...prev]
+      next[index] = updated
+      return next
+    })
   }, [])
+
+  const handleStatusChange = useCallback((orderId: string, status: Status) => {
+    updateOrderById(orderId, (order) => ({ ...order, status }))
+  }, [updateOrderById])
+
+  const handleCellChange = useCallback((orderId: string, field: EditableOrderField, value: string, isValid: boolean) => {
+    updateOrderById(orderId, (order) => {
+      switch (field) {
+        case "date":
+          return { ...order, date: value }
+        case "customer":
+          return { ...order, customer: value }
+        case "product":
+          return { ...order, product: value }
+        case "category":
+          return { ...order, category: value }
+        case "time":
+          return { ...order, time: value }
+        case "code":
+          return { ...order, code: value }
+        case "channel":
+          return { ...order, channel: value }
+        case "quantity": {
+          const normalized = value.trim()
+          return {
+            ...order,
+            quantity: isValid ? Number.parseInt(normalized, 10) : value,
+          }
+        }
+        default:
+          return order
+      }
+    })
+  }, [updateOrderById])
 
   const copyCode = useCallback((order: Order) => {
     navigator.clipboard.writeText(order.code)
     toast.success("Order code copied")
   }, [])
 
-  const handleDelete = useCallback((code: string) => {
-    setOrders((prev) => prev.filter((o) => o.code !== code))
+  const handleDelete = useCallback((orderId: string) => {
+    setOrders((prev) => {
+      const index = prev.findIndex((order) => (order.id ?? order.code) === orderId)
+      if (index === -1) return prev
+
+      const next = [...prev]
+      next.splice(index, 1)
+      return next
+    })
   }, [])
 
   const handleQueueStatusChange = useCallback((code: string, status: QueueStatus) => {
@@ -121,7 +183,10 @@ export function OrdersPage() {
     toast.success("Order code copied")
   }, [])
 
-  const columns = useMemo(() => createColumns(handleDelete, handleStatusChange), [handleDelete, handleStatusChange])
+  const columns = useMemo(
+    () => createColumns(handleDelete, handleStatusChange, handleCellChange),
+    [handleCellChange, handleDelete, handleStatusChange]
+  )
   const queueColumns = useMemo(
     () => createQueueColumns(handleQueueStatusChange, handleQueuePriorityToggle, handleQueueRemove),
     [handleQueuePriorityToggle, handleQueueRemove, handleQueueStatusChange]
@@ -290,7 +355,8 @@ export function OrdersPage() {
               variant="destructive"
               onClick={() => {
                 if (!rowDeleteTarget) return
-                setOrders((prev) => prev.filter((o) => o.code !== rowDeleteTarget.code))
+                const rowId = rowDeleteTarget.id ?? rowDeleteTarget.code
+                setOrders((prev) => prev.filter((order) => (order.id ?? order.code) !== rowId))
                 toast.success("Order deleted")
                 setRowDeleteTarget(null)
               }}
@@ -318,8 +384,8 @@ export function OrdersPage() {
               variant="destructive"
               onClick={() => {
                 if (!bulkDeleteTarget) return
-                const codes = new Set(bulkDeleteTarget.selected.map((o) => o.code))
-                setOrders((prev) => prev.filter((o) => !codes.has(o.code)))
+                const ids = new Set(bulkDeleteTarget.selected.map((order) => order.id ?? order.code))
+                setOrders((prev) => prev.filter((order) => !ids.has(order.id ?? order.code)))
                 toast.success(`${bulkDeleteTarget.selected.length} orders deleted`)
                 bulkDeleteTarget.clearSelection()
                 setBulkDeleteTarget(null)

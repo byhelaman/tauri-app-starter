@@ -23,7 +23,7 @@ import type { Order } from "./columns"
 
 interface DataTableRowActionsProps {
   order: Order
-  onDelete: (code: string) => void
+  onDelete: (orderId: string) => void
 }
 
 export function DataTableRowActions({ order, onDelete }: DataTableRowActionsProps) {
@@ -67,7 +67,7 @@ export function DataTableRowActions({ order, onDelete }: DataTableRowActionsProp
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction variant="destructive"
               onClick={() => {
-                onDelete(order.code)
+                onDelete(order.id ?? order.code)
                 toast.success("Order deleted")
               }}
             >

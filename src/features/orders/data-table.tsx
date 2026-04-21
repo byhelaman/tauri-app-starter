@@ -190,6 +190,7 @@ export function DataTable<TData, TValue>({
     onColumnPinningChange: setColumnPinning,
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
+    autoResetPageIndex: false,
     initialState: { pagination: { pageSize: defaultPageSize } },
     state: { sorting, columnFilters, globalFilter, columnPinning, columnVisibility, rowSelection },
   })

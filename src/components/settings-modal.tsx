@@ -56,7 +56,7 @@ function SettingRow({
   onCheckedChange: (checked: boolean) => void
 }) {
   return (
-    <Field orientation="horizontal">
+    <Field orientation="horizontal" className="items-center!">
       <FieldContent>
         <FieldLabel htmlFor={id}>{label}</FieldLabel>
         {description && <FieldDescription>{description}</FieldDescription>}
@@ -204,14 +204,14 @@ export function SettingsModal({ open, onOpenChange, settings, onSettingsChange }
             <TabsContent value="application">
               <div className="flex flex-col gap-4">
                 <FieldGroup>
-                  <Field orientation="horizontal">
+                  <Field orientation="horizontal" className="items-center!">
                     <FieldContent>
                       <FieldLabel>Auto-update</FieldLabel>
                       <FieldDescription>Download and install updates automatically</FieldDescription>
                     </FieldContent>
                     <Switch id="auto-update" checked={settings.autoUpdate} onCheckedChange={() => toggle("autoUpdate")} />
                   </Field>
-                  <Field orientation="horizontal">
+                  <Field orientation="horizontal" className="items-center!">
                     <FieldContent>
                       <FieldLabel>Check for updates</FieldLabel>
                       <FieldDescription>Look for a newer version right now</FieldDescription>
@@ -228,8 +228,8 @@ export function SettingsModal({ open, onOpenChange, settings, onSettingsChange }
                   </Button>
                 )}
 
-<FieldGroup>
-                  <Field orientation="horizontal">
+                <FieldGroup>
+                  <Field orientation="horizontal" className="items-center!">
                     <FieldContent>
                       <FieldLabel>Reset to defaults</FieldLabel>
                       <FieldDescription>Clear local data and reset app settings.</FieldDescription>

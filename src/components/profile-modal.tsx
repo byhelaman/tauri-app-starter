@@ -214,9 +214,9 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
                   </Select>
                 </Field>
                 <Separator />
-                <Field orientation="horizontal">
+                <Field orientation="horizontal" className="items-center!">
                   <FieldContent>
-                      <FieldLabel>Reset preferences</FieldLabel>
+                    <FieldLabel>Reset preferences</FieldLabel>
                     <FieldDescription>Reset preferences to their default values.</FieldDescription>
                   </FieldContent>
                   <AlertDialog>
@@ -244,7 +244,7 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
             {/* Security */}
             <TabsContent value="security">
               <FieldGroup>
-                <Field orientation="horizontal">
+                <Field orientation="horizontal" className="items-center!">
                   <FieldContent>
                     <FieldLabel htmlFor="2fa">Two-factor authentication</FieldLabel>
                     <FieldDescription>
@@ -261,7 +261,7 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
                   />
                 </Field>
 
-                <Field orientation="horizontal">
+                <Field orientation="horizontal" className="items-center!">
                   <FieldContent>
                     <FieldLabel htmlFor="sessions">Active sessions</FieldLabel>
                     <FieldDescription>

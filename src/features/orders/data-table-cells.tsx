@@ -1,3 +1,4 @@
+import { useState } from "react"
 import type { ColumnDef, FilterFn } from "@tanstack/react-table"
 import { cn } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -5,8 +6,75 @@ import { Input } from "@/components/ui/input"
 
 export const cellInputClass = "border-transparent bg-transparent shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background/30 dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-background/30 text-left"
 
-export function renderReadOnlyCell(value: string | number, className?: string) {
-  return <Input readOnly defaultValue={value} className={cn(cellInputClass, className)} />
+export interface InlineEditableCellOptions {
+  className?: string
+  enableEditing?: boolean
+  validate?: (value: string) => boolean
+  onCommit?: (value: string, isValid: boolean) => void
+}
+
+function normalizeCellOptions(classNameOrOptions?: string | InlineEditableCellOptions): InlineEditableCellOptions {
+  if (typeof classNameOrOptions === "string") {
+    return { className: classNameOrOptions }
+  }
+  return classNameOrOptions ?? {}
+}
+
+function InlineEditableCell({
+  value,
+  className,
+  enableEditing = false,
+  validate,
+  onCommit,
+}: {
+  value: string | number
+} & InlineEditableCellOptions) {
+  const nextValue = String(value ?? "")
+
+  const [hasError, setHasError] = useState(false)
+  const [wasBlurred, setWasBlurred] = useState(false)
+
+  function handleBlur(currentValue: string) {
+    if (!enableEditing) {
+      return
+    }
+
+    setWasBlurred(true)
+
+    const isValid = validate ? validate(currentValue) : true
+    setHasError(!isValid)
+
+    if (currentValue !== nextValue) {
+      onCommit?.(currentValue, isValid)
+    }
+  }
+
+  return (
+    <Input
+      key={nextValue}
+      readOnly={!enableEditing}
+      defaultValue={nextValue}
+      onBlur={(event) => {
+        handleBlur(event.currentTarget.value)
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.currentTarget.blur()
+        }
+      }}
+      aria-invalid={(wasBlurred && hasError) || undefined}
+      className={cn(
+        cellInputClass,
+        !enableEditing && "cursor-default hover:bg-transparent focus-visible:bg-transparent",
+        className
+      )}
+    />
+  )
+}
+
+export function renderReadOnlyCell(value: string | number, classNameOrOptions?: string | InlineEditableCellOptions) {
+  const options = normalizeCellOptions(classNameOrOptions)
+  return <InlineEditableCell value={value} {...options} />
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
