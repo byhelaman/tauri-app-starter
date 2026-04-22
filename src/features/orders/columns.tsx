@@ -7,6 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header"
 import { DataTableRowActions } from "./data-table-row-actions"
 import { createSelectColumn, multiValueFilter, renderCell } from "@/components/data-table/data-table-cells"
@@ -25,6 +26,9 @@ export interface Order {
   channel: string
   quantity: number | string
   amount: number
+  region: string
+  payment: string
+  priority: string
 }
 
 export type EditableOrderField =
@@ -36,6 +40,9 @@ export type EditableOrderField =
   | "code"
   | "channel"
   | "quantity"
+  | "region"
+  | "payment"
+  | "priority"
 
 const STATUSES: Status[] = ["pending", "processing", "shipped", "delivered", "cancelled"]
 const CHANNELS = ["Online", "Retail", "Partner", "Phone"] as const
@@ -165,6 +172,48 @@ export function createColumns(
         validate: (value) => CHANNELS.includes(value.trim() as (typeof CHANNELS)[number]),
         onCommit: (value, isValid) => onCellChange(row.original.id ?? row.original.code, "channel", value, isValid),
       }),
+    },
+    {
+      accessorKey: "region",
+      enableGlobalFilter: true,
+      minSize: 120,
+      maxSize: 180,
+      header: "Region",
+      filterFn: multiValueFilter,
+      cell: ({ row }) => renderCell(row.getValue("region") as string, {
+        enableEditing: true,
+        validate: isRequiredText,
+        onCommit: (value, isValid) => onCellChange(row.original.id ?? row.original.code, "region", value, isValid),
+      }),
+    },
+    {
+      accessorKey: "payment",
+      enableGlobalFilter: true,
+      minSize: 130,
+      maxSize: 180,
+      header: "Payment",
+      filterFn: multiValueFilter,
+      cell: ({ row }) => renderCell(row.getValue("payment") as string, {
+        enableEditing: true,
+        validate: isRequiredText,
+        onCommit: (value, isValid) => onCellChange(row.original.id ?? row.original.code, "payment", value, isValid),
+      }),
+    },
+    {
+      accessorKey: "priority",
+      enableGlobalFilter: true,
+      minSize: 100,
+      maxSize: 150,
+      header: "Priority",
+      filterFn: multiValueFilter,
+      cell: ({ row }) => {
+        const priority = row.getValue("priority") as string
+        return (
+          <Badge variant={priority === "High" ? "destructive" : "secondary"}>
+            {priority}
+          </Badge>
+        )
+      },
     },
     {
       accessorKey: "quantity",
