@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header"
-import { createSelectColumn, multiValueFilter, renderReadOnlyCell } from "@/components/data-table/data-table-cells"
+import { createSelectColumn, multiValueFilter, renderCell } from "@/components/data-table/data-table-cells"
 
 export type QueueStatus = "queued" | "processing" | "ready" | "delivered"
 
@@ -51,7 +51,7 @@ export function createQueueColumns(
       minSize: 140,
       maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Time" className="justify-center" />,
-      cell: ({ row }) => renderReadOnlyCell(row.getValue("time") as string),
+      cell: ({ row }) => renderCell(row.getValue("time") as string),
     },
     {
       accessorKey: "code",
@@ -59,7 +59,7 @@ export function createQueueColumns(
       minSize: 120,
       maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Code" className="justify-center" />,
-      cell: ({ row }) => renderReadOnlyCell(row.getValue("code") as string, "font-mono"),
+      cell: ({ row }) => renderCell(row.getValue("code") as string, "font-mono"),
     },
     {
       accessorKey: "customer",
@@ -67,7 +67,7 @@ export function createQueueColumns(
       minSize: 120,
       maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Customer" />,
-      cell: ({ row }) => renderReadOnlyCell(row.getValue("customer") as string),
+      cell: ({ row }) => renderCell(row.getValue("customer") as string),
     },
     {
       accessorKey: "status",
@@ -103,7 +103,7 @@ export function createQueueColumns(
       maxSize: 180,
       header: "Channel",
       filterFn: multiValueFilter,
-      cell: ({ row }) => renderReadOnlyCell(row.getValue("channel") as string),
+      cell: ({ row }) => renderCell(row.getValue("channel") as string),
     },
     {
       accessorKey: "agent",
@@ -111,7 +111,7 @@ export function createQueueColumns(
       minSize: 120,
       maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Assigned" />,
-      cell: ({ row }) => renderReadOnlyCell(row.getValue("agent") as string),
+      cell: ({ row }) => renderCell(row.getValue("agent") as string),
     },
     {
       accessorKey: "priority",

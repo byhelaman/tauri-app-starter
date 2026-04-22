@@ -1,10 +1,9 @@
-import { useState } from "react"
+import { useState, useRef } from "react"
 import type { ColumnDef, FilterFn } from "@tanstack/react-table"
 import { cn } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 
-export const cellInputClass = "border-transparent bg-transparent shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background/30 dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-background/30 text-left"
 
 export interface InlineEditableCellOptions {
   className?: string
@@ -20,6 +19,29 @@ function normalizeCellOptions(classNameOrOptions?: string | InlineEditableCellOp
   return classNameOrOptions ?? {}
 }
 
+function moveFocus(element: HTMLElement, direction: "up" | "down" | "left" | "right") {
+  const td = element.closest("td")
+  const tr = td?.closest("tr")
+  if (!td || !tr) return
+
+  let targetTd: Element | null | undefined = null
+
+  if (direction === "up") {
+    targetTd = tr.previousElementSibling?.children[td.cellIndex]
+  } else if (direction === "down") {
+    targetTd = tr.nextElementSibling?.children[td.cellIndex]
+  } else if (direction === "left") {
+    targetTd = td.previousElementSibling
+  } else if (direction === "right") {
+    targetTd = td.nextElementSibling
+  }
+
+  if (targetTd) {
+    const focusable = targetTd.querySelector<HTMLElement>('[tabindex="0"], input, button')
+    focusable?.focus()
+  }
+}
+
 function InlineEditableCell({
   value,
   className,
@@ -31,48 +53,144 @@ function InlineEditableCell({
 } & InlineEditableCellOptions) {
   const nextValue = String(value ?? "")
 
+  const [isEditing, setIsEditing] = useState(false)
   const [hasError, setHasError] = useState(false)
   const [wasBlurred, setWasBlurred] = useState(false)
+  
+  const containerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  
+  const [initialEditValue, setInitialEditValue] = useState<string | null>(null)
 
-  function handleBlur(currentValue: string) {
+  function handleCommit(currentValue: string) {
     if (!enableEditing) {
+      setIsEditing(false)
       return
     }
 
     setWasBlurred(true)
-
     const isValid = validate ? validate(currentValue) : true
     setHasError(!isValid)
 
     if (currentValue !== nextValue) {
       onCommit?.(currentValue, isValid)
     }
+    setIsEditing(false)
+  }
+
+  function handleGridKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key.startsWith("Arrow")) {
+      e.preventDefault()
+      const direction = e.key.replace("Arrow", "").toLowerCase() as "up" | "down" | "left" | "right"
+      if (containerRef.current) moveFocus(containerRef.current, direction)
+      return
+    }
+
+    if ((e.ctrlKey || e.metaKey) && e.key === "c") {
+      navigator.clipboard.writeText(nextValue)
+      return
+    }
+
+    if (enableEditing && e.key === "Delete") {
+      e.preventDefault()
+      handleCommit("")
+      return
+    }
+
+    if (enableEditing && e.key === "Backspace") {
+      e.preventDefault()
+      setInitialEditValue("")
+      setIsEditing(true)
+      return
+    }
+
+    if (e.key === "Enter" || e.key === "F2") {
+      e.preventDefault()
+      setInitialEditValue(null)
+      setIsEditing(true)
+      return
+    }
+
+    if (enableEditing && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault()
+      setInitialEditValue(e.key)
+      setIsEditing(true)
+      return
+    }
+  }
+
+  if (!isEditing) {
+    return (
+      <div
+        ref={containerRef}
+        tabIndex={0}
+        onDoubleClick={() => {
+          setInitialEditValue(null)
+          setIsEditing(true)
+        }}
+        onKeyDown={handleGridKeyDown}
+        aria-invalid={(wasBlurred && hasError) || undefined}
+        className={cn(
+          "flex h-8 w-full min-w-0 items-center rounded-lg border border-transparent bg-transparent px-2.5 py-1 text-base transition-colors outline-none md:text-sm",
+          "hover:bg-input/30",
+          "focus:border-ring focus:ring-3 focus:ring-ring/50 focus:bg-background dark:focus:bg-input/30",
+          "aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
+          "focus:aria-invalid:border-ring focus:aria-invalid:ring-ring/50 dark:focus:aria-invalid:border-ring dark:focus:aria-invalid:ring-ring/50",
+          className
+        )}
+      >
+        <span className="truncate">{nextValue}</span>
+      </div>
+    )
   }
 
   return (
     <Input
-      key={nextValue}
+      ref={inputRef}
       readOnly={!enableEditing}
-      defaultValue={nextValue}
-      onBlur={(event) => {
-        handleBlur(event.currentTarget.value)
+      defaultValue={initialEditValue !== null ? initialEditValue : nextValue}
+      autoFocus
+      onBlur={(e) => {
+        if (enableEditing) {
+          handleCommit(e.currentTarget.value)
+        } else {
+          setIsEditing(false)
+        }
       }}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") {
-          event.currentTarget.blur()
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault()
+          const td = inputRef.current?.closest("td")
+          handleCommit(e.currentTarget.value)
+          
+          if (td) {
+            setTimeout(() => {
+              const tr = td.closest("tr")
+              const nextTd = tr?.nextElementSibling?.children[td.cellIndex]
+              const focusable = nextTd?.querySelector<HTMLElement>('[tabindex="0"], input, button')
+              if (focusable) focusable.focus()
+              else td.querySelector<HTMLElement>('[tabindex="0"]')?.focus()
+            }, 0)
+          }
+        } else if (e.key === "Escape") {
+          e.preventDefault()
+          const td = inputRef.current?.closest("td")
+          setIsEditing(false)
+          setTimeout(() => {
+            td?.querySelector<HTMLElement>('[tabindex="0"]')?.focus()
+          }, 0)
         }
       }}
       aria-invalid={(wasBlurred && hasError) || undefined}
       className={cn(
-        cellInputClass,
-        !enableEditing && "cursor-default hover:bg-transparent focus-visible:bg-transparent",
+        "min-w-full bg-background shadow-sm",
         className
       )}
     />
   )
 }
 
-export function renderReadOnlyCell(value: string | number, classNameOrOptions?: string | InlineEditableCellOptions) {
+export function renderCell(value: string | number, classNameOrOptions?: string | InlineEditableCellOptions) {
   const options = normalizeCellOptions(classNameOrOptions)
   return <InlineEditableCell value={value} {...options} />
 }
