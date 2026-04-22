@@ -11,6 +11,19 @@ export const handlers = [
     return HttpResponse.json(orders)
   }),
 
+  // Create an order
+  http.post("/api/orders", async ({ request }) => {
+    const newOrder = await request.json() as any
+    const order = {
+      id: `ORD-${Math.floor(Math.random() * 10000)}`,
+      status: "pending",
+      date: new Date().toISOString().split("T")[0],
+      ...newOrder,
+    }
+    orders.unshift(order)
+    return HttpResponse.json(order, { status: 201 })
+  }),
+
   // Patch an order
   http.patch("/api/orders/:id", async ({ request, params }) => {
     const { id } = params

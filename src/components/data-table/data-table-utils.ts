@@ -55,7 +55,6 @@ export function getPinnedColumnStyle<TData, TValue>(
     maxWidth: `${size}px`,
     left: pin === "left" ? `${offset}px` : undefined,
     right: pin === "right" ? `${offset}px` : undefined,
-    zIndex: isHeader ? 11 : 1,
     boxShadow: shadows,
   }
 }

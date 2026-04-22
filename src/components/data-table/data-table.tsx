@@ -173,7 +173,7 @@ export function DataTable<TData, TValue>({
         style={{ scrollPadding: `${headerHeight}px ${rightPinnedWidth}px ${cellPadding}px ${leftPinnedWidth}px` }}
       >
         <Table containerClassName="overflow-visible">
-          <TableHeader className={cn("sticky top-0 z-10 bg-(--table-bg,var(--color-background))", tableHeaderClassName)}>
+          <TableHeader className={cn("sticky top-0 z-50 bg-(--table-bg,var(--color-background))", tableHeaderClassName)}>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="group">
                 {headerGroup.headers.map((header) => {
@@ -189,7 +189,7 @@ export function DataTable<TData, TValue>({
                       key={header.id}
                       className={cn(
                         header.column.getIsPinned() &&
-                        "bg-(--table-bg,var(--color-background)) transition-colors group-hover:bg-[color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))]",
+                        "z-40 bg-(--table-bg,var(--color-background)) transition-colors group-hover:bg-[color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))]",
                       )}
                       style={{
                         ...(header.column.getIsPinned() ? undefined : getColumnSizeStyle(header.column.columnDef)),
@@ -239,7 +239,7 @@ export function DataTable<TData, TValue>({
                           key={cell.id}
                           className={cn(
                             cell.column.getIsPinned() &&
-                            "border-b group-last/row:border-b-0 bg-(--highlight-bg,var(--table-bg,var(--color-background))) transition-colors group-hover:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-data-[state=selected]:bg-muted",
+                            "relative z-10 group-hover/row:z-30 border-b group-last/row:border-b-0 bg-(--highlight-bg,var(--table-bg,var(--color-background))) transition-colors group-hover:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-has-aria-expanded:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-data-[state=selected]:bg-muted",
                           )}
                           style={{
                             ...(cell.column.getIsPinned() ? undefined : getColumnSizeStyle(cell.column.columnDef)),

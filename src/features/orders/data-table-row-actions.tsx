@@ -38,19 +38,28 @@ export function DataTableRowActions({ order, onDelete }: DataTableRowActionsProp
             <span className="sr-only">Open menu</span>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => {
-            navigator.clipboard.writeText(order.code)
-            toast.success("Order code copied")
-          }}>
-            Copy code
+        <DropdownMenuContent align="end" className="w-fit">
+          <DropdownMenuItem onClick={() => toast.info(`Viewing details for ${order.id}`)}>
+            View details
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => toast.info("Order editing coming soon")}>Edit order</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => toast.info(`Duplicating order ${order.id}`)}>
+            Duplicate order
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => {
+            navigator.clipboard.writeText(`https://tracking.com/${order.id}`)
+            toast.success("Tracking link copied")
+          }}>
+            Copy tracking link
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => toast.info(`Drafting email for ${order.customer}`)}>
+            Send email
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => setConfirmOpen(true)}
           >
-            Delete
+            Cancel order
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

@@ -36,7 +36,7 @@ export function DataTableSkeleton<TData>({
                 key={`skeleton-cell-${colId}-${i}`}
                 className={cn(
                   pinned &&
-                    "border-b group-last/row:border-b-0 bg-(--highlight-bg,var(--table-bg,var(--color-background))) transition-colors group-hover:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background))))",
+                  "z-10 border-b group-last/row:border-b-0 bg-(--highlight-bg,var(--table-bg,var(--color-background))) transition-colors group-hover:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-has-aria-expanded:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background))))",
                 )}
                 style={{
                   ...(pinned ? undefined : getColumnSizeStyle(header.column.columnDef)),

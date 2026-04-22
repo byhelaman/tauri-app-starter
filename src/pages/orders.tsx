@@ -9,6 +9,7 @@ import {
   ListTodo,
   LoaderCircle,
   Phone,
+  Plus,
   Store,
   Truck,
   Upload,
@@ -108,6 +109,7 @@ export function OrdersPage() {
   const [rowDeleteTarget, setRowDeleteTarget] = useState<Order | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [tableModalOpen, setTableModalOpen] = useState(false)
+  const [draftOrder, setDraftOrder] = useState<{ index: number, data: Partial<Order> } | null>(null)
 
   const { toolbarActions, rowClassName } = useTableHighlights()
   const { toolbarActions: queueToolbarActions, rowClassName: queueRowClassName } = useQueueHighlights()
@@ -140,6 +142,28 @@ export function OrdersPage() {
     },
   })
 
+  const createOrderMutation = useMutation({
+    mutationFn: async (newOrder: Partial<Order>) => {
+      // Remove temporary ID before sending to server
+      const { id, ...orderData } = newOrder
+      const res = await fetch(`/api/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(orderData),
+      })
+      if (!res.ok) throw new Error("Failed to create")
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["orders"] })
+      setDraftOrder(null)
+      toast.success("Order created successfully")
+    },
+    onError: () => {
+      toast.error("Failed to create order")
+    }
+  })
+
   const updateOrderById = useCallback((orderId: string, updater: (order: Order) => Order) => {
     const currentOrders = queryClient.getQueryData<Order[]>(["orders"]) || []
     const current = currentOrders.find((order) => order.id === orderId)
@@ -157,6 +181,18 @@ export function OrdersPage() {
   }, [updateOrderById])
 
   const handleCellChange = useCallback((orderId: string, field: EditableOrderField, value: string, isValid: boolean) => {
+    if (orderId === "draft") {
+      if (!draftOrder) return
+      
+      const updatedData = { ...draftOrder.data, [field]: value }
+      setDraftOrder({ ...draftOrder, data: updatedData })
+      
+      if (isValid) {
+        createOrderMutation.mutate(updatedData)
+      }
+      return
+    }
+
     updateOrderById(orderId, (order) => {
       switch (field) {
         case "date":
@@ -184,12 +220,7 @@ export function OrdersPage() {
           return order
       }
     })
-  }, [updateOrderById])
-
-  const copyCode = useCallback((order: Order) => {
-    navigator.clipboard.writeText(order.code)
-    toast.success("Order code copied")
-  }, [])
+  }, [updateOrderById, draftOrder, createOrderMutation])
 
   const deleteOrderMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -308,6 +339,13 @@ export function OrdersPage() {
     [handleQueuePriorityToggle, handleQueueRemove, handleQueueStatusChange]
   )
 
+  const tableData = useMemo(() => {
+    if (!draftOrder) return orders
+    const copy = [...orders]
+    copy.splice(draftOrder.index, 0, draftOrder.data as Order)
+    return copy
+  }, [draftOrder, orders])
+
   return (
     <main className="h-full overflow-hidden flex flex-col p-6 gap-6">
       <PageHeader
@@ -329,8 +367,8 @@ export function OrdersPage() {
       <ImportDialog open={importOpen} onOpenChange={setImportOpen} title="Import orders" />
       <DataTable
         columns={columns}
-        data={orders}
-        isLoading={isOrdersLoading}
+        data={tableData}
+        isLoading={isOrdersLoading && !draftOrder}
         tableId="orders"
         toolbar={{
           searchable: true,
@@ -343,16 +381,48 @@ export function OrdersPage() {
           actions: toolbarActions,
           searchDebounceMs: 300,
         }}
-        rowContextMenu={(order) => (
-          <>
-            <ContextMenuItem onSelect={() => copyCode(order)}>Copy code</ContextMenuItem>
-            <ContextMenuItem onSelect={() => toast.info("Order editing coming soon")}>Edit order</ContextMenuItem>
-            <ContextMenuSeparator />
-            <ContextMenuItem onSelect={() => handleDeleteRequest(order)}>
-              Delete
-            </ContextMenuItem>
-          </>
-        )}
+        rowContextMenu={(order) => {
+          const rowIndex = orders.findIndex((o) => o.id === order.id)
+          return (
+            <>
+              <ContextMenuItem onSelect={() => setDraftOrder({
+                index: Math.max(0, rowIndex),
+                data: { id: "draft", customer: "", product: "", status: "pending", channel: "Online", code: "DRAFT" }
+              })}>
+                Insert row above
+              </ContextMenuItem>
+              <ContextMenuItem onSelect={() => setDraftOrder({
+                index: rowIndex + 1,
+                data: { id: "draft", customer: "", product: "", status: "pending", channel: "Online", code: "DRAFT" }
+              })}>
+                Insert row below
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onSelect={() => toast.info(`Viewing details for ${order.id}`)}>
+                View details
+              </ContextMenuItem>
+              <ContextMenuItem onSelect={() => toast.info(`Duplicating order ${order.id}`)}>
+                Duplicate order
+              </ContextMenuItem>
+              <ContextMenuItem onSelect={() => {
+                navigator.clipboard.writeText(`https://tracking.com/${order.id}`)
+                toast.success("Tracking link copied")
+              }}>
+                Copy tracking link
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onSelect={() => toast.info(`Drafting email for ${order.customer}`)}>
+                Send email
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem 
+                onSelect={() => handleDeleteRequest(order)}
+              >
+                Cancel order
+              </ContextMenuItem>
+            </>
+          )
+        }}
         bulkActions={(selected, clearSelection) => (
           <>
             <Button
