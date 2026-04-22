@@ -31,7 +31,7 @@ const SHORTCUT_GROUPS: { heading: string; items: Shortcut[] }[] = [
     heading: "Panels",
     items: [
       { label: "Profile", mac: "⇧⌘P", win: "Ctrl + Shift + P" },
-      { label: "System", mac: "⇧S", win: "Shift + S" },
+      { label: "System", mac: "⌘⇧S", win: "Ctrl + Shift + S" },
     ],
   },
   {

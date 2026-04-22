@@ -60,7 +60,7 @@ export function AppLayout() {
         e.preventDefault()
         setModal("settings")
       }
-      if (canOpenSystem && e.shiftKey && !mod && !e.altKey && e.code === "KeyS") {
+      if (canOpenSystem && e.shiftKey && mod && !e.altKey && e.code === "KeyS") {
         e.preventDefault()
         setModal("system")
       }

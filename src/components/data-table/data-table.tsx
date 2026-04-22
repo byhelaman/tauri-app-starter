@@ -17,7 +17,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import { LoaderCircle, X } from "lucide-react"
+import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Table,
@@ -49,6 +49,7 @@ interface DataTableProps<TData, TValue> {
   pageSizeOptions?: number[]
   rowClassName?: (row: TData) => string | undefined
   isLoading?: boolean
+  getRowId?: (row: TData) => string
 }
 
 type SizableColumnDef<TData, TValue> = ColumnDef<TData, TValue> & {
@@ -123,6 +124,7 @@ export function DataTable<TData, TValue>({
   pageSizeOptions,
   rowClassName,
   isLoading = false,
+  getRowId,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -180,6 +182,7 @@ export function DataTable<TData, TValue>({
     enableMultiSort: true,
     enableSortingRemoval: false,
     isMultiSortEvent: () => true,
+    getRowId,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,

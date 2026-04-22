@@ -149,7 +149,8 @@ export function OrdersPage() {
     if (updated === current) return
 
     updateOrderMutation.mutate(updated)
-  }, [queryClient, updateOrderMutation])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryClient])
 
   const handleStatusChange = useCallback((orderId: string, status: Status) => {
     updateOrderById(orderId, (order) => ({ ...order, status }))
@@ -231,7 +232,8 @@ export function OrdersPage() {
 
   const handleDelete = useCallback((orderId: string) => {
     deleteOrderMutation.mutate(orderId)
-  }, [deleteOrderMutation])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const updateQueueOrderMutation = useMutation({
     mutationFn: async ({ code, ...updates }: Partial<QueueOrder> & { code: string }) => {
@@ -274,7 +276,8 @@ export function OrdersPage() {
 
   const handleQueueStatusChange = useCallback((code: string, status: QueueStatus) => {
     updateQueueOrderMutation.mutate({ code, status })
-  }, [updateQueueOrderMutation])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleQueuePriorityToggle = useCallback((code: string) => {
     const currentOrders = queryClient.getQueryData<QueueOrder[]>(["queueOrders"]) || []
@@ -282,12 +285,14 @@ export function OrdersPage() {
     if (order) {
       updateQueueOrderMutation.mutate({ code, priority: !order.priority })
     }
-  }, [queryClient, updateQueueOrderMutation])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryClient])
 
   const handleQueueRemove = useCallback((code: string) => {
     deleteQueueOrderMutation.mutate(code)
     toast.success("Removed from queue")
-  }, [deleteQueueOrderMutation])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const copyQueueCode = useCallback((order: QueueOrder) => {
     navigator.clipboard.writeText(order.code)
@@ -379,6 +384,7 @@ export function OrdersPage() {
           </>
         )}
         rowClassName={rowClassName}
+        getRowId={(row) => row.id}
         defaultPageSize={25}
       />
 
@@ -429,6 +435,7 @@ export function OrdersPage() {
                 searchDebounceMs: 300,
               }}
               rowClassName={queueRowClassName}
+              getRowId={(row) => row.id}
               rowContextMenu={(order) => (
                 <>
                   <ContextMenuItem onSelect={() => copyQueueCode(order)}>Copy code</ContextMenuItem>
