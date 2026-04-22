@@ -15,7 +15,7 @@ import { createSelectColumn, multiValueFilter, renderCell } from "@/components/d
 export type Status = "pending" | "processing" | "shipped" | "delivered" | "cancelled"
 
 export interface Order {
-  id?: string
+  id: string
   date: string
   customer: string
   product: string

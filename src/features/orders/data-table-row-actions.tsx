@@ -67,7 +67,7 @@ export function DataTableRowActions({ order, onDelete }: DataTableRowActionsProp
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction variant="destructive"
               onClick={() => {
-                onDelete(order.id ?? order.code)
+                onDelete(order.id)
                 toast.success("Order deleted")
               }}
             >

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   CheckCircle2,
@@ -19,7 +20,6 @@ import {
   type Order,
   type Status,
 } from "@/features/orders/columns"
-import { INITIAL_ORDERS } from "@/mocks/orders"
 import { DataTable } from "@/components/data-table/data-table"
 import type { FacetedFilterOption } from "@/components/data-table/data-table-types"
 import { ImportDialog } from "@/components/data-table/import-dialog"
@@ -56,7 +56,18 @@ import {
   type QueueOrder,
   type QueueStatus,
 } from "@/features/orders/modal-columns"
-import { INITIAL_QUEUE_ORDERS } from "@/mocks/orders"
+
+const fetchOrders = async (): Promise<Order[]> => {
+  const res = await fetch("/api/orders")
+  if (!res.ok) throw new Error("Failed to fetch orders")
+  return res.json()
+}
+
+const fetchQueueOrders = async (): Promise<QueueOrder[]> => {
+  const res = await fetch("/api/queue-orders")
+  if (!res.ok) throw new Error("Failed to fetch queue orders")
+  return res.json()
+}
 
 const STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
   { label: "Pending", value: "pending", icon: Clock },
@@ -81,13 +92,18 @@ const QUEUE_STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
 ]
 
 export function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>(() => (
-    INITIAL_ORDERS.map((order, index) => ({
-      ...order,
-      id: order.id ?? `${order.code}-${index + 1}`,
-    }))
-  ))
-  const [queueOrders, setQueueOrders] = useState<QueueOrder[]>(INITIAL_QUEUE_ORDERS)
+  const queryClient = useQueryClient()
+
+  const { data: orders = [], isLoading: isOrdersLoading } = useQuery({
+    queryKey: ["orders"],
+    queryFn: fetchOrders,
+  })
+
+  const { data: queueOrders = [], isLoading: isQueueLoading } = useQuery({
+    queryKey: ["queueOrders"],
+    queryFn: fetchQueueOrders,
+  })
+
   const [bulkDeleteTarget, setBulkDeleteTarget] = useState<{ selected: Order[], clearSelection: () => void } | null>(null)
   const [rowDeleteTarget, setRowDeleteTarget] = useState<Order | null>(null)
   const [importOpen, setImportOpen] = useState(false)
@@ -100,20 +116,40 @@ export function OrdersPage() {
     setRowDeleteTarget(order)
   }, [])
 
+  const updateOrderMutation = useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<Order> & { id: string }) => {
+      const res = await fetch(`/api/orders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      })
+      if (!res.ok) throw new Error("Failed to update")
+      return res.json()
+    },
+    onMutate: async (newOrder) => {
+      await queryClient.cancelQueries({ queryKey: ["orders"] })
+      const previousOrders = queryClient.getQueryData<Order[]>(["orders"])
+      queryClient.setQueryData<Order[]>(["orders"], (old = []) => {
+        return old.map(order => order.id === newOrder.id ? { ...order, ...newOrder } : order)
+      })
+      return { previousOrders }
+    },
+    onError: (_err, _newOrder, context) => {
+      queryClient.setQueryData(["orders"], context?.previousOrders)
+      toast.error("Failed to update order")
+    },
+  })
+
   const updateOrderById = useCallback((orderId: string, updater: (order: Order) => Order) => {
-    setOrders((prev) => {
-      const index = prev.findIndex((order) => (order.id ?? order.code) === orderId)
-      if (index === -1) return prev
+    const currentOrders = queryClient.getQueryData<Order[]>(["orders"]) || []
+    const current = currentOrders.find((order) => order.id === orderId)
+    if (!current) return
 
-      const current = prev[index]
-      const updated = updater(current)
-      if (updated === current) return prev
+    const updated = updater(current)
+    if (updated === current) return
 
-      const next = [...prev]
-      next[index] = updated
-      return next
-    })
-  }, [])
+    updateOrderMutation.mutate(updated)
+  }, [queryClient, updateOrderMutation])
 
   const handleStatusChange = useCallback((orderId: string, status: Status) => {
     updateOrderById(orderId, (order) => ({ ...order, status }))
@@ -154,29 +190,104 @@ export function OrdersPage() {
     toast.success("Order code copied")
   }, [])
 
-  const handleDelete = useCallback((orderId: string) => {
-    setOrders((prev) => {
-      const index = prev.findIndex((order) => (order.id ?? order.code) === orderId)
-      if (index === -1) return prev
+  const deleteOrderMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/orders/${id}`, { method: "DELETE" })
+      if (!res.ok) throw new Error("Failed to delete")
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ["orders"] })
+      const previousOrders = queryClient.getQueryData<Order[]>(["orders"])
+      queryClient.setQueryData<Order[]>(["orders"], (old = []) => old.filter(order => order.id !== id))
+      return { previousOrders }
+    },
+    onError: (_err, _id, context) => {
+      queryClient.setQueryData(["orders"], context?.previousOrders)
+      toast.error("Failed to delete order")
+    },
+  })
 
-      const next = [...prev]
-      next.splice(index, 1)
-      return next
-    })
-  }, [])
+  const deleteBulkOrdersMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const res = await fetch(`/api/orders/bulk-delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      })
+      if (!res.ok) throw new Error("Failed to bulk delete")
+    },
+    onMutate: async (ids) => {
+      const idSet = new Set(ids)
+      await queryClient.cancelQueries({ queryKey: ["orders"] })
+      const previousOrders = queryClient.getQueryData<Order[]>(["orders"])
+      queryClient.setQueryData<Order[]>(["orders"], (old = []) => old.filter(order => !idSet.has(order.id)))
+      return { previousOrders }
+    },
+    onError: (_err, _ids, context) => {
+      queryClient.setQueryData(["orders"], context?.previousOrders)
+      toast.error("Failed to delete orders")
+    },
+  })
+
+  const handleDelete = useCallback((orderId: string) => {
+    deleteOrderMutation.mutate(orderId)
+  }, [deleteOrderMutation])
+
+  const updateQueueOrderMutation = useMutation({
+    mutationFn: async ({ code, ...updates }: Partial<QueueOrder> & { code: string }) => {
+      const res = await fetch(`/api/queue-orders/${code}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      })
+      if (!res.ok) throw new Error("Failed to update")
+      return res.json()
+    },
+    onMutate: async (newOrder) => {
+      await queryClient.cancelQueries({ queryKey: ["queueOrders"] })
+      const previousOrders = queryClient.getQueryData<QueueOrder[]>(["queueOrders"])
+      queryClient.setQueryData<QueueOrder[]>(["queueOrders"], (old = []) => {
+        return old.map(order => order.code === newOrder.code ? { ...order, ...newOrder } : order)
+      })
+      return { previousOrders }
+    },
+    onError: (_err, _newOrder, context) => {
+      queryClient.setQueryData(["queueOrders"], context?.previousOrders)
+    },
+  })
+
+  const deleteQueueOrderMutation = useMutation({
+    mutationFn: async (code: string) => {
+      const res = await fetch(`/api/queue-orders/${code}`, { method: "DELETE" })
+      if (!res.ok) throw new Error("Failed to delete")
+    },
+    onMutate: async (code) => {
+      await queryClient.cancelQueries({ queryKey: ["queueOrders"] })
+      const previousOrders = queryClient.getQueryData<QueueOrder[]>(["queueOrders"])
+      queryClient.setQueryData<QueueOrder[]>(["queueOrders"], (old = []) => old.filter(order => order.code !== code))
+      return { previousOrders }
+    },
+    onError: (_err, _code, context) => {
+      queryClient.setQueryData(["queueOrders"], context?.previousOrders)
+    },
+  })
 
   const handleQueueStatusChange = useCallback((code: string, status: QueueStatus) => {
-    setQueueOrders((prev) => prev.map((o) => o.code === code ? { ...o, status } : o))
-  }, [])
+    updateQueueOrderMutation.mutate({ code, status })
+  }, [updateQueueOrderMutation])
 
   const handleQueuePriorityToggle = useCallback((code: string) => {
-    setQueueOrders((prev) => prev.map((o) => o.code === code ? { ...o, priority: !o.priority } : o))
-  }, [])
+    const currentOrders = queryClient.getQueryData<QueueOrder[]>(["queueOrders"]) || []
+    const order = currentOrders.find(o => o.code === code)
+    if (order) {
+      updateQueueOrderMutation.mutate({ code, priority: !order.priority })
+    }
+  }, [queryClient, updateQueueOrderMutation])
 
   const handleQueueRemove = useCallback((code: string) => {
-    setQueueOrders((prev) => prev.filter((o) => o.code !== code))
+    deleteQueueOrderMutation.mutate(code)
     toast.success("Removed from queue")
-  }, [])
+  }, [deleteQueueOrderMutation])
 
   const copyQueueCode = useCallback((order: QueueOrder) => {
     navigator.clipboard.writeText(order.code)
@@ -214,6 +325,7 @@ export function OrdersPage() {
       <DataTable
         columns={columns}
         data={orders}
+        isLoading={isOrdersLoading}
         tableId="orders"
         toolbar={{
           filterPlaceholder: "Search...",
@@ -283,6 +395,7 @@ export function OrdersPage() {
             <DataTable
               columns={queueColumns}
               data={queueOrders}
+              isLoading={isQueueLoading}
               tableId="orders-queue"
               toolbar={{
                 filterPlaceholder: "Search queue...",
@@ -355,8 +468,8 @@ export function OrdersPage() {
               variant="destructive"
               onClick={() => {
                 if (!rowDeleteTarget) return
-                const rowId = rowDeleteTarget.id ?? rowDeleteTarget.code
-                setOrders((prev) => prev.filter((order) => (order.id ?? order.code) !== rowId))
+                const rowId = rowDeleteTarget.id
+                deleteOrderMutation.mutate(rowId)
                 toast.success("Order deleted")
                 setRowDeleteTarget(null)
               }}
@@ -384,8 +497,8 @@ export function OrdersPage() {
               variant="destructive"
               onClick={() => {
                 if (!bulkDeleteTarget) return
-                const ids = new Set(bulkDeleteTarget.selected.map((order) => order.id ?? order.code))
-                setOrders((prev) => prev.filter((order) => !ids.has(order.id ?? order.code)))
+                const ids = bulkDeleteTarget.selected.map((order) => order.id)
+                deleteBulkOrdersMutation.mutate(ids)
                 toast.success(`${bulkDeleteTarget.selected.length} orders deleted`)
                 bulkDeleteTarget.clearSelection()
                 setBulkDeleteTarget(null)

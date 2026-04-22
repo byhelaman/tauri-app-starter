@@ -17,7 +17,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import { X } from "lucide-react"
+import { LoaderCircle, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Table,
@@ -34,6 +34,7 @@ import type {
   DataTableLayoutConfig,
   DataTableToolbarConfig,
 } from "./data-table-types"
+import { Spinner } from "../ui/spinner"
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -47,6 +48,7 @@ interface DataTableProps<TData, TValue> {
   defaultPageSize?: number
   pageSizeOptions?: number[]
   rowClassName?: (row: TData) => string | undefined
+  isLoading?: boolean
 }
 
 type SizableColumnDef<TData, TValue> = ColumnDef<TData, TValue> & {
@@ -120,6 +122,7 @@ export function DataTable<TData, TValue>({
   defaultPageSize = 10,
   pageSizeOptions,
   rowClassName,
+  isLoading = false,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -261,7 +264,16 @@ export function DataTable<TData, TValue>({
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows?.length ? (
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="h-24 text-center">
+                  <div className="flex items-center justify-center text-muted-foreground gap-2">
+                    <Spinner/>
+                    Loading data...
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => {
                 const rowEl = (
                   <TableRow 

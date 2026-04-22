@@ -18,6 +18,7 @@
     "@supabase/supabase-js": "^2",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.2.2",
+    "@tanstack/react-query": "^5.99.2",
     "@tanstack/react-table": "^8.21.3",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-autostart": "^2.5.1",
@@ -50,6 +51,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@faker-js/faker": "^10.4.0",
     "@tauri-apps/cli": "^2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -62,10 +64,16 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.5.0",
     "jsdom": "^29.0.2",
+    "msw": "^2.13.4",
     "shadcn": "^4.2.0",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.58.2",
     "vite": "^7.0.4",
     "vitest": "^4.1.4"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }

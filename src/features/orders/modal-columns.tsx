@@ -23,6 +23,7 @@ import { createSelectColumn, multiValueFilter, renderCell } from "@/components/d
 export type QueueStatus = "queued" | "processing" | "ready" | "delivered"
 
 export interface QueueOrder {
+  id: string
   time: string
   code: string
   customer: string
