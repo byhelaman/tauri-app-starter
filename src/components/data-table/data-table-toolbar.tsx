@@ -26,6 +26,7 @@ import type { FacetedFilterConfig, IntervalFilterConfig } from "./data-table-typ
 interface DataTableToolbarProps<TData> {
   table: Table<TData>
   tableId: string
+  searchable?: boolean
   filterPlaceholder?: string
   facetedFilters?: FacetedFilterConfig[]
   intervalFilter?: IntervalFilterConfig
@@ -37,6 +38,7 @@ interface DataTableToolbarProps<TData> {
 export function DataTableToolbar<TData>({
   table,
   tableId,
+  searchable = false,
   filterPlaceholder = "Search...",
   facetedFilters,
   intervalFilter,
@@ -44,10 +46,6 @@ export function DataTableToolbar<TData>({
   searchDebounceMs = 300,
   showViewOptions = true,
 }: DataTableToolbarProps<TData>) {
-  const hasSearchTarget = table
-    .getAllLeafColumns()
-    .some((column) => column.getCanGlobalFilter())
-
   const currentFilterValue = (table.getState().globalFilter as string) ?? ""
 
   const [searchInput, setSearchInput] = useState(currentFilterValue)
@@ -75,7 +73,7 @@ export function DataTableToolbar<TData>({
 
   return (
     <div className="flex items-center gap-2">
-      {hasSearchTarget && (
+      {searchable && (
         <InputGroup className="max-w-xs shrink-0">
           <InputGroupAddon>
             <SearchIcon />

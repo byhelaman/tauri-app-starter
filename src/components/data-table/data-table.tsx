@@ -1,7 +1,6 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import { cn, joinSearchValues, matchesSearchGroups, normalizeSearchGroups } from "@/lib/utils"
 import {
-  type Column,
   type ColumnDef,
   type ColumnFiltersState,
   type ColumnPinningState,
@@ -30,11 +29,12 @@ import {
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { DataTableToolbar } from "./data-table-toolbar"
 import { DataTablePagination } from "./data-table-pagination"
+import { DataTableSkeleton } from "./data-table-skeleton"
 import type {
   DataTableLayoutConfig,
   DataTableToolbarConfig,
 } from "./data-table-types"
-import { Spinner } from "../ui/spinner"
+
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -52,64 +52,7 @@ interface DataTableProps<TData, TValue> {
   getRowId?: (row: TData) => string
 }
 
-type SizableColumnDef<TData, TValue> = ColumnDef<TData, TValue> & {
-  size?: number
-  minSize?: number
-  maxSize?: number
-}
-
-function getColumnSizeStyle<TData, TValue>(columnDef: ColumnDef<TData, TValue>): CSSProperties | undefined {
-  const sizing = columnDef as SizableColumnDef<TData, TValue>
-
-  const hasSizing =
-    typeof sizing.size === "number" ||
-    typeof sizing.minSize === "number" ||
-    typeof sizing.maxSize === "number"
-
-  if (!hasSizing) return undefined
-
-  return {
-    width: typeof sizing.size === "number" ? `${sizing.size}px` : undefined,
-    minWidth: typeof sizing.minSize === "number" ? `${sizing.minSize}px` : undefined,
-    maxWidth: typeof sizing.maxSize === "number" ? `${sizing.maxSize}px` : undefined,
-  }
-}
-
-function getPinnedColumnStyle<TData, TValue>(
-  column: Column<TData, TValue>,
-  isHeader: boolean,
-  isEdge: boolean,
-  isFirst: boolean,
-): CSSProperties | undefined {
-  const pin = column.getIsPinned()
-  if (!pin) return undefined
-
-  const offset = pin === "left" ? column.getStart("left") : column.getAfter("right")
-  const size = column.getSize()
-
-  const accentShadow = isFirst && pin === "left" && !isHeader
-    ? "inset 2px 0 0 0 var(--highlight-accent, transparent)"
-    : undefined
-
-  const edgeShadow = isEdge
-    ? pin === "left"
-      ? "inset -1px 0 0 var(--border), 6px 0 8px -8px var(--border)"
-      : "inset 1px 0 0 var(--border), -6px 0 8px -8px var(--border)"
-    : undefined
-
-  const shadows = [accentShadow, edgeShadow].filter(Boolean).join(", ") || undefined
-
-  return {
-    position: "sticky",
-    width: `${size}px`,
-    minWidth: `${size}px`,
-    maxWidth: `${size}px`,
-    left: pin === "left" ? `${offset}px` : undefined,
-    right: pin === "right" ? `${offset}px` : undefined,
-    zIndex: isHeader ? 11 : 1,
-    boxShadow: shadows,
-  }
-}
+import { getColumnSizeStyle, getPinnedColumnStyle } from "./data-table-utils"
 
 export function DataTable<TData, TValue>({
   columns,
@@ -216,6 +159,7 @@ export function DataTable<TData, TValue>({
       <DataTableToolbar
         table={table}
         tableId={tableId}
+        searchable={toolbar?.searchable}
         filterPlaceholder={toolbar?.filterPlaceholder}
         facetedFilters={toolbar?.facetedFilters}
         intervalFilter={toolbar?.intervalFilter}
@@ -241,26 +185,26 @@ export function DataTable<TData, TValue>({
                       ? header.column.id === rightEdgeId
                       : false
                   return (
-                  <TableHead
-                    key={header.id}
-                    className={cn(
-                      header.column.getIsPinned() &&
+                    <TableHead
+                      key={header.id}
+                      className={cn(
+                        header.column.getIsPinned() &&
                         "bg-(--table-bg,var(--color-background)) transition-colors group-hover:bg-[color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))]",
-                    )}
-                    style={{
-                      ...(header.column.getIsPinned() ? undefined : getColumnSizeStyle(header.column.columnDef)),
-                      ...getPinnedColumnStyle(
-                        header.column,
-                        true,
-                        isEdge,
-                        isFirst,
-                      ),
-                    }}
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </TableHead>
+                      )}
+                      style={{
+                        ...(header.column.getIsPinned() ? undefined : getColumnSizeStyle(header.column.columnDef)),
+                        ...getPinnedColumnStyle(
+                          header.column,
+                          true,
+                          isEdge,
+                          isFirst,
+                        ),
+                      }}
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.header, header.getContext())}
+                    </TableHead>
                   )
                 })}
               </TableRow>
@@ -268,19 +212,17 @@ export function DataTable<TData, TValue>({
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
-                  <div className="flex items-center justify-center text-muted-foreground gap-2">
-                    <Spinner/>
-                    Loading data...
-                  </div>
-                </TableCell>
-              </TableRow>
+              <DataTableSkeleton
+                table={table}
+                rowCount={defaultPageSize}
+                leftEdgeId={leftEdgeId}
+                rightEdgeId={rightEdgeId}
+              />
             ) : table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => {
                 const rowEl = (
-                  <TableRow 
-                    key={row.id} 
+                  <TableRow
+                    key={row.id}
                     className={cn("group/row group", rowClassName?.(row.original))}
                     data-state={row.getIsSelected() && "selected"}
                   >
@@ -293,24 +235,24 @@ export function DataTable<TData, TValue>({
                           ? cell.column.id === rightEdgeId
                           : false
                       return (
-                      <TableCell
-                        key={cell.id}
-                        className={cn(
-                          cell.column.getIsPinned() &&
+                        <TableCell
+                          key={cell.id}
+                          className={cn(
+                            cell.column.getIsPinned() &&
                             "border-b group-last/row:border-b-0 bg-(--highlight-bg,var(--table-bg,var(--color-background))) transition-colors group-hover:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-data-[state=selected]:bg-muted",
-                        )}
-                        style={{
-                          ...(cell.column.getIsPinned() ? undefined : getColumnSizeStyle(cell.column.columnDef)),
-                          ...getPinnedColumnStyle(
-                            cell.column,
-                            false,
-                            isEdge,
-                            isFirst,
-                          ),
-                        }}
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
+                          )}
+                          style={{
+                            ...(cell.column.getIsPinned() ? undefined : getColumnSizeStyle(cell.column.columnDef)),
+                            ...getPinnedColumnStyle(
+                              cell.column,
+                              false,
+                              isEdge,
+                              isFirst,
+                            ),
+                          }}
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
                       )
                     })}
                   </TableRow>

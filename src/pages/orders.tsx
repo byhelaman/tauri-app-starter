@@ -333,6 +333,7 @@ export function OrdersPage() {
         isLoading={isOrdersLoading}
         tableId="orders"
         toolbar={{
+          searchable: true,
           filterPlaceholder: "Search...",
           facetedFilters: [
             { columnId: "status", title: "Status", options: STATUS_FILTER_OPTIONS },
@@ -404,6 +405,7 @@ export function OrdersPage() {
               isLoading={isQueueLoading}
               tableId="orders-queue"
               toolbar={{
+                searchable: true,
                 filterPlaceholder: "Search queue...",
                 facetedFilters: [
                   { columnId: "status", title: "Status", options: QUEUE_STATUS_FILTER_OPTIONS },
