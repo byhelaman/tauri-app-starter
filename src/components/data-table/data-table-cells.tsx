@@ -1,4 +1,4 @@
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect, startTransition } from "react"
 import type { ColumnDef, FilterFn } from "@tanstack/react-table"
 import { cn } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -51,12 +51,19 @@ function InlineEditableCell({
 }: {
   value: string | number
 } & InlineEditableCellOptions) {
-  const nextValue = String(value ?? "")
-
   const [isEditing, setIsEditing] = useState(false)
   const [hasError, setHasError] = useState(false)
   const [wasBlurred, setWasBlurred] = useState(false)
   
+  // Estado Optimista de UI para evitar parpadeos mientras la tabla pesada se actualiza en segundo plano
+  const [optimisticValue, setOptimisticValue] = useState<string | null>(null)
+  const nextValue = optimisticValue !== null ? optimisticValue : String(value ?? "")
+
+  useEffect(() => {
+    // Limpia el valor optimista una vez que la tabla padre ha actualizado nuestra prop real
+    setOptimisticValue(null)
+  }, [value])
+
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   
@@ -73,7 +80,12 @@ function InlineEditableCell({
     setHasError(!isValid)
 
     if (currentValue !== nextValue) {
-      onCommit?.(currentValue, isValid)
+      setOptimisticValue(currentValue)
+      // Usamos el modo concurrente de React para marcar la actualización de la tabla como no urgente,
+      // manteniendo así el hilo principal fluido y responsivo.
+      startTransition(() => {
+        onCommit?.(currentValue, isValid)
+      })
     }
     setIsEditing(false)
   }
@@ -145,48 +157,70 @@ function InlineEditableCell({
   }
 
   return (
-    <Input
-      ref={inputRef}
-      readOnly={!enableEditing}
-      defaultValue={initialEditValue !== null ? initialEditValue : nextValue}
-      autoFocus
-      onBlur={(e) => {
-        if (enableEditing) {
-          handleCommit(e.currentTarget.value)
-        } else {
-          setIsEditing(false)
-        }
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          e.preventDefault()
-          const td = inputRef.current?.closest("td")
-          handleCommit(e.currentTarget.value)
-          
-          if (td) {
+    <div className="relative flex w-full min-w-0">
+      {/* Marcador de posición invisible que mantiene el ancho exacto de la celda del modo vista */}
+      <div className={cn(
+        "flex h-8 w-full min-w-0 items-center border border-transparent px-2.5 py-1 text-base md:text-sm opacity-0 pointer-events-none",
+        className
+      )}>
+        <span className="truncate">{nextValue}</span>
+      </div>
+      <Input
+        ref={inputRef}
+        readOnly={!enableEditing}
+        defaultValue={initialEditValue !== null ? initialEditValue : nextValue}
+        autoFocus
+        onBlur={(e) => {
+          if (enableEditing) {
+            handleCommit(e.currentTarget.value)
+          } else {
+            setIsEditing(false)
+          }
+        }}
+        onKeyDown={(e) => {
+          let direction: "up" | "down" | "left" | "right" | null = null
+
+          if (e.key === "Enter") {
+            direction = "down"
+          } else if (initialEditValue !== null) {
+            // "Modo de sobrescritura" (se escribió directamente en la celda)
+            // Las flechas guardan inmediatamente y mueven el foco
+            if (e.key === "ArrowUp") direction = "up"
+            else if (e.key === "ArrowDown") direction = "down"
+            else if (e.key === "ArrowLeft") direction = "left"
+            else if (e.key === "ArrowRight") direction = "right"
+          }
+
+          if (direction) {
+            e.preventDefault()
+            const td = inputRef.current?.closest("td")
+            handleCommit(e.currentTarget.value)
+            
+            if (td) {
+              setTimeout(() => {
+                moveFocus(td, direction!)
+                // Foco de respaldo en la celda actual si se llega al límite de la tabla
+                if (!document.activeElement || document.activeElement === document.body) {
+                  td.querySelector<HTMLElement>('[tabindex="0"]')?.focus()
+                }
+              }, 0)
+            }
+          } else if (e.key === "Escape") {
+            e.preventDefault()
+            const td = inputRef.current?.closest("td")
+            setIsEditing(false)
             setTimeout(() => {
-              const tr = td.closest("tr")
-              const nextTd = tr?.nextElementSibling?.children[td.cellIndex]
-              const focusable = nextTd?.querySelector<HTMLElement>('[tabindex="0"], input, button')
-              if (focusable) focusable.focus()
-              else td.querySelector<HTMLElement>('[tabindex="0"]')?.focus()
+              td?.querySelector<HTMLElement>('[tabindex="0"]')?.focus()
             }, 0)
           }
-        } else if (e.key === "Escape") {
-          e.preventDefault()
-          const td = inputRef.current?.closest("td")
-          setIsEditing(false)
-          setTimeout(() => {
-            td?.querySelector<HTMLElement>('[tabindex="0"]')?.focus()
-          }, 0)
-        }
-      }}
-      aria-invalid={(wasBlurred && hasError) || undefined}
-      className={cn(
-        "min-w-full bg-background shadow-sm",
-        className
-      )}
-    />
+        }}
+        aria-invalid={(wasBlurred && hasError) || undefined}
+        className={cn(
+          "absolute inset-0 h-8 w-full bg-background shadow-sm",
+          className
+        )}
+      />
+    </div>
   )
 }
 
