@@ -1,11 +1,6 @@
 import { useDeferredValue, useMemo, useState } from "react"
-import { Controller, useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
-import { ChevronRightIcon, MoreHorizontalIcon, PlusIcon, SearchIcon } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import { PlusIcon, SearchIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -17,227 +12,15 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter,
-} from "@/components/ui/dialog"
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuGroup,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-    ContextMenu,
-    ContextMenuContent,
-    ContextMenuItem,
-    ContextMenuSeparator,
-    ContextMenuTrigger,
-} from "@/components/ui/context-menu"
-import {
-    Field,
-    FieldLabel,
-    FieldGroup,
-    FieldError,
-    FieldDescription,
-    FieldContent,
-} from "@/components/ui/field"
-import {
     InputGroup,
     InputGroupAddon,
     InputGroupInput,
 } from "@/components/ui/input-group"
-import { Checkbox } from "@/components/ui/checkbox"
-import {
-    Collapsible,
-    CollapsibleTrigger,
-    CollapsibleContent,
-} from "@/components/ui/collapsible"
-import { cn, filterByMultiSearch } from "@/lib/utils"
+import { filterByMultiSearch } from "@/lib/utils"
 import type { PermissionDefinition, PermissionMatrix, RoleDefinition } from "./types"
-
-const roleFormSchema = z.object({
-    name: z
-        .string()
-        .min(1, "Required")
-        .regex(/^[a-z0-9_]+$/, "Only lowercase letters, numbers and underscores"),
-    level: z.coerce
-        .number({ invalid_type_error: "Must be a number" })
-        .int()
-        .min(0, "Min 0")
-        .max(99, "Max 99"),
-    description: z.string(),
-})
-
-type RoleFormValues = z.infer<typeof roleFormSchema>
-
-const editRoleSchema = roleFormSchema.extend({
-    name: z.string().min(1, "Required"),
-    level: z.coerce.number({ invalid_type_error: "Must be a number" }).int().min(0).max(100),
-})
-
-type EditRoleValues = z.infer<typeof editRoleSchema>
-
-interface NewRoleDialogProps {
-    open: boolean
-    onOpenChange: (open: boolean) => void
-    onSubmit: (values: RoleFormValues) => Promise<void>
-    disabled?: boolean
-}
-
-function NewRoleDialog({ open, onOpenChange, onSubmit, disabled }: NewRoleDialogProps) {
-    const { control, handleSubmit, reset } = useForm<RoleFormValues>({
-        resolver: zodResolver(roleFormSchema),
-        defaultValues: { name: "", level: "" as unknown as number, description: "" },
-    })
-
-    function handleClose(v: boolean) {
-        onOpenChange(v)
-        if (!v) reset()
-    }
-
-    return (
-        <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent
-                className="max-w-sm"
-                onInteractOutside={(event) => event.preventDefault()}
-            >
-                <DialogHeader>
-                    <DialogTitle>New role</DialogTitle>
-                    <DialogDescription>Define a name, level, and description for the new role.</DialogDescription>
-                </DialogHeader>
-                <form className="contents" onSubmit={handleSubmit(onSubmit)}>
-                    <FieldGroup>
-                        <div className="flex gap-3">
-                            <Controller
-                                name="name"
-                                control={control}
-                                render={({ field, fieldState }) => (
-                                    <Field className="flex-1" data-invalid={fieldState.invalid}>
-                                        <FieldLabel>Name</FieldLabel>
-                                        <Input {...field} placeholder="e.g. moderator" aria-invalid={fieldState.invalid} disabled={disabled} />
-                                        <FieldError errors={[fieldState.error]} />
-                                    </Field>
-                                )}
-                            />
-                            <Controller
-                                name="level"
-                                control={control}
-                                render={({ field, fieldState }) => (
-                                    <Field className="w-24" data-invalid={fieldState.invalid}>
-                                        <FieldLabel>Level</FieldLabel>
-                                        <Input {...field} type="number" placeholder="0–99" aria-invalid={fieldState.invalid} disabled={disabled} />
-                                        <FieldError errors={[fieldState.error]} />
-                                    </Field>
-                                )}
-                            />
-                        </div>
-                        <Controller
-                            name="description"
-                            control={control}
-                            render={({ field, fieldState }) => (
-                                <Field data-invalid={fieldState.invalid}>
-                                    <FieldLabel>Description</FieldLabel>
-                                    <Input {...field} placeholder="Optional" aria-invalid={fieldState.invalid} disabled={disabled} />
-                                    <FieldError errors={[fieldState.error]} />
-                                </Field>
-                            )}
-                        />
-                    </FieldGroup>
-                    <DialogFooter showCloseButton>
-                        <Button type="submit" disabled={disabled}>Add role</Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-    )
-}
-
-interface EditRoleDialogProps {
-    role: RoleDefinition | null
-    onOpenChange: (open: boolean) => void
-    onSubmit: (original: string, values: EditRoleValues) => Promise<void>
-    disabled?: boolean
-}
-
-function EditRoleDialog({ role, onOpenChange, onSubmit, disabled }: EditRoleDialogProps) {
-    const { control, handleSubmit, reset } = useForm<EditRoleValues>({
-        resolver: zodResolver(editRoleSchema),
-        values: role
-            ? { name: role.name, level: role.level, description: role.description }
-            : { name: "", level: 0, description: "" },
-    })
-
-    function handleClose(v: boolean) {
-        onOpenChange(v)
-        if (!v) reset()
-    }
-
-    return (
-        <Dialog open={!!role} onOpenChange={handleClose}>
-            <DialogContent
-                className="max-w-sm"
-                onInteractOutside={(event) => event.preventDefault()}
-            >
-                <DialogHeader>
-                    <DialogTitle>Edit role</DialogTitle>
-                    <DialogDescription>
-                        {role?.builtin
-                            ? "For built-in roles, only the description can be updated."
-                            : "Update the name, level, or description of this role."}
-                    </DialogDescription>
-                </DialogHeader>
-                <form className="contents" onSubmit={handleSubmit((values) => role ? onSubmit(role.name, values) : Promise.resolve())}>
-                    <FieldGroup>
-                        <div className="flex gap-3">
-                            <Controller
-                                name="name"
-                                control={control}
-                                render={({ field, fieldState }) => (
-                                    <Field className="flex-1" data-invalid={fieldState.invalid}>
-                                        <FieldLabel>Name</FieldLabel>
-                                        <Input {...field} disabled={role?.builtin || disabled} aria-invalid={fieldState.invalid} />
-                                        <FieldError errors={[fieldState.error]} />
-                                    </Field>
-                                )}
-                            />
-                            <Controller
-                                name="level"
-                                control={control}
-                                render={({ field, fieldState }) => (
-                                    <Field className="w-24" data-invalid={fieldState.invalid}>
-                                        <FieldLabel>Level</FieldLabel>
-                                        <Input {...field} type="number" disabled={role?.builtin || disabled} aria-invalid={fieldState.invalid} />
-                                        <FieldError errors={[fieldState.error]} />
-                                    </Field>
-                                )}
-                            />
-                        </div>
-                        <Controller
-                            name="description"
-                            control={control}
-                            render={({ field, fieldState }) => (
-                                <Field data-invalid={fieldState.invalid}>
-                                    <FieldLabel>Description</FieldLabel>
-                                    <Input {...field} placeholder="Optional" aria-invalid={fieldState.invalid} disabled={disabled} />
-                                    <FieldError errors={[fieldState.error]} />
-                                </Field>
-                            )}
-                        />
-                    </FieldGroup>
-                    <DialogFooter showCloseButton>
-                        <Button type="submit" disabled={disabled}>Save Changes</Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-    )
-}
+import { NewRoleDialog, type RoleFormValues } from "./components/NewRoleDialog"
+import { EditRoleDialog, type EditRoleValues } from "./components/EditRoleDialog"
+import { RoleItem } from "./components/RoleItem"
 
 interface RolesTabProps {
     roles: RoleDefinition[]
@@ -395,104 +178,20 @@ export function RolesTab({
 
             <div className="divide-y text-sm">
                 {filtered.map((role) => (
-                    <Collapsible
+                    <RoleItem
                         key={role.name}
-                        open={openRole === role.name}
+                        role={role}
+                        isOpen={openRole === role.name}
                         onOpenChange={(open) => setOpenRole(open ? role.name : null)}
-                    >
-                        <ContextMenu>
-                            <ContextMenuTrigger asChild>
-                                <CollapsibleTrigger asChild>
-                                    <div className={cn(
-                                        "flex items-center justify-between px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors select-none",
-                                        openRole === role.name && "bg-muted/40"
-                                    )}>
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <ChevronRightIcon className={cn(
-                                                "size-3.5 text-muted-foreground shrink-0 transition-transform duration-200",
-                                                openRole === role.name && "rotate-90"
-                                            )} />
-                                            <div className="min-w-0">
-                                                <p className="font-medium">{role.name}</p>
-                                                <p className="mt-0.5 text-sm text-muted-foreground truncate">{role.description || "—"}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-                                            <Badge variant="outline">Level {role.level}</Badge>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon-xs" onClick={(e) => e.stopPropagation()}>
-                                                        <MoreHorizontalIcon data-icon />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuGroup>
-                                                        <DropdownMenuItem onClick={() => navigator.clipboard.writeText(role.name)}>
-                                                            Copy name
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditTarget(role) }} disabled={!canManageRoles || busy}>
-                                                            Edit role
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => void handleDuplicateRole(role)} disabled={!canManageRoles || busy}>
-                                                            Duplicate role
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuGroup>
-                                                    <DropdownMenuSeparator />
-                                                    <DropdownMenuGroup>
-                                                        <DropdownMenuItem
-                                                            disabled={role.builtin || !canManageRoles || busy}
-                                                            onClick={() => setRemoveTarget(role)}
-                                                        >
-                                                            Remove role
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuGroup>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </div>
-                                    </div>
-                                </CollapsibleTrigger>
-                            </ContextMenuTrigger>
-                            <ContextMenuContent>
-                                <ContextMenuItem onSelect={() => navigator.clipboard.writeText(role.name)}>
-                                    Copy name
-                                </ContextMenuItem>
-                                <ContextMenuItem onSelect={() => setEditTarget(role)} disabled={!canManageRoles || busy}>Edit role</ContextMenuItem>
-                                <ContextMenuItem onSelect={() => void handleDuplicateRole(role)} disabled={!canManageRoles || busy}>Duplicate role</ContextMenuItem>
-                                <ContextMenuSeparator />
-                                <ContextMenuItem
-                                    disabled={role.builtin || !canManageRoles || busy}
-                                    onSelect={() => setRemoveTarget(role)}
-                                >
-                                    Remove role
-                                </ContextMenuItem>
-                            </ContextMenuContent>
-                        </ContextMenu>
-
-                        <CollapsibleContent>
-                            <div className="border-t bg-muted/20 px-4 py-3 flex flex-col gap-3">
-                                <p className="text-sm text-muted-foreground">Permissions</p>
-                                <div className="grid grid-cols-2 gap-4 pb-2">
-                                    {permissions.map((permission) => {
-                                        const isLocked = role.builtin
-                                        const checked = isLocked && role.name === "owner" ? true : (matrix[role.name]?.[permission.name] ?? false)
-                                        return (
-                                            <Field key={permission.name} orientation="horizontal">
-                                                <Checkbox
-                                                    checked={checked}
-                                                    disabled={isLocked || !canManageRoles || busy}
-                                                    onCheckedChange={() => void togglePermission(role.name, permission.name)}
-                                                />
-                                                <FieldContent>
-                                                    <FieldLabel className="text-sm">{permission.name}</FieldLabel>
-                                                    <FieldDescription>{permission.description || "No description"}</FieldDescription>
-                                                </FieldContent>
-                                            </Field>
-                                        )
-                                    })}
-                                </div>
-                            </div>
-                        </CollapsibleContent>
-                    </Collapsible>
+                        permissions={permissions}
+                        matrix={matrix}
+                        onTogglePermission={togglePermission}
+                        onEdit={setEditTarget}
+                        onDuplicate={handleDuplicateRole}
+                        onRemove={setRemoveTarget}
+                        canManageRoles={canManageRoles}
+                        busy={busy}
+                    />
                 ))}
                 {filtered.length === 0 && (
                     <p className="px-3 py-6 text-center text-sm text-muted-foreground">No roles found.</p>

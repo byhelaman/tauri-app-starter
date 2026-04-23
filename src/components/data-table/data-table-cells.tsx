@@ -68,6 +68,21 @@ function InlineEditableCell({
   const inputRef = useRef<HTMLInputElement>(null)
   
   const [initialEditValue, setInitialEditValue] = useState<string | null>(null)
+  
+  // Estado para gestionar el movimiento del foco de forma declarativa y evitar setTimeout(0)
+  const [pendingFocusAction, setPendingFocusAction] = useState<"current" | "up" | "down" | "left" | "right" | null>(null)
+
+  // useEffect que se encarga de mover el foco una vez que el componente ha vuelto al modo vista (DOM actualizado)
+  useEffect(() => {
+    if (!isEditing && pendingFocusAction && containerRef.current) {
+      if (pendingFocusAction === "current") {
+        containerRef.current.focus()
+      } else {
+        moveFocus(containerRef.current, pendingFocusAction)
+      }
+      setPendingFocusAction(null)
+    }
+  }, [isEditing, pendingFocusAction])
 
   function handleCommit(currentValue: string) {
     if (!enableEditing) {
@@ -103,6 +118,11 @@ function InlineEditableCell({
       return
     }
 
+    if (enableEditing && (e.ctrlKey || e.metaKey) && e.key === "v") {
+      // Dejamos que el evento 'onPaste' del div maneje esto para evitar avisos de seguridad
+      return
+    }
+
     if (enableEditing && e.key === "Delete") {
       e.preventDefault()
       handleCommit("")
@@ -131,6 +151,15 @@ function InlineEditableCell({
     }
   }
 
+  const handlePaste = (e: React.ClipboardEvent) => {
+    if (!enableEditing) return
+    const text = e.clipboardData.getData("text")
+    if (text) {
+      e.preventDefault()
+      handleCommit(text)
+    }
+  }
+
   if (!isEditing) {
     return (
       <div
@@ -141,6 +170,7 @@ function InlineEditableCell({
           setIsEditing(true)
         }}
         onKeyDown={handleGridKeyDown}
+        onPaste={handlePaste}
         aria-invalid={(wasBlurred && hasError) || undefined}
         className={cn(
           "flex h-8 w-full min-w-0 items-center rounded-lg border border-transparent bg-transparent px-2.5 py-1 text-base transition-colors outline-none md:text-sm",
@@ -193,25 +223,12 @@ function InlineEditableCell({
 
           if (direction) {
             e.preventDefault()
-            const td = inputRef.current?.closest("td")
             handleCommit(e.currentTarget.value)
-            
-            if (td) {
-              setTimeout(() => {
-                moveFocus(td, direction!)
-                // Foco de respaldo en la celda actual si se llega al límite de la tabla
-                if (!document.activeElement || document.activeElement === document.body) {
-                  td.querySelector<HTMLElement>('[tabindex="0"]')?.focus()
-                }
-              }, 0)
-            }
+            setPendingFocusAction(direction)
           } else if (e.key === "Escape") {
             e.preventDefault()
-            const td = inputRef.current?.closest("td")
             setIsEditing(false)
-            setTimeout(() => {
-              td?.querySelector<HTMLElement>('[tabindex="0"]')?.focus()
-            }, 0)
+            setPendingFocusAction("current")
           }
         }}
         aria-invalid={(wasBlurred && hasError) || undefined}

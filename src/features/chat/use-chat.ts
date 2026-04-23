@@ -33,11 +33,7 @@ function saveHistory(userId: string | null, messages: Message[]) {
     }
 }
 
-type SSEEvent =
-    | { type: "status"; text: string }
-    | { type: "token"; text: string }
-    | { type: "done" }
-    | { type: "error"; text: string }
+import { processSSEStream } from "./sse-utils"
 
 export function useChat(apiKey: string, model: string, userId: string | null) {
     const [messages, setMessages] = useState<Message[]>(() => loadHistory(userId))
@@ -111,29 +107,13 @@ export function useChat(apiKey: string, model: string, userId: string | null) {
             if (!response.body) throw new Error("No response body")
 
             const reader = response.body.getReader()
-            const decoder = new TextDecoder()
-            let buf = ""
             let assistantAdded = false
 
-            while (true) {
-                const { done, value } = await reader.read()
-                if (done) break
-                if (abortRef.current !== controller) return
-
-                buf += decoder.decode(value, { stream: true })
-                const lines = buf.split("\n")
-                buf = lines.pop() ?? ""
-
-                for (const line of lines) {
-                    if (!line.startsWith("data: ")) continue
-                    let event: SSEEvent
-                    try { event = JSON.parse(line.slice(6)) } catch { continue }
-
-                    if (abortRef.current !== controller) return
-
+            await processSSEStream(
+                reader,
+                (event) => {
                     if (event.type === "status") {
                         setStatusText(event.text)
-
                     } else if (event.type === "token") {
                         if (!assistantAdded) {
                             setMessages(prev => [...prev, { role: "assistant", content: "" }])
@@ -148,13 +128,11 @@ export function useChat(apiKey: string, model: string, userId: string | null) {
                             next[next.length - 1] = { ...last, content: last.content + event.text }
                             return next
                         })
-
                     } else if (event.type === "done") {
                         setStreamingIdx(null)
                         setMessages(prev => { saveHistory(userId, prev); return prev })
                         setLoading(false)
                         setStatusText("")
-
                     } else if (event.type === "error") {
                         const errMsg: Message = { role: "assistant", content: `Error: ${event.text}`, isError: true }
                         setStreamingIdx(null)
@@ -166,8 +144,9 @@ export function useChat(apiKey: string, model: string, userId: string | null) {
                         setLoading(false)
                         setStatusText("")
                     }
-                }
-            }
+                },
+                () => abortRef.current !== controller
+            )
 
             if (!assistantAdded) {
                 setMessages(prev => {

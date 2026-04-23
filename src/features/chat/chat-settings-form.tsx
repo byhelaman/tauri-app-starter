@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { useQuery } from "@tanstack/react-query"
 import { z } from "zod"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -62,25 +63,33 @@ interface ChatSettingsFormProps {
 }
 
 export function ChatSettingsForm({ view, currentApiKey, currentModel, onSave, onReset }: ChatSettingsFormProps) {
-    const [availableModels, setAvailableModels] = useState<GatewayModel[]>([])
-    const [modelsLoading, setModelsLoading] = useState(false)
-
     const { control, handleSubmit, register, setError, watch, formState: { errors } } = useForm<SettingsValues>({
         resolver: zodResolver(settingsSchema),
         defaultValues: { apiKey: "", model: currentModel },
     })
     const watchedKey = watch("apiKey")
+    
+    // Debounce simple para la API Key
+    const [debouncedKey, setDebouncedKey] = useState(currentApiKey)
+    useEffect(() => {
+        const key = watchedKey.trim() || currentApiKey
+        if (key.length > 10) {
+            const t = setTimeout(() => setDebouncedKey(key), 500)
+            return () => clearTimeout(t)
+        }
+    }, [watchedKey, currentApiKey])
 
-    const loadModels = useCallback(async (key: string) => {
-        if (!key.trim()) return
-        setModelsLoading(true)
-        try {
+    // Query para obtener modelos disponibles
+    const { data: availableModels = [], isLoading: modelsLoading } = useQuery({
+        queryKey: ["ai-models", debouncedKey],
+        queryFn: async () => {
+            if (!debouncedKey) return []
             const res = await fetch(MODELS_ENDPOINT, {
-                headers: { Authorization: `Bearer ${key}` },
+                headers: { Authorization: `Bearer ${debouncedKey}` },
             })
-            if (!res.ok) return
+            if (!res.ok) return []
             const json = await res.json() as { data?: Array<{ id: string }> }
-            const models = (json.data ?? [])
+            return (json.data ?? [])
                 .filter(m => !NON_CHAT_PATTERNS.some(p => m.id.includes(p)))
                 .map(m => {
                     const slash = m.id.indexOf("/")
@@ -91,30 +100,13 @@ export function ChatSettingsForm({ view, currentApiKey, currentModel, onSave, on
                     }
                 })
                 .sort((a, b) => a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name))
-            setAvailableModels(models)
-        } catch {
-            // silencioso — el modelo guardado sigue siendo válido
-        } finally {
-            setModelsLoading(false)
-        }
-    }, [])
-
-    // Cargar modelos al montar si ya hay una key guardada
-    useEffect(() => {
-        if (currentApiKey) void loadModels(currentApiKey)
-    }, [currentApiKey, loadModels])
-
-    // Recargar modelos cuando el usuario escribe una nueva key (debounced)
-    useEffect(() => {
-        if (watchedKey.trim().length > 10) {
-            const t = setTimeout(() => void loadModels(watchedKey), 700)
-            return () => clearTimeout(t)
-        }
-    }, [watchedKey, loadModels])
+        },
+        enabled: !!debouncedKey,
+        staleTime: 1000 * 60 * 30, // 30 minutos de cache
+    })
 
     function onSubmit(values: SettingsValues) {
         const trimmedKey = values.apiKey.trim()
-        // En setup la key es obligatoria; en settings vacío = conservar la key actual
         if (view === "setup" && !trimmedKey) {
             setError("apiKey", { message: "API key is required" })
             return

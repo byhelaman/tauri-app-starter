@@ -55,14 +55,14 @@ export function ChatWidget() {
     // Focus al input al entrar en vista chat
     useEffect(() => {
         if (view === "chat" && open) {
-            setTimeout(() => inputRef.current?.focus(), 50)
+            inputRef.current?.focus()
         }
     }, [view, open, inputRef])
 
     // Focus al textarea de edición al activar modo edición
     useEffect(() => {
         if (editingIdx !== null) {
-            setTimeout(() => editRef.current?.focus(), 50)
+            editRef.current?.focus()
         }
     }, [editingIdx])
 

@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   CheckCircle2,
@@ -15,11 +14,10 @@ import {
   Upload,
   XCircle,
 } from "lucide-react"
+import { useOrders } from "@/features/orders/hooks/useOrders"
 import {
   createColumns,
-  type EditableOrderField,
   type Order,
-  type Status,
 } from "@/features/orders/columns"
 import { DataTable } from "@/components/data-table/data-table"
 import type { FacetedFilterOption } from "@/components/data-table/data-table-types"
@@ -55,20 +53,8 @@ import {
 import {
   createQueueColumns,
   type QueueOrder,
-  type QueueStatus,
 } from "@/features/orders/modal-columns"
-
-const fetchOrders = async (): Promise<Order[]> => {
-  const res = await fetch("/api/orders")
-  if (!res.ok) throw new Error("Failed to fetch orders")
-  return res.json()
-}
-
-const fetchQueueOrders = async (): Promise<QueueOrder[]> => {
-  const res = await fetch("/api/queue-orders")
-  if (!res.ok) throw new Error("Failed to fetch queue orders")
-  return res.json()
-}
+import { OrderDialog } from "@/features/orders/order-dialog"
 
 const STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
   { label: "Pending", value: "pending", icon: Clock },
@@ -93,23 +79,19 @@ const QUEUE_STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
 ]
 
 export function OrdersPage() {
-  const queryClient = useQueryClient()
-
-  const { data: orders = [], isLoading: isOrdersLoading } = useQuery({
-    queryKey: ["orders"],
-    queryFn: fetchOrders,
-  })
-
-  const { data: queueOrders = [], isLoading: isQueueLoading } = useQuery({
-    queryKey: ["queueOrders"],
-    queryFn: fetchQueueOrders,
-  })
+  const {
+    orders,
+    isOrdersLoading,
+    queueOrders,
+    isQueueLoading,
+    actions
+  } = useOrders()
 
   const [bulkDeleteTarget, setBulkDeleteTarget] = useState<{ selected: Order[], clearSelection: () => void } | null>(null)
   const [rowDeleteTarget, setRowDeleteTarget] = useState<Order | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [tableModalOpen, setTableModalOpen] = useState(false)
-  const [draftOrder, setDraftOrder] = useState<{ index: number, data: Partial<Order> } | null>(null)
+  const [addOrderOpen, setAddOrderOpen] = useState(false)
 
   const { toolbarActions, rowClassName } = useTableHighlights()
   const { toolbarActions: queueToolbarActions, rowClassName: queueRowClassName } = useQueueHighlights()
@@ -118,233 +100,21 @@ export function OrdersPage() {
     setRowDeleteTarget(order)
   }, [])
 
-  const updateOrderMutation = useMutation({
-    mutationFn: async ({ id, ...updates }: Partial<Order> & { id: string }) => {
-      const res = await fetch(`/api/orders/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
-      })
-      if (!res.ok) throw new Error("Failed to update")
-      return res.json()
-    },
-    onMutate: async (newOrder) => {
-      await queryClient.cancelQueries({ queryKey: ["orders"] })
-      const previousOrders = queryClient.getQueryData<Order[]>(["orders"])
-      queryClient.setQueryData<Order[]>(["orders"], (old = []) => {
-        return old.map(order => order.id === newOrder.id ? { ...order, ...newOrder } : order)
-      })
-      return { previousOrders }
-    },
-    onError: (_err, _newOrder, context) => {
-      queryClient.setQueryData(["orders"], context?.previousOrders)
-      toast.error("Failed to update order")
-    },
-  })
-
-  const createOrderMutation = useMutation({
-    mutationFn: async (newOrder: Partial<Order>) => {
-      // Remove temporary ID before sending to server
-      const { id, ...orderData } = newOrder
-      const res = await fetch(`/api/orders`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(orderData),
-      })
-      if (!res.ok) throw new Error("Failed to create")
-      return res.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] })
-      setDraftOrder(null)
-      toast.success("Order created successfully")
-    },
-    onError: () => {
-      toast.error("Failed to create order")
-    }
-  })
-
-  const updateOrderById = useCallback((orderId: string, updater: (order: Order) => Order) => {
-    const currentOrders = queryClient.getQueryData<Order[]>(["orders"]) || []
-    const current = currentOrders.find((order) => order.id === orderId)
-    if (!current) return
-
-    const updated = updater(current)
-    if (updated === current) return
-
-    updateOrderMutation.mutate(updated)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queryClient])
-
-  const handleStatusChange = useCallback((orderId: string, status: Status) => {
-    updateOrderById(orderId, (order) => ({ ...order, status }))
-  }, [updateOrderById])
-
-  const handleCellChange = useCallback((orderId: string, field: EditableOrderField, value: string, isValid: boolean) => {
-    if (orderId === "draft") {
-      if (!draftOrder) return
-      
-      const updatedData = { ...draftOrder.data, [field]: value }
-      setDraftOrder({ ...draftOrder, data: updatedData })
-      
-      if (isValid) {
-        createOrderMutation.mutate(updatedData)
-      }
-      return
-    }
-
-    updateOrderById(orderId, (order) => {
-      switch (field) {
-        case "date":
-          return { ...order, date: value }
-        case "customer":
-          return { ...order, customer: value }
-        case "product":
-          return { ...order, product: value }
-        case "category":
-          return { ...order, category: value }
-        case "time":
-          return { ...order, time: value }
-        case "code":
-          return { ...order, code: value }
-        case "channel":
-          return { ...order, channel: value }
-        case "quantity": {
-          const normalized = value.trim()
-          return {
-            ...order,
-            quantity: isValid ? Number.parseInt(normalized, 10) : value,
-          }
-        }
-        default:
-          return order
-      }
-    })
-  }, [updateOrderById, draftOrder, createOrderMutation])
-
-  const deleteOrderMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/orders/${id}`, { method: "DELETE" })
-      if (!res.ok) throw new Error("Failed to delete")
-    },
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: ["orders"] })
-      const previousOrders = queryClient.getQueryData<Order[]>(["orders"])
-      queryClient.setQueryData<Order[]>(["orders"], (old = []) => old.filter(order => order.id !== id))
-      return { previousOrders }
-    },
-    onError: (_err, _id, context) => {
-      queryClient.setQueryData(["orders"], context?.previousOrders)
-      toast.error("Failed to delete order")
-    },
-  })
-
-  const deleteBulkOrdersMutation = useMutation({
-    mutationFn: async (ids: string[]) => {
-      const res = await fetch(`/api/orders/bulk-delete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids }),
-      })
-      if (!res.ok) throw new Error("Failed to bulk delete")
-    },
-    onMutate: async (ids) => {
-      const idSet = new Set(ids)
-      await queryClient.cancelQueries({ queryKey: ["orders"] })
-      const previousOrders = queryClient.getQueryData<Order[]>(["orders"])
-      queryClient.setQueryData<Order[]>(["orders"], (old = []) => old.filter(order => !idSet.has(order.id)))
-      return { previousOrders }
-    },
-    onError: (_err, _ids, context) => {
-      queryClient.setQueryData(["orders"], context?.previousOrders)
-      toast.error("Failed to delete orders")
-    },
-  })
-
-  const handleDelete = useCallback((orderId: string) => {
-    deleteOrderMutation.mutate(orderId)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const updateQueueOrderMutation = useMutation({
-    mutationFn: async ({ code, ...updates }: Partial<QueueOrder> & { code: string }) => {
-      const res = await fetch(`/api/queue-orders/${code}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
-      })
-      if (!res.ok) throw new Error("Failed to update")
-      return res.json()
-    },
-    onMutate: async (newOrder) => {
-      await queryClient.cancelQueries({ queryKey: ["queueOrders"] })
-      const previousOrders = queryClient.getQueryData<QueueOrder[]>(["queueOrders"])
-      queryClient.setQueryData<QueueOrder[]>(["queueOrders"], (old = []) => {
-        return old.map(order => order.code === newOrder.code ? { ...order, ...newOrder } : order)
-      })
-      return { previousOrders }
-    },
-    onError: (_err, _newOrder, context) => {
-      queryClient.setQueryData(["queueOrders"], context?.previousOrders)
-    },
-  })
-
-  const deleteQueueOrderMutation = useMutation({
-    mutationFn: async (code: string) => {
-      const res = await fetch(`/api/queue-orders/${code}`, { method: "DELETE" })
-      if (!res.ok) throw new Error("Failed to delete")
-    },
-    onMutate: async (code) => {
-      await queryClient.cancelQueries({ queryKey: ["queueOrders"] })
-      const previousOrders = queryClient.getQueryData<QueueOrder[]>(["queueOrders"])
-      queryClient.setQueryData<QueueOrder[]>(["queueOrders"], (old = []) => old.filter(order => order.code !== code))
-      return { previousOrders }
-    },
-    onError: (_err, _code, context) => {
-      queryClient.setQueryData(["queueOrders"], context?.previousOrders)
-    },
-  })
-
-  const handleQueueStatusChange = useCallback((code: string, status: QueueStatus) => {
-    updateQueueOrderMutation.mutate({ code, status })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const handleQueuePriorityToggle = useCallback((code: string) => {
-    const currentOrders = queryClient.getQueryData<QueueOrder[]>(["queueOrders"]) || []
-    const order = currentOrders.find(o => o.code === code)
-    if (order) {
-      updateQueueOrderMutation.mutate({ code, priority: !order.priority })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queryClient])
-
-  const handleQueueRemove = useCallback((code: string) => {
-    deleteQueueOrderMutation.mutate(code)
-    toast.success("Removed from queue")
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const columns = useMemo(
+    () => createColumns(actions.deleteOrder, actions.handleStatusChange, actions.handleCellChange),
+    [actions.deleteOrder, actions.handleStatusChange, actions.handleCellChange]
+  )
+  const queueColumns = useMemo(
+    () => createQueueColumns(actions.handleQueueStatusChange, actions.handleQueuePriorityToggle, actions.handleQueueRemove),
+    [actions.handleQueueStatusChange, actions.handleQueuePriorityToggle, actions.handleQueueRemove]
+  )
 
   const copyQueueCode = useCallback((order: QueueOrder) => {
     navigator.clipboard.writeText(order.code)
     toast.success("Order code copied")
   }, [])
 
-  const columns = useMemo(
-    () => createColumns(handleDelete, handleStatusChange, handleCellChange),
-    [handleCellChange, handleDelete, handleStatusChange]
-  )
-  const queueColumns = useMemo(
-    () => createQueueColumns(handleQueueStatusChange, handleQueuePriorityToggle, handleQueueRemove),
-    [handleQueuePriorityToggle, handleQueueRemove, handleQueueStatusChange]
-  )
-
-  const tableData = useMemo(() => {
-    if (!draftOrder) return orders
-    const copy = [...orders]
-    copy.splice(draftOrder.index, 0, draftOrder.data as Order)
-    return copy
-  }, [draftOrder, orders])
+  const tableData = orders
 
   return (
     <main className="h-full overflow-hidden flex flex-col p-6 gap-6">
@@ -361,14 +131,23 @@ export function OrdersPage() {
               <Upload data-icon="inline-start" />
               Import
             </Button>
+            <Button onClick={() => setAddOrderOpen(true)}>
+              <Plus data-icon="inline-start" />
+              Add Order
+            </Button>
           </div>
         }
       />
       <ImportDialog open={importOpen} onOpenChange={setImportOpen} title="Import orders" />
+      <OrderDialog
+        open={addOrderOpen}
+        onOpenChange={setAddOrderOpen}
+        onSubmit={(newOrder) => actions.createOrder(newOrder)}
+      />
       <DataTable
         columns={columns}
         data={tableData}
-        isLoading={isOrdersLoading && !draftOrder}
+        isLoading={isOrdersLoading}
         tableId="orders"
         toolbar={{
           searchable: true,
@@ -382,22 +161,8 @@ export function OrdersPage() {
           searchDebounceMs: 300,
         }}
         rowContextMenu={(order) => {
-          const rowIndex = orders.findIndex((o) => o.id === order.id)
           return (
             <>
-              <ContextMenuItem onSelect={() => setDraftOrder({
-                index: Math.max(0, rowIndex),
-                data: { id: "draft", customer: "", product: "", status: "pending", channel: "Online", code: "DRAFT" }
-              })}>
-                Insert row above
-              </ContextMenuItem>
-              <ContextMenuItem onSelect={() => setDraftOrder({
-                index: rowIndex + 1,
-                data: { id: "draft", customer: "", product: "", status: "pending", channel: "Online", code: "DRAFT" }
-              })}>
-                Insert row below
-              </ContextMenuItem>
-              <ContextMenuSeparator />
               <ContextMenuItem onSelect={() => toast.info(`Viewing details for ${order.id}`)}>
                 View details
               </ContextMenuItem>
@@ -511,11 +276,11 @@ export function OrdersPage() {
               rowContextMenu={(order) => (
                 <>
                   <ContextMenuItem onSelect={() => copyQueueCode(order)}>Copy code</ContextMenuItem>
-                  <ContextMenuItem onSelect={() => handleQueuePriorityToggle(order.code)}>
+                  <ContextMenuItem onSelect={() => actions.handleQueuePriorityToggle(order.code)}>
                     {order.priority ? "Set normal priority" : "Set high priority"}
                   </ContextMenuItem>
                   <ContextMenuSeparator />
-                  <ContextMenuItem onSelect={() => handleQueueRemove(order.code)}>
+                  <ContextMenuItem onSelect={() => actions.handleQueueRemove(order.code)}>
                     Remove from queue
                   </ContextMenuItem>
                 </>
@@ -547,8 +312,7 @@ export function OrdersPage() {
               variant="destructive"
               onClick={() => {
                 if (!rowDeleteTarget) return
-                const rowId = rowDeleteTarget.id
-                deleteOrderMutation.mutate(rowId)
+                actions.deleteOrder(rowDeleteTarget.id)
                 toast.success("Order deleted")
                 setRowDeleteTarget(null)
               }}
@@ -577,7 +341,7 @@ export function OrdersPage() {
               onClick={() => {
                 if (!bulkDeleteTarget) return
                 const ids = bulkDeleteTarget.selected.map((order) => order.id)
-                deleteBulkOrdersMutation.mutate(ids)
+                actions.deleteBulkOrders(ids)
                 toast.success(`${bulkDeleteTarget.selected.length} orders deleted`)
                 bulkDeleteTarget.clearSelection()
                 setBulkDeleteTarget(null)

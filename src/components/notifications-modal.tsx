@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useEffect } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { BellIcon, CheckCheckIcon, XIcon } from "lucide-react"
 import { supabase } from "@/lib/supabase"
@@ -88,47 +89,34 @@ interface NotificationsModalProps {
 }
 
 export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: NotificationsModalProps) {
-  const [notifications, setNotifications] = useState<Notification[]>([])
-  const unreadCount = notifications.filter((n) => !n.read).length
+  const queryClient = useQueryClient()
 
-  // Callback ref para evitar re-disparos cuando el padre redefine la función inline en cada render
-  const onUnreadCountChangeRef = useRef(onUnreadCountChange)
-  useEffect(() => { onUnreadCountChangeRef.current = onUnreadCountChange })
-  useEffect(() => {
-    onUnreadCountChangeRef.current?.(unreadCount)
-  }, [unreadCount])
-
-  const fetchNotifications = useCallback(async () => {
-    if (!supabase) return
-    try {
+  const { data: notifications = [], isLoading } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: async () => {
+      if (!supabase) return []
       const { data, error } = await supabase.rpc("get_my_notifications", { p_limit: 50 })
       if (error) throw error
-      setNotifications(
-        ((data ?? []) as RpcNotification[]).map((n) => ({
-          id: n.id,
-          title: n.title,
-          body: n.body,
-          type: n.type as Notification["type"],
-          read: n.read,
-          createdAt: n.created_at,
-        }))
-      )
-    } catch (err) {
-      console.error("Failed to fetch notifications", err)
-    }
-  }, [])
+      return ((data ?? []) as RpcNotification[]).map((n) => ({
+        id: n.id,
+        title: n.title,
+        body: n.body,
+        type: n.type as Notification["type"],
+        read: n.read,
+        createdAt: n.created_at,
+      }))
+    },
+    enabled: !!supabase,
+  })
 
-  // Fetch inicial al montar para que el badge sea preciso sin abrir el modal
+  const unreadCount = notifications.filter((n) => !n.read).length
+
+  // Sincronización del contador hacia el padre (badge del sidebar/navbar)
   useEffect(() => {
-    void fetchNotifications()
-  }, [fetchNotifications])
+    onUnreadCountChange?.(unreadCount)
+  }, [unreadCount, onUnreadCountChange])
 
-  // Refresca al abrir para mostrar datos actualizados
-  useEffect(() => {
-    if (open) void fetchNotifications()
-  }, [open, fetchNotifications])
-
-  // Realtime subscription — always active to keep badge updated
+  // Realtime subscription — Actualización reactiva basada en invalidación
   useEffect(() => {
     if (!supabase) return
 
@@ -139,52 +127,93 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
         { event: "INSERT", schema: "public", table: "notifications" },
         (payload) => {
           const row = payload.new as RpcNotification
-          const notification: Notification = {
-            id: row.id,
-            title: row.title,
-            body: row.body,
-            type: row.type as Notification["type"],
-            read: row.read,
-            createdAt: row.created_at,
-          }
-          setNotifications((prev) => [notification, ...prev])
-          void sendOsNotification(notification.title, notification.body)
+          // Notificación al SO
+          void sendOsNotification(row.title, row.body)
+          // Invalidamos la cache para que React Query refresque los datos de forma limpia
+          void queryClient.invalidateQueries({ queryKey: ["notifications"] })
         }
       )
 
     channel.subscribe()
     return () => { void supabase!.removeChannel(channel) }
-  }, [])
+  }, [queryClient])
 
-  async function markAllRead() {
-    if (!supabase) return
-    const { error } = await supabase.rpc("mark_all_notifications_read")
-    if (error) { toast.error(error.message); return }
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
-  }
+  // Mutaciones con actualizaciones optimistas para una UI instantánea
+  const markAllReadMutation = useMutation({
+    mutationFn: async () => {
+      if (!supabase) return
+      const { error } = await supabase.rpc("mark_all_notifications_read")
+      if (error) throw error
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["notifications"] })
+      const previous = queryClient.getQueryData<Notification[]>(["notifications"])
+      queryClient.setQueryData<Notification[]>(["notifications"], (old) => 
+        old?.map(n => ({ ...n, read: true }))
+      )
+      return { previous }
+    },
+    onError: (_, __, context) => {
+      queryClient.setQueryData(["notifications"], context?.previous)
+      toast.error("Failed to mark all as read")
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["notifications"] })
+    }
+  })
 
-  async function markRead(id: number) {
-    if (!supabase) return
-    const { error } = await supabase.rpc("mark_notification_read", { p_id: id })
-    if (error) { toast.error(error.message); return }
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
-  }
+  const markReadMutation = useMutation({
+    mutationFn: async (id: number) => {
+      if (!supabase) return
+      const { error } = await supabase.rpc("mark_notification_read", { p_id: id })
+      if (error) throw error
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ["notifications"] })
+      const previous = queryClient.getQueryData<Notification[]>(["notifications"])
+      queryClient.setQueryData<Notification[]>(["notifications"], (old) => 
+        old?.map(n => n.id === id ? { ...n, read: true } : n)
+      )
+      return { previous }
+    },
+    onError: (_, __, context) => {
+      queryClient.setQueryData(["notifications"], context?.previous)
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["notifications"] })
+    }
+  })
 
-  async function dismiss(id: number) {
-    if (!supabase) return
-    const { error } = await supabase.rpc("dismiss_notification", { p_id: id })
-    if (error) { toast.error(error.message); return }
-    setNotifications((prev) => prev.filter((n) => n.id !== id))
-  }
+  const dismissMutation = useMutation({
+    mutationFn: async (id: number) => {
+      if (!supabase) return
+      const { error } = await supabase.rpc("dismiss_notification", { p_id: id })
+      if (error) throw error
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ["notifications"] })
+      const previous = queryClient.getQueryData<Notification[]>(["notifications"])
+      queryClient.setQueryData<Notification[]>(["notifications"], (old) => 
+        old?.filter(n => n.id !== id)
+      )
+      return { previous }
+    },
+    onError: (_, __, context) => {
+      queryClient.setQueryData(["notifications"], context?.previous)
+      toast.error("Failed to dismiss notification")
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["notifications"] })
+    }
+  })
 
   async function sendTest() {
     const title = "Test notification"
     const body = "This came from the OS notification system."
     await sendOsNotification(title, body)
-    setNotifications((prev) => [
-      { id: Date.now(), title, body, type: "info", read: false, createdAt: new Date().toISOString() },
-      ...prev,
-    ])
+    // Para tests, simplemente invalidamos para ver si llega algo nuevo (si el RPC lo creara)
+    // Opcionalmente podríamos añadirlo manualmente a la cache, pero invalidar es más limpio.
+    void queryClient.invalidateQueries({ queryKey: ["notifications"] })
   }
 
   return (
@@ -199,7 +228,12 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
               </DialogDescription>
             </div>
             {unreadCount > 0 && (
-              <Button variant="ghost" size="sm" onClick={markAllRead}>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => markAllReadMutation.mutate()}
+                disabled={markAllReadMutation.isPending}
+              >
                 <CheckCheckIcon />
                 Mark all read
               </Button>
@@ -208,7 +242,7 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
         </DialogHeader>
 
         <DialogBody className="mt-1 py-1">
-          {notifications.length === 0 ? (
+          {notifications.length === 0 && !isLoading ? (
             <Empty>
               <EmptyHeader>
                 <EmptyMedia variant="icon">
@@ -220,7 +254,7 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent className="flex-row justify-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => void fetchNotifications()}>
+                <Button variant="outline" size="sm" onClick={() => void queryClient.invalidateQueries({ queryKey: ["notifications"] })}>
                   Refresh
                 </Button>
               </EmptyContent>
@@ -233,7 +267,7 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
                   size="sm"
                   variant={n.read ? "default" : "muted"}
                   className={cn("cursor-pointer", !n.read && "hover:bg-muted/70")}
-                  onClick={() => void markRead(n.id)}
+                  onClick={() => !n.read && markReadMutation.mutate(n.id)}
                 >
                   <ItemMedia variant="icon">
                     <BellIcon />
@@ -251,9 +285,10 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
                       variant="ghost"
                       size="icon-sm"
                       aria-label="Dismiss notification"
+                      disabled={dismissMutation.isPending}
                       onClick={(e) => {
                         e.stopPropagation()
-                        void dismiss(n.id)
+                        dismissMutation.mutate(n.id)
                       }}
                     >
                       <XIcon />
