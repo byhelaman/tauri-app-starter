@@ -35,3 +35,18 @@ export interface DataTableLayoutConfig {
   scrollAreaClassName?: string
   tableHeaderClassName?: string
 }
+
+export interface HistoryDetail {
+  field: string
+  oldValue?: string | number
+  newValue?: string | number
+}
+
+export interface HistoryEntry {
+  id: string
+  action: "create" | "update" | "delete"
+  description: string
+  actorEmail: string
+  createdAt: string
+  details?: HistoryDetail[]
+}
