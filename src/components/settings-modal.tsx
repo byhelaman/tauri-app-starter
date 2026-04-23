@@ -34,6 +34,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface SettingsModalProps {
   open: boolean
@@ -48,12 +49,14 @@ function SettingRow({
   description,
   checked,
   onCheckedChange,
+  disabled,
 }: {
   id: string
   label: string
   description?: string
   checked: boolean
   onCheckedChange: (checked: boolean) => void
+  disabled?: boolean
 }) {
   return (
     <Field orientation="horizontal" className="items-center!">
@@ -61,8 +64,37 @@ function SettingRow({
         <FieldLabel htmlFor={id}>{label}</FieldLabel>
         {description && <FieldDescription>{description}</FieldDescription>}
       </FieldContent>
-      <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
+      <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
     </Field>
+  )
+}
+
+import { FormSkeleton } from "@/components/ui/field-skeleton"
+
+function ApplicationSkeleton() {
+  return (
+    <div className="flex flex-col gap-4">
+      <FormSkeleton rows={2} orientation="horizontal" />
+      <Separator />
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <Skeleton className="h-5 w-16" /> {/* About Title */}
+          <div className="flex flex-col gap-1">
+            <Skeleton className="h-5 w-32" /> {/* Version 1 */}
+            <Skeleton className="h-5 w-32" /> {/* Version 2 */}
+          </div>
+        </div>
+        <div className="flex flex-col gap-1">
+          <Skeleton className="h-5 w-16" /> {/* Legal Title */}
+          <div className="flex flex-col gap-1">
+            <Skeleton className="h-5 w-32" /> {/* Legal 1 */}
+            <Skeleton className="h-5 w-32" /> {/* Legal 2 */}
+            <Skeleton className="h-5 w-32" /> {/* Legal 3 */}
+          </div>
+        </div>
+      </div>
+      <Skeleton className="h-5 w-60 mt-2" /> {/* Copyright */}
+    </div>
   )
 }
 
@@ -70,12 +102,22 @@ export function SettingsModal({ open, onOpenChange, settings, onSettingsChange }
   const { checkForUpdates, isChecking, simulateUpdate } = useUpdaterContext()
   const [appVersion, setAppVersion] = useState("")
   const [tauriVersion, setTauriVersion] = useState("")
+  const [loadingVersions, setLoadingVersions] = useState(true)
   const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
 
   useEffect(() => {
-    getVersion().then(setAppVersion).catch(() => { })
-    getTauriVersion().then(setTauriVersion).catch(() => { })
-  }, [])
+    if (!open) return
+    setLoadingVersions(true)
+    Promise.all([
+      getVersion().catch(() => "0.0.0"),
+      getTauriVersion().catch(() => "0.0.0")
+    ]).then(([app, tauri]) => {
+      setAppVersion(app)
+      setTauriVersion(tauri)
+    }).finally(() => {
+      setLoadingVersions(false)
+    })
+  }, [open])
 
   function toggle(key: keyof AppSettings) {
     onSettingsChange({ ...settings, [key]: !settings[key] })
@@ -128,28 +170,28 @@ export function SettingsModal({ open, onOpenChange, settings, onSettingsChange }
                 <SettingRow
                   id="launch-at-login"
                   label="Launch at login"
-                  description="Start the app automatically when you sign in to Windows"
+                  description="Start the app automatically when you sign in"
                   checked={settings.launchAtLogin}
                   onCheckedChange={() => toggle("launchAtLogin")}
                 />
                 <SettingRow
                   id="start-minimized"
                   label="Start minimized"
-                  description="Launch in the background without showing the window"
+                  description="Launch in the background"
                   checked={settings.startMinimized}
                   onCheckedChange={() => toggle("startMinimized")}
                 />
                 <SettingRow
                   id="close-to-tray"
                   label="Close to system tray"
-                  description="Keep the app running in the background when closed"
+                  description="Keep the app running when closed"
                   checked={settings.closeToTray}
                   onCheckedChange={() => toggle("closeToTray")}
                 />
                 <SettingRow
                   id="ask-export-location"
                   label="Ask where to save files"
-                  description="Prompt for a location when saving files to disk"
+                  description="Prompt for a location when saving"
                   checked={settings.askExportLocation}
                   onCheckedChange={() => toggle("askExportLocation")}
                 />
@@ -159,13 +201,6 @@ export function SettingsModal({ open, onOpenChange, settings, onSettingsChange }
             <TabsContent value="notifications">
               <FieldGroup>
                 <SettingRow
-                  id="email-notif"
-                  label="Email notifications"
-                  description="Receive updates via email"
-                  checked={settings.emailNotifications}
-                  onCheckedChange={() => toggle("emailNotifications")}
-                />
-                <SettingRow
                   id="push-notif"
                   label="Push notifications"
                   description="Notify me about activity"
@@ -173,11 +208,20 @@ export function SettingsModal({ open, onOpenChange, settings, onSettingsChange }
                   onCheckedChange={() => toggle("pushNotifications")}
                 />
                 <SettingRow
+                  id="email-notif"
+                  label="Email notifications"
+                  description="Receive updates via email"
+                  checked={settings.emailNotifications}
+                  onCheckedChange={() => toggle("emailNotifications")}
+                  disabled
+                />
+                <SettingRow
                   id="digest"
                   label="Weekly digest"
                   description="Summary of activity every Monday"
                   checked={settings.weeklyDigest}
                   onCheckedChange={() => toggle("weeklyDigest")}
+                  disabled
                 />
               </FieldGroup>
             </TabsContent>
@@ -190,6 +234,7 @@ export function SettingsModal({ open, onOpenChange, settings, onSettingsChange }
                   description="Let others see when you're active"
                   checked={settings.showOnlineStatus}
                   onCheckedChange={() => toggle("showOnlineStatus")}
+                  disabled
                 />
                 <SettingRow
                   id="analytics"
@@ -197,95 +242,100 @@ export function SettingsModal({ open, onOpenChange, settings, onSettingsChange }
                   description="Help improve the app with anonymous data"
                   checked={settings.usageAnalytics}
                   onCheckedChange={() => toggle("usageAnalytics")}
+                  disabled
                 />
               </FieldGroup>
             </TabsContent>
 
             <TabsContent value="application">
-              <div className="flex flex-col gap-4">
-                <FieldGroup>
-                  <Field orientation="horizontal" className="items-center!">
-                    <FieldContent>
-                      <FieldLabel>Auto-update</FieldLabel>
-                      <FieldDescription>Download and install updates automatically</FieldDescription>
-                    </FieldContent>
-                    <Switch id="auto-update" checked={settings.autoUpdate} onCheckedChange={() => toggle("autoUpdate")} />
-                  </Field>
-                  <Field orientation="horizontal" className="items-center!">
-                    <FieldContent>
-                      <FieldLabel>Check for updates</FieldLabel>
-                      <FieldDescription>Look for a newer version right now</FieldDescription>
-                    </FieldContent>
-                    <Button variant="outline" size="sm" onClick={checkForUpdates} disabled={isChecking}>
-                      {isChecking ? "Checking..." : "Check"}
+              {loadingVersions ? (
+                <ApplicationSkeleton />
+              ) : (
+                <div className="flex flex-col gap-4">
+                  <FieldGroup>
+                    <Field orientation="horizontal" className="items-center!">
+                      <FieldContent>
+                        <FieldLabel>Auto-update</FieldLabel>
+                        <FieldDescription>Download and install updates automatically</FieldDescription>
+                      </FieldContent>
+                      <Switch id="auto-update" checked={settings.autoUpdate} onCheckedChange={() => toggle("autoUpdate")} />
+                    </Field>
+                    <Field orientation="horizontal" className="items-center!">
+                      <FieldContent>
+                        <FieldLabel>Check for updates</FieldLabel>
+                        <FieldDescription>Look for a newer version right now</FieldDescription>
+                      </FieldContent>
+                      <Button variant="outline" size="sm" onClick={checkForUpdates} disabled={isChecking}>
+                        {isChecking ? "Checking..." : "Check"}
+                      </Button>
+                    </Field>
+                  </FieldGroup>
+
+                  {import.meta.env.DEV && (
+                    <Button variant="outline" className="w-full text-muted-foreground" onClick={simulateUpdate}>
+                      [Demo] Simulate update
                     </Button>
-                  </Field>
-                </FieldGroup>
+                  )}
 
-                {import.meta.env.DEV && (
-                  <Button variant="outline" className="w-full text-muted-foreground" onClick={simulateUpdate}>
-                    [Demo] Simulate update
-                  </Button>
-                )}
+                  <FieldGroup>
+                    <Field orientation="horizontal" className="items-center!">
+                      <FieldContent>
+                        <FieldLabel>Reset to defaults</FieldLabel>
+                        <FieldDescription>Clear local data and reset app settings.</FieldDescription>
+                      </FieldContent>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" size="sm">Reset</Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Reset to defaults?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This clears local app data on this device.
+                              The app will reload.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => {
+                              void handleResetToDefaults()
+                            }}>
+                              Reset
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </Field>
+                  </FieldGroup>
 
-                <FieldGroup>
-                  <Field orientation="horizontal" className="items-center!">
-                    <FieldContent>
-                      <FieldLabel>Reset to defaults</FieldLabel>
-                      <FieldDescription>Clear local data and reset app settings.</FieldDescription>
-                    </FieldContent>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="outline" size="sm">Reset</Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Reset to defaults?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This clears local app data on this device.
-                            The app will reload.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => {
-                            void handleResetToDefaults()
-                          }}>
-                            Reset
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </Field>
-                </FieldGroup>
+                  <Separator />
 
-                <Separator />
-
-                <div className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-0.5">
-                    <p className="text-sm font-medium">About</p>
-                    <div className="flex flex-col gap-1 text-sm text-muted-foreground">
-                      {appVersion && <span>Version v{appVersion}</span>}
-                      {tauriVersion && <span>Tauri v{tauriVersion}</span>}
+                  <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-0.5">
+                      <p className="text-sm font-medium">About</p>
+                      <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+                        {appVersion && <span>Version v{appVersion}</span>}
+                        {tauriVersion && <span>Tauri v{tauriVersion}</span>}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <p className="text-sm font-medium">Legal</p>
+                      <div className="flex flex-col gap-1">
+                        {[
+                          { label: "License Terms", href: "#" },
+                          { label: "Privacy Statement", href: "#" },
+                          { label: "Terms of Service", href: "#" },
+                        ].map(({ label, href }) => (
+                          <a key={label} href={href} className="text-sm text-muted-foreground hover:text-foreground transition-colors w-fit">
+                            {label}
+                          </a>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex flex-col gap-0.5">
-                    <p className="text-sm font-medium">Legal</p>
-                    <div className="flex flex-col gap-1">
-                      {[
-                        { label: "License Terms", href: "#" },
-                        { label: "Privacy Statement", href: "#" },
-                        { label: "Terms of Service", href: "#" },
-                      ].map(({ label, href }) => (
-                        <a key={label} href={href} className="text-sm text-muted-foreground hover:text-foreground transition-colors w-fit">
-                          {label}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
+                  <p className="text-sm text-muted-foreground">© 2026 Your Company. All rights reserved.</p>
                 </div>
-                <p className="text-sm text-muted-foreground">© 2026 Your Company. All rights reserved.</p>
-              </div>
+              )}
             </TabsContent>
           </DialogBody>
         </Tabs>

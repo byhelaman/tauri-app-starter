@@ -49,25 +49,25 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 
+import { FieldSkeleton } from "@/components/ui/field-skeleton"
+
 function ProfileSkeleton() {
   return (
-    <FieldGroup>
-      <Field>
+    <div className="flex flex-col gap-5">
+      {/* Avatar Field Skeleton */}
+      <div className="flex flex-col gap-2 py-1">
+        <Skeleton className="h-5 w-24" /> {/* Label: Avatar */}
         <div className="flex items-center gap-4">
           <Skeleton className="size-18 rounded-full" />
-          <div className="space-y-2">
-            <Skeleton className="h-8 w-24" />
-            <Skeleton className="h-4 w-32" />
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-8 w-28 rounded-lg" /> {/* Button */}
+            <Skeleton className="h-5 w-40" /> {/* Description */}
           </div>
         </div>
-      </Field>
-      {[1, 2, 3].map((i) => (
-        <Field key={i}>
-          <Skeleton className="h-4 w-20 mb-2" />
-          <Skeleton className="h-10 w-full" />
-        </Field>
-      ))}
-    </FieldGroup>
+      </div>
+      <FieldSkeleton orientation="vertical" hasDescription={true} />
+      <FieldSkeleton orientation="vertical" hasDescription={true} />
+    </div>
   )
 }
 
