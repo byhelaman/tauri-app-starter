@@ -52,7 +52,7 @@ export function createQueueColumns(
       minSize: 140,
       maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Time" className="justify-center" />,
-      cell: ({ row }) => renderCell(row.getValue("time") as string),
+      cell: ({ row }) => renderCell(row.getValue("time") as string, "font-mono"),
     },
     {
       accessorKey: "code",

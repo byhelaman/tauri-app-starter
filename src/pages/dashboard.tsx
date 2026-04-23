@@ -77,7 +77,7 @@ export function DashboardPage() {
               <Card key={stat.label}>
                 <CardHeader className="pb-2">
                   <CardDescription>{stat.label}</CardDescription>
-                  <CardTitle className="text-2xl">{stat.value}</CardTitle>
+                  <CardTitle className="text-2xl font-mono">{stat.value}</CardTitle>
                 </CardHeader>
                 <CardContent className="flex items-center justify-between gap-3 pt-0">
                   <div className="flex flex-col gap-1">

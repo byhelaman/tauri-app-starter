@@ -70,7 +70,7 @@ export function createColumns(
       minSize: 124,
       maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Date" className="justify-center" />,
-      cell: ({ row }) => renderCell(row.getValue("date") as string),
+      cell: ({ row }) => renderCell(row.getValue("date") as string, { className: "font-mono" }),
     },
     {
       accessorKey: "customer",
@@ -120,7 +120,7 @@ export function createColumns(
         const startHour = time.split(" - ")[0]?.trim().split(":")[0] ?? ""
         return filterValue.includes(startHour)
       },
-      cell: ({ row }) => renderCell(row.getValue("time") as string),
+      cell: ({ row }) => renderCell(row.getValue("time") as string, { className: "font-mono" }),
     },
     {
       accessorKey: "code",

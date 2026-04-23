@@ -126,6 +126,7 @@ export function OrderDialog({ open, onOpenChange, onSubmit }: OrderDialogProps) 
                   <FieldLabel>Code</FieldLabel>
                   <Input
                     {...register("code")}
+                    className="font-mono"
                     placeholder="ORD-XXXXX"
                     aria-invalid={!!errors.code}
                   />
@@ -157,6 +158,7 @@ export function OrderDialog({ open, onOpenChange, onSubmit }: OrderDialogProps) 
                   <FieldLabel>Quantity</FieldLabel>
                   <Input
                     type="number"
+                    className="font-mono"
                     {...register("quantity", { valueAsNumber: true })}
                     aria-invalid={!!errors.quantity}
                   />
@@ -254,6 +256,7 @@ export function OrderDialog({ open, onOpenChange, onSubmit }: OrderDialogProps) 
                   <Input
                     type="number"
                     step="0.01"
+                    className="font-mono"
                     {...register("amount", { valueAsNumber: true })}
                     aria-invalid={!!errors.amount}
                   />
