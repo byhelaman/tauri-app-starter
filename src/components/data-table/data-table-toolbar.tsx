@@ -33,6 +33,7 @@ interface DataTableToolbarProps<TData> {
   actions?: React.ReactNode | ((table: Table<TData>) => React.ReactNode)
   searchDebounceMs?: number
   showViewOptions?: boolean
+  onSidePanelToggle?: () => void
 }
 
 export function DataTableToolbar<TData>({
@@ -45,6 +46,7 @@ export function DataTableToolbar<TData>({
   actions,
   searchDebounceMs = 300,
   showViewOptions = true,
+  onSidePanelToggle,
 }: DataTableToolbarProps<TData>) {
   const currentFilterValue = (table.getState().globalFilter as string) ?? ""
 
@@ -232,7 +234,7 @@ export function DataTableToolbar<TData>({
 
       {renderedActions}
 
-      {showViewOptions && <DataTableViewOptions table={table} tableId={tableId} />}
+      {showViewOptions && <DataTableViewOptions table={table} tableId={tableId} onSidePanelToggle={onSidePanelToggle} />}
     </div>
   )
 }

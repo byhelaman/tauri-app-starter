@@ -56,6 +56,7 @@ import {
   createQueueColumns,
   type QueueOrder,
 } from "@/features/orders/modal-columns"
+import { TableHistoryCard } from "@/components/data-table/table-history-card"
 import { OrderDialog } from "@/features/orders/order-dialog"
 
 const STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
@@ -151,6 +152,9 @@ export function OrdersPage() {
         data={tableData}
         isLoading={isOrdersLoading}
         tableId="orders"
+        sidePanel={(onClose) => (
+          <TableHistoryCard tableId="orders" onClose={onClose} />
+        )}
         toolbar={{
           searchable: true,
           filterPlaceholder: "Search...",

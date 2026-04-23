@@ -33,11 +33,11 @@ import {
   type Scope,
 } from "./table-formats"
 import { BulkCopyDialog } from "./bulk-copy-dialog"
-import { TableHistoryDialog } from "./table-history-dialog"
 
 interface DataTableViewOptionsProps<TData> {
   table: Table<TData>
   tableId: string
+  onSidePanelToggle?: () => void
 }
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
@@ -85,14 +85,13 @@ const SCOPE_LABEL: Record<Scope, string> = {
   all: "All",
 }
 
-export function DataTableViewOptions<TData>({ table, tableId }: DataTableViewOptionsProps<TData>) {
+export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle }: DataTableViewOptionsProps<TData>) {
   const selectedCount = table.getSelectedRowModel().rows.length
   const filteredCount = table.getFilteredRowModel().rows.length
   const totalCount = table.getCoreRowModel().rows.length
 
   const [scope, setScope] = useState<Scope>("all")
   const [bulkCopyOpen, setBulkCopyOpen] = useState(false)
-  const [historyOpen, setHistoryOpen] = useState(false)
   const effectiveScope: Scope = scope === "selected" && selectedCount === 0 ? "filtered" : scope
 
   const scopeCounts: Record<Scope, number> = {
@@ -172,9 +171,9 @@ export function DataTableViewOptions<TData>({ table, tableId }: DataTableViewOpt
             Bulk Copy
           </DropdownMenuItem>
 
-          <DropdownMenuItem onClick={() => setHistoryOpen(true)}>
+          <DropdownMenuItem onClick={() => onSidePanelToggle?.()}>
             <History />
-            Show Changes
+            Changes
           </DropdownMenuItem>
 
           <DropdownMenuSeparator />
@@ -234,12 +233,6 @@ export function DataTableViewOptions<TData>({ table, tableId }: DataTableViewOpt
         scope={effectiveScope}
         open={bulkCopyOpen}
         onOpenChange={setBulkCopyOpen}
-      />
-
-      <TableHistoryDialog
-        open={historyOpen}
-        onOpenChange={setHistoryOpen}
-        tableId={tableId}
       />
     </div>
   )
