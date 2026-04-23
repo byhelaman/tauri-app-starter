@@ -60,7 +60,7 @@ export function DataTableIntervalFilter<TData, TValue>({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" className="border-dashed">
-          <Clock data-icon="inline-start" />
+          <Clock />
           {title}
           {selectedValues.size > 0 && (
             <>

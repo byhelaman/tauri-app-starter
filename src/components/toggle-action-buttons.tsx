@@ -46,7 +46,7 @@ export function ToggleActionButtons({ items }: ToggleActionButtonsProps) {
             onClick={item.onToggle}
             className={item.active ? TOGGLE_THEMES[item.theme].buttonActive : "border-dashed"}
           >
-            {Icon && <Icon data-icon="inline-start" />}
+            {Icon && <Icon />}
             {item.label}
           </Button>
         )

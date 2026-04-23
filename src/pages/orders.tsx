@@ -3,6 +3,7 @@ import { toast } from "sonner"
 import {
   CheckCircle2,
   Clock,
+  Copy,
   Globe,
   Handshake,
   ListTodo,
@@ -10,6 +11,7 @@ import {
   Phone,
   Plus,
   Store,
+  Trash2,
   Truck,
   Upload,
   XCircle,
@@ -124,15 +126,15 @@ export function OrdersPage() {
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setTableModalOpen(true)}>
-              <ListTodo data-icon="inline-start" />
+              <ListTodo />
               Queue
             </Button>
             <Button variant="outline" onClick={() => setImportOpen(true)}>
-              <Upload data-icon="inline-start" />
+              <Upload />
               Import
             </Button>
             <Button onClick={() => setAddOrderOpen(true)}>
-              <Plus data-icon="inline-start" />
+              <Plus />
               Add Order
             </Button>
           </div>
@@ -207,6 +209,7 @@ export function OrdersPage() {
                 }
               }}
             >
+              <Copy />
               Copy
             </Button>
             <Button
@@ -215,6 +218,7 @@ export function OrdersPage() {
               aria-label="Delete"
               onClick={() => setBulkDeleteTarget({ selected, clearSelection })}
             >
+              <Trash2 />
               Delete
             </Button>
           </>

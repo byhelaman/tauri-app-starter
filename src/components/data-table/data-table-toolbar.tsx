@@ -95,7 +95,7 @@ export function DataTableToolbar<TData>({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="border-dashed">
-                <FilterIcon data-icon="inline-start" />
+                <FilterIcon />
                 Filters
                 {activeFiltersCount > 0 && (
                   <>

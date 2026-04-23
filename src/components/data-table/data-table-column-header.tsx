@@ -71,15 +71,15 @@ export function DataTableColumnHeader<TData, TValue>({
         {canSort && (
           <>
             <ContextMenuItem onSelect={() => setSort("asc")}>
-              <ArrowUp data-icon="inline-start" />
+              <ArrowUp />
               Sort ascending
             </ContextMenuItem>
             <ContextMenuItem onSelect={() => setSort("desc")}>
-              <ArrowDown data-icon="inline-start" />
+              <ArrowDown />
               Sort descending
             </ContextMenuItem>
             <ContextMenuItem onSelect={() => setSort("none")} disabled={!column.getIsSorted()}>
-              <ArrowUpDown data-icon="inline-start" />
+              <ArrowUpDown />
               Clear sorting
             </ContextMenuItem>
           </>
@@ -90,15 +90,15 @@ export function DataTableColumnHeader<TData, TValue>({
         {canPin && (
           <>
             <ContextMenuItem onSelect={() => column.pin("left")}>
-              <PinIcon data-icon="inline-start" />
+              <PinIcon />
               Pin left
             </ContextMenuItem>
             <ContextMenuItem onSelect={() => column.pin("right")}>
-              <PinIcon data-icon="inline-start" />
+              <PinIcon />
               Pin right
             </ContextMenuItem>
             <ContextMenuItem onSelect={() => column.pin(false)} disabled={!column.getIsPinned()}>
-              <PinOffIcon data-icon="inline-start" />
+              <PinOffIcon />
               Unpin
             </ContextMenuItem>
           </>

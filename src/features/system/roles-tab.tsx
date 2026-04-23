@@ -171,7 +171,7 @@ export function RolesTab({
                     )}
                 </InputGroup>
                 <Button variant="outline" size="sm" onClick={() => setShowNew(true)} disabled={busy || !canManageRoles || loading}>
-                    <PlusIcon data-icon="inline-start" />
+                    <PlusIcon />
                     New role
                 </Button>
             </div>

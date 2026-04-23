@@ -281,7 +281,7 @@ export function DataTable<TData, TValue>({
       {bulkActions && table.getFilteredSelectedRowModel().rows.length > 0 && (
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10">
           <div className="flex items-center gap-3 rounded-lg border bg-background p-2 shadow-lg">
-            <span className="pl-2 text-sm text-muted-foreground">
+            <span className="pl-2 text-sm">
               {table.getFilteredSelectedRowModel().rows.length} selected
             </span>
             <div className="h-4 w-px bg-border" />
@@ -290,7 +290,7 @@ export function DataTable<TData, TValue>({
               clearSelection
             )}
             <div className="h-4 w-px bg-border" />
-            <Button variant="ghost" size="icon-sm" onClick={clearSelection} className="text-muted-foreground">
+            <Button variant="ghost" size="icon-sm" onClick={clearSelection}>
               <X />
             </Button>
           </div>

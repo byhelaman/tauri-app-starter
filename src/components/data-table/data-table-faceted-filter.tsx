@@ -44,7 +44,7 @@ export function DataTableFacetedFilter<TData, TValue>({
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="border-dashed">
-                    <PlusCircle data-icon="inline-start" />
+                    <PlusCircle />
                     {title ?? "Filter"}
                     {selectedValues?.size > 0 && (
                         <>

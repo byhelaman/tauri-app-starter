@@ -267,7 +267,6 @@ export function OrderDialog({ open, onOpenChange, onSubmit }: OrderDialogProps) 
           </DialogBody>
           <DialogFooter showCloseButton>
             <Button type="submit">
-              <Plus data-icon="inline-start" />
               Create Order
             </Button>
           </DialogFooter>
