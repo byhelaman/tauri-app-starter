@@ -1,9 +1,22 @@
 import { http, HttpResponse } from "msw"
 import { generateOrders, generateQueueOrders } from "./orders"
+import { TABLE_HISTORY_MOCK } from "@/components/data-table/table-history-mock"
 
 // In-memory state for realistic CRUD
 let orders = generateOrders(250)
 let queueOrders = generateQueueOrders(25)
+let orderHistory = [...TABLE_HISTORY_MOCK]
+
+function addHistoryEntry(action: "create" | "update" | "delete", description: string, details?: any[]) {
+  orderHistory.unshift({
+    id: `HIST-${Math.floor(Math.random() * 10000)}`,
+    action,
+    description,
+    actorEmail: "admin@example.com",
+    createdAt: new Date().toISOString(),
+    details
+  })
+}
 
 export const handlers = [
   // Get all orders
@@ -21,6 +34,7 @@ export const handlers = [
       ...newOrder,
     }
     orders.unshift(order)
+    addHistoryEntry("create", `Created new order ${order.id}`)
     return HttpResponse.json(order, { status: 201 })
   }),
 
@@ -34,8 +48,21 @@ export const handlers = [
       return new HttpResponse("Order not found", { status: 404 })
     }
 
+    const oldOrder = orders[orderIndex]
+    
+    // Calculate changed fields for history details
+    const details = Object.entries(updates as any).map(([key, val]) => ({
+      field: key,
+      oldValue: (oldOrder as any)[key],
+      newValue: val
+    })).filter(d => d.oldValue !== d.newValue)
+
     // Apply updates
-    orders[orderIndex] = { ...orders[orderIndex], ...(updates as object) }
+    orders[orderIndex] = { ...oldOrder, ...(updates as object) }
+    
+    if (details.length > 0) {
+      addHistoryEntry("update", `Updated order ${id}`, details)
+    }
     
     return HttpResponse.json(orders[orderIndex])
   }),
@@ -44,6 +71,7 @@ export const handlers = [
   http.delete("/api/orders/:id", ({ params }) => {
     const { id } = params
     orders = orders.filter((o) => o.id !== id)
+    addHistoryEntry("delete", `Deleted order ${id}`)
     return new HttpResponse(null, { status: 204 })
   }),
 
@@ -51,12 +79,18 @@ export const handlers = [
   http.post("/api/orders/bulk-delete", async ({ request }) => {
     const { ids } = await request.json() as { ids: string[] }
     orders = orders.filter((o) => !ids.includes(o.id))
+    addHistoryEntry("delete", `Deleted ${ids.length} orders in bulk`)
     return new HttpResponse(null, { status: 204 })
   }),
 
   // Get queue orders
   http.get("/api/queue-orders", () => {
     return HttpResponse.json(queueOrders)
+  }),
+
+  // Get order history
+  http.get("/api/orders/history", () => {
+    return HttpResponse.json(orderHistory)
   }),
 
   // Patch a queue order

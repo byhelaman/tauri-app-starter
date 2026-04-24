@@ -1,5 +1,6 @@
 import type { Order } from "@/features/orders/columns"
 import type { QueueOrder } from "@/features/orders/modal-columns"
+import type { HistoryEntry } from "@/components/data-table/data-table-types"
 
 export const fetchOrders = async (): Promise<Order[]> => {
   const res = await fetch("/api/orders")
@@ -10,6 +11,12 @@ export const fetchOrders = async (): Promise<Order[]> => {
 export const fetchQueueOrders = async (): Promise<QueueOrder[]> => {
   const res = await fetch("/api/queue-orders")
   if (!res.ok) throw new Error("Failed to fetch queue orders")
+  return res.json()
+}
+
+export const fetchOrderHistory = async (): Promise<HistoryEntry[]> => {
+  const res = await fetch("/api/orders/history")
+  if (!res.ok) throw new Error("Failed to fetch history")
   return res.json()
 }
 

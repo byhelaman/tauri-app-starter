@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { cn, joinSearchValues, matchesSearchGroups, normalizeSearchGroups } from "@/lib/utils"
 import {
   type ColumnDef,
@@ -131,6 +131,15 @@ export function DataTable<TData, TValue>({
     initialState: { pagination: { pageSize: defaultPageSize } },
     state: { sorting, columnFilters, globalFilter, columnPinning, columnVisibility, rowSelection },
   })
+
+  // Ensure page index doesn't go out of bounds when data shrinks (e.g. bulk deleting items on the last page)
+  useEffect(() => {
+    const pageCount = table.getPageCount()
+    const pageIndex = table.getState().pagination.pageIndex
+    if (pageCount > 0 && pageIndex >= pageCount) {
+      table.setPageIndex(pageCount - 1)
+    }
+  }, [table, table.getState().pagination.pageIndex, table.getPageCount()])
 
   const cellPadding = 8
   const { left: leftPinned = [], right: rightPinned = [] } = table.getState().columnPinning

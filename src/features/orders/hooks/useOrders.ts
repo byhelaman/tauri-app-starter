@@ -28,6 +28,10 @@ export function useOrders() {
       })
       return { previousOrders }
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["orders", "history"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard", "history"] })
+    },
     onError: (_err, _newOrder, context) => {
       queryClient.setQueryData(["orders"], context?.previousOrders)
       toast.error("Failed to update order")
@@ -38,6 +42,8 @@ export function useOrders() {
     mutationFn: api.createOrder,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] })
+      queryClient.invalidateQueries({ queryKey: ["orders", "history"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard", "history"] })
       toast.success("Order created successfully")
     },
     onError: () => {
@@ -53,6 +59,10 @@ export function useOrders() {
       queryClient.setQueryData<Order[]>(["orders"], (old = []) => old.filter(order => order.id !== id))
       return { previousOrders }
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["orders", "history"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard", "history"] })
+    },
     onError: (_err, _id, context) => {
       queryClient.setQueryData(["orders"], context?.previousOrders)
       toast.error("Failed to delete order")
@@ -67,6 +77,10 @@ export function useOrders() {
       const previousOrders = queryClient.getQueryData<Order[]>(["orders"])
       queryClient.setQueryData<Order[]>(["orders"], (old = []) => old.filter(order => !idSet.has(order.id)))
       return { previousOrders }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["orders", "history"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard", "history"] })
     },
     onError: (_err, _ids, context) => {
       queryClient.setQueryData(["orders"], context?.previousOrders)

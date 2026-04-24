@@ -39,10 +39,12 @@ function ThrowError(): never {
   )
 }
 
-import { ACTIVITY, STATS, UPCOMING } from "@/mocks/dashboard"
+import { useDashboardData } from "@/hooks/use-dashboard-data"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export function DashboardPage() {
   const { user } = useAuth()
+  const { stats, activity, upcoming, isLoading } = useDashboardData()
   const [crash, setCrash] = useState(false)
 
   if (crash) return <ThrowError />
@@ -71,7 +73,23 @@ export function DashboardPage() {
           <span className="text-xs text-muted-foreground">Last 7 days</span>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {STATS.map((stat) => {
+          {isLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i}>
+                <CardHeader className="pb-2">
+                  <Skeleton className="h-3 w-24 mb-2" />
+                  <Skeleton className="h-8 w-20" />
+                </CardHeader>
+                <CardContent className="flex items-center justify-between gap-3 pt-0">
+                  <div className="flex flex-col gap-2">
+                    <Skeleton className="h-3 w-32" />
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                  <Skeleton className="size-9 rounded-md" />
+                </CardContent>
+              </Card>
+            ))
+          ) : stats.map((stat) => {
             const Icon = stat.icon
             return (
               <Card key={stat.label}>
@@ -107,7 +125,19 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent>
             <ItemGroup>
-              {ACTIVITY.map((a, i) => {
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <Item key={i} size="sm">
+                    <ItemMedia>
+                      <Skeleton className="size-8 rounded-md" />
+                    </ItemMedia>
+                    <ItemContent className="space-y-1 py-1">
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-3 w-1/4" />
+                    </ItemContent>
+                  </Item>
+                ))
+              ) : activity.map((a, i) => {
                 const Icon = a.icon
                 return (
                   <Item key={i} size="sm">
@@ -118,7 +148,7 @@ export function DashboardPage() {
                     </ItemMedia>
                     <ItemContent>
                       <ItemTitle className="text-sm font-normal">
-                        <span className="font-medium">{a.user}</span>
+                        <span className="font-medium capitalize">{a.user}</span>
                         <span className="text-muted-foreground"> {a.action} </span>
                         <span className="font-medium">{a.target}</span>
                       </ItemTitle>
@@ -138,7 +168,23 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent>
             <ItemGroup>
-              {UPCOMING.map((u, i) => (
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <Item key={i} size="sm">
+                    <ItemMedia>
+                      <Skeleton className="size-8 rounded-md" />
+                    </ItemMedia>
+                    <ItemContent className="space-y-1 py-1">
+                      <Skeleton className="h-4 w-2/3" />
+                      <Skeleton className="h-3 w-1/2" />
+                    </ItemContent>
+                    <ItemActions className="flex-col items-end gap-1.5">
+                      <Skeleton className="h-5 w-16 rounded-full" />
+                      <Skeleton className="h-3 w-12" />
+                    </ItemActions>
+                  </Item>
+                ))
+              ) : upcoming.map((u, i) => (
                 <Item key={i} size="sm">
                   <ItemMedia>
                     <div className="flex size-8 items-center justify-center rounded-md bg-muted">

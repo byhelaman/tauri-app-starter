@@ -1,5 +1,6 @@
 import { useDeferredValue, useMemo, useState } from "react"
-import { ArrowRight, SearchIcon, PlusIcon, PencilIcon, TrashIcon, XIcon } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
+import { ArrowRight, SearchIcon, PlusIcon, PencilIcon, TrashIcon, XIcon, LoaderCircle } from "lucide-react"
 import {
   Card,
   CardHeader,
@@ -22,9 +23,10 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { filterByMultiSearch } from "@/lib/utils"
 import type { HistoryEntry } from "./data-table-types"
-import { TABLE_HISTORY_MOCK } from "./table-history-mock"
+import { fetchOrderHistory } from "@/features/orders/api"
 
 interface TableHistoryCardProps {
   onClose: () => void
@@ -47,9 +49,21 @@ function formatRelativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString()
 }
 
-export function TableHistoryCard({ onClose, tableId, history = TABLE_HISTORY_MOCK }: TableHistoryCardProps) {
+export function TableHistoryCard({ onClose, tableId }: TableHistoryCardProps) {
   const [search, setSearch] = useState("")
+  const [showAll, setShowAll] = useState(false)
   const deferredSearch = useDeferredValue(search)
+
+  const { data: fullHistory = [], isLoading } = useQuery({
+    queryKey: [tableId, "history"],
+    queryFn: fetchOrderHistory,
+  })
+
+  const history = useMemo(() => {
+    if (showAll) return fullHistory
+    const eightHoursAgo = Date.now() - 8 * 60 * 60 * 1000
+    return fullHistory.filter(h => new Date(h.createdAt).getTime() > eightHoursAgo)
+  }, [fullHistory, showAll])
 
   const filtered = useMemo(
     () => filterByMultiSearch(history, deferredSearch, (e) => [e.description, e.actorEmail, e.action]),
@@ -95,7 +109,24 @@ export function TableHistoryCard({ onClose, tableId, history = TABLE_HISTORY_MOC
       </div>
 
       <CardContent className="flex-1 min-h-0 overflow-y-auto px-3 flex flex-col gap-2 scrollbar">
-        {filtered.length === 0 ? (
+        {isLoading ? (
+          <ItemGroup>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Item key={i} size="sm">
+                <ItemMedia variant="icon">
+                  <Skeleton className="size-8 rounded-md" />
+                </ItemMedia>
+                <ItemContent className="space-y-1 py-1">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                </ItemContent>
+                <ItemActions>
+                  <Skeleton className="h-4 w-12" />
+                </ItemActions>
+              </Item>
+            ))}
+          </ItemGroup>
+        ) : filtered.length === 0 ? (
           <p className="px-3 py-6 text-center text-sm text-muted-foreground">No events found.</p>
         ) : (
           <ItemGroup>
@@ -130,6 +161,17 @@ export function TableHistoryCard({ onClose, tableId, history = TABLE_HISTORY_MOC
                 </ItemActions>
               </Item>
             ))}
+            {!showAll && fullHistory.length > history.length && (
+              <div className="w-full flex justify-center">
+                <Button 
+                  variant="ghost" 
+                  className="w-fit text-muted-foreground" 
+                  onClick={() => setShowAll(true)}
+                >
+                  Load more changes
+                </Button>
+              </div>
+            )}
           </ItemGroup>
         )}
       </CardContent>
