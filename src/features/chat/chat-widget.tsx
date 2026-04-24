@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/input-group"
 import { Spinner } from "@/components/ui/spinner"
 import { Empty, EmptyHeader, EmptyMedia, EmptyDescription, EmptyTitle } from "@/components/ui/empty"
-import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card"
+import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { useChat } from "@/features/chat/use-chat"
 import { ChatSettingsForm, DEFAULT_MODEL } from "@/features/chat/chat-settings-form"
@@ -143,8 +143,8 @@ export function ChatWidget() {
     }
 
     return (
-        <Card className="fixed bottom-4 right-4 z-50 w-85 h-125 shadow-xl gap-0 py-0">
-            <CardHeader className="flex flex-row items-center justify-between p-2 shrink-0 gap-0 space-y-0">
+        <Card className="fixed bottom-4 right-4 z-50 w-96 h-[70vh] shadow-xl gap-0">
+            <CardHeader className="flex flex-row items-center justify-between shrink-0 gap-0 space-y-0 pb-4">
                 <div className="flex items-center gap-2">
                     {view !== "chat" && (
                         <Button
@@ -156,9 +156,11 @@ export function ChatWidget() {
                             <ChevronLeft data-icon />
                         </Button>
                     )}
-                    <span className={cn("text-sm font-medium", view === "chat" && "pl-2")}>
-                        {view === "settings" ? "Settings" : view === "setup" ? "Set up AI" : "AI Chat"}
-                    </span>
+                    <CardTitle>
+                        <span className={cn("", view === "chat" && "")}>
+                            {view === "settings" ? "Settings" : view === "setup" ? "Set up AI" : "AI Chat"}
+                        </span>
+                    </CardTitle>
                 </div>
                 <div className="flex items-center gap-1">
                     {view === "chat" && (

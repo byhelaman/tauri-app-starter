@@ -75,7 +75,22 @@ export function DataTable<TData, TValue>({
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({ left: ["select"], right: [] })
   const [rowSelection, setRowSelection] = useState({})
-  const [isSidePanelOpen, setIsSidePanelOpen] = useState(false)
+  const [isSidePanelOpen, setIsSidePanelOpen] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`data-table-panel-${tableId}`)
+      return saved === "true"
+    } catch {
+      return false
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`data-table-panel-${tableId}`, String(isSidePanelOpen))
+    } catch {
+      // ignore
+    }
+  }, [isSidePanelOpen, tableId])
 
   const clearSelection = () => setRowSelection({})
 

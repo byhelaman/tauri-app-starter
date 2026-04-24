@@ -126,6 +126,7 @@ export function ChatSettingsForm({ view, currentApiKey, currentModel, onSave, on
                         type="password"
                         placeholder="vck_..."
                         autoFocus
+                        aria-invalid={!!errors.apiKey}
                     />
                     <FieldDescription>
                         {view === "setup"
