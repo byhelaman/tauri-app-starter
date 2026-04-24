@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/input-group"
 import { Spinner } from "@/components/ui/spinner"
 import { Empty, EmptyHeader, EmptyMedia, EmptyDescription, EmptyTitle } from "@/components/ui/empty"
-import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardHeader, CardContent, CardFooter, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { useChat } from "@/features/chat/use-chat"
 import { ChatSettingsForm, DEFAULT_MODEL } from "@/features/chat/chat-settings-form"
@@ -157,7 +157,7 @@ export function ChatWidget() {
                         </Button>
                     )}
                     <CardTitle>
-                        <span className={cn("", view === "chat" && "")}>
+                        <span>
                             {view === "settings" ? "Settings" : view === "setup" ? "Set up AI" : "AI Chat"}
                         </span>
                     </CardTitle>

@@ -103,7 +103,7 @@ export function DataTableToolbar<TData>({
                   <>
                     <Separator orientation="vertical" className="mx-1 h-8" />
                     <Badge variant="secondary" className="rounded-sm px-1 font-normal">
-                      {activeFiltersCount} actived
+                      {activeFiltersCount} active
                     </Badge>
                   </>
                 )}

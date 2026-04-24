@@ -1,13 +1,16 @@
 import { http, HttpResponse } from "msw"
 import { generateOrders, generateQueueOrders } from "./orders"
-import { TABLE_HISTORY_MOCK } from "@/components/data-table/table-history-mock"
+import { TABLE_HISTORY_MOCK } from "./table-history-mock"
+import type { HistoryDetail } from "@/components/data-table/data-table-types"
+import type { Order } from "@/features/orders/columns"
+
 
 // In-memory state for realistic CRUD
 let orders = generateOrders(100)
 let queueOrders = generateQueueOrders(25)
 let orderHistory = [...TABLE_HISTORY_MOCK]
 
-function addHistoryEntry(action: "create" | "update" | "delete", description: string, details?: any[]) {
+function addHistoryEntry(action: "create" | "update" | "delete", description: string, details?: HistoryDetail[]) {
   orderHistory.unshift({
     id: `HIST-${Math.floor(Math.random() * 10000)}`,
     action,
@@ -26,13 +29,13 @@ export const handlers = [
 
   // Create an order
   http.post("/api/orders", async ({ request }) => {
-    const newOrder = await request.json() as any
+    const newOrder = await request.json() as Partial<Order>
     const order = {
       id: `ORD-${Math.floor(Math.random() * 10000)}`,
       status: "pending",
       date: new Date().toISOString().split("T")[0],
       ...newOrder,
-    }
+    } as Order
     orders.unshift(order)
     addHistoryEntry("create", `Created new order ${order.id}`)
     return HttpResponse.json(order, { status: 201 })
@@ -41,7 +44,7 @@ export const handlers = [
   // Patch an order
   http.patch("/api/orders/:id", async ({ request, params }) => {
     const { id } = params
-    const updates = await request.json()
+    const updates = await request.json() as Partial<Order>
 
     const orderIndex = orders.findIndex((o) => o.id === id)
     if (orderIndex === -1) {
@@ -51,14 +54,16 @@ export const handlers = [
     const oldOrder = orders[orderIndex]
     
     // Calculate changed fields for history details
-    const details = Object.entries(updates as any).map(([key, val]) => ({
-      field: key,
-      oldValue: (oldOrder as any)[key],
-      newValue: val
-    })).filter(d => d.oldValue !== d.newValue)
+    const details: HistoryDetail[] = (Object.keys(updates) as Array<keyof Order>)
+      .map((key) => ({
+        field: String(key),
+        oldValue: oldOrder[key] as string | number | undefined,
+        newValue: updates[key] as string | number | undefined
+      }))
+      .filter(d => d.oldValue !== d.newValue)
 
     // Apply updates
-    orders[orderIndex] = { ...oldOrder, ...(updates as object) }
+    orders[orderIndex] = { ...oldOrder, ...updates }
     
     if (details.length > 0) {
       addHistoryEntry("update", `Updated order ${id}`, details)
@@ -96,12 +101,12 @@ export const handlers = [
   // Patch a queue order
   http.patch("/api/queue-orders/:code", async ({ request, params }) => {
     const { code } = params
-    const updates = await request.json()
+    const updates = await request.json() as Partial<typeof queueOrders[0]>
 
     const index = queueOrders.findIndex((o) => o.code === code)
     if (index === -1) return new HttpResponse("Queue order not found", { status: 404 })
 
-    queueOrders[index] = { ...queueOrders[index], ...(updates as object) }
+    queueOrders[index] = { ...queueOrders[index], ...updates }
     return HttpResponse.json(queueOrders[index])
   }),
 

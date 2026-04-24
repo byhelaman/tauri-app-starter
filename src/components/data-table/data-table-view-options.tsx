@@ -171,10 +171,12 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle 
             Bulk Copy
           </DropdownMenuItem>
 
-          <DropdownMenuItem onClick={() => onSidePanelToggle?.()}>
-            <History />
-            Changes
-          </DropdownMenuItem>
+          {onSidePanelToggle && (
+            <DropdownMenuItem onClick={onSidePanelToggle}>
+              <History />
+              Changes
+            </DropdownMenuItem>
+          )}
 
           <DropdownMenuSeparator />
 

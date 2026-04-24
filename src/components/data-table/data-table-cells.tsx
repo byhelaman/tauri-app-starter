@@ -4,12 +4,23 @@ import { cn } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Autocomplete } from "@/components/ui/autocomplete"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 
 export interface InlineEditableCellOptions {
   className?: string
   enableEditing?: boolean
   validate?: (value: string) => boolean
+  validationMessage?: string
   onCommit?: (value: string, isValid: boolean) => void
   autocompleteOptions?: { label: string; value: string }[]
   restrictive?: boolean
@@ -50,6 +61,7 @@ function InlineEditableCell({
   className,
   enableEditing = false,
   validate,
+  validationMessage = "The value entered is not valid for this cell.",
   onCommit,
   autocompleteOptions,
   restrictive = false,
@@ -59,6 +71,8 @@ function InlineEditableCell({
   const [isEditing, setIsEditing] = useState(false)
   const [hasError, setHasError] = useState(false)
   const [wasBlurred, setWasBlurred] = useState(false)
+  const [showErrorDialog, setShowErrorDialog] = useState(false)
+
   
   // Estado Optimista de UI para evitar parpadeos mientras la tabla pesada se actualiza en segundo plano
   const [optimisticValue, setOptimisticValue] = useState<string | null>(null)
@@ -71,6 +85,7 @@ function InlineEditableCell({
 
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const editContainerRef = useRef<HTMLDivElement>(null)
   
   const [initialEditValue, setInitialEditValue] = useState<string | null>(null)
   
@@ -95,19 +110,38 @@ function InlineEditableCell({
       return
     }
 
-    setWasBlurred(true)
     const isValid = validate ? validate(currentValue) : true
-    setHasError(!isValid)
+    
+    if (!isValid) {
+
+      setShowErrorDialog(true)
+      // No cerramos la edicin ni enviamos nada al padre
+      return
+    }
+
+    setWasBlurred(true)
+    setHasError(false)
 
     if (currentValue !== nextValue) {
       setOptimisticValue(currentValue)
-      // Usamos el modo concurrente de React para marcar la actualización de la tabla como no urgente,
-      // manteniendo así el hilo principal fluido y responsivo.
       startTransition(() => {
-        onCommit?.(currentValue, isValid)
+        onCommit?.(currentValue, true)
       })
     }
     setIsEditing(false)
+  }
+
+  const handleRetry = () => {
+    setShowErrorDialog(false)
+    // El input ya tiene el valor invlido, as que solo cerramos el dilogo
+    // y dejamos que el usuario siga editando.
+  }
+
+  const handleCancelEdit = () => {
+    setShowErrorDialog(false)
+    setIsEditing(false)
+    setInitialEditValue(null)
+    setPendingFocusAction("current")
   }
 
   function handleGridKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
@@ -128,13 +162,7 @@ function InlineEditableCell({
       return
     }
 
-    if (enableEditing && e.key === "Delete") {
-      e.preventDefault()
-      handleCommit("")
-      return
-    }
-
-    if (enableEditing && e.key === "Backspace") {
+    if (enableEditing && (e.key === "Delete" || e.key === "Backspace")) {
       e.preventDefault()
       setInitialEditValue("")
       setIsEditing(true)
@@ -215,7 +243,7 @@ function InlineEditableCell({
   }
 
   return (
-    <div className="relative flex w-full min-w-0">
+    <div ref={editContainerRef} className="relative flex w-full min-w-0">
       {/* Marcador de posición invisible que mantiene el ancho exacto de la celda del modo vista */}
       <div className={cn(
         "flex h-8 w-full min-w-0 items-center border border-transparent px-2.5 py-1 text-base md:text-sm opacity-0 pointer-events-none",
@@ -234,7 +262,14 @@ function InlineEditableCell({
           }}
           onBlur={(committedValue) => {
             if (committedValue !== undefined) {
-              handleCommit(committedValue)
+              // Si acabamos de entrar con Backspace/Delete (initialEditValue === ""), 
+              // solo validamos si el usuario realmente interactu con el input (committedValue no est vaco)
+              // o si el blur es intencional después de un tiempo.
+              if (initialEditValue === "" && committedValue === "") {
+                setIsEditing(false)
+              } else {
+                handleCommit(committedValue)
+              }
             } else {
               setIsEditing(false)
             }
@@ -268,6 +303,29 @@ function InlineEditableCell({
           )}
         />
       )}
+
+      <AlertDialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+        <AlertDialogContent
+          onCloseAutoFocus={(e) => {
+            if (isEditing) {
+              e.preventDefault()
+              const input = editContainerRef.current?.querySelector('input')
+              input?.focus()
+            }
+          }}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>Data Validation Error</AlertDialogTitle>
+            <AlertDialogDescription>
+              {validationMessage}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={handleRetry}>Retry</AlertDialogAction>
+            <AlertDialogCancel onClick={handleCancelEdit}>Cancel</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

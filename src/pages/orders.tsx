@@ -58,6 +58,7 @@ import {
 } from "@/features/orders/modal-columns"
 import { TableHistoryCard } from "@/components/data-table/table-history-card"
 import { OrderDialog } from "@/features/orders/order-dialog"
+import { fetchOrderHistory } from "@/features/orders/api"
 
 const STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
   { label: "Pending", value: "pending", icon: Clock },
@@ -153,7 +154,12 @@ export function OrdersPage() {
         isLoading={isOrdersLoading}
         tableId="orders"
         sidePanel={(onClose) => (
-          <TableHistoryCard tableId="orders" onClose={onClose} />
+          <TableHistoryCard 
+            tableId="orders" 
+            onClose={onClose} 
+            queryKey={["orders", "history"]}
+            queryFn={fetchOrderHistory}
+          />
         )}
         toolbar={{
           searchable: true,

@@ -1,6 +1,6 @@
 import { useDeferredValue, useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { ArrowRight, SearchIcon, PlusIcon, PencilIcon, TrashIcon, XIcon, LoaderCircle } from "lucide-react"
+import { ArrowRight, SearchIcon, PlusIcon, PencilIcon, TrashIcon, XIcon } from "lucide-react"
 import {
   Card,
   CardHeader,
@@ -24,39 +24,25 @@ import {
 } from "@/components/ui/input-group"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { formatRelativeTime } from "@/lib/date-utils"
 import { filterByMultiSearch } from "@/lib/utils"
 import type { HistoryEntry } from "./data-table-types"
-import { fetchOrderHistory } from "@/features/orders/api"
 
 interface TableHistoryCardProps {
   onClose: () => void
   tableId: string
-  history?: HistoryEntry[]
+  queryKey: unknown[]
+  queryFn: () => Promise<HistoryEntry[]>
 }
 
-function formatRelativeTime(iso: string): string {
-  const now = Date.now()
-  const then = new Date(iso).getTime()
-  const diff = now - then
-  const seconds = Math.floor(diff / 1000)
-  if (seconds < 60) return "just now"
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days === 1) return "yesterday"
-  return new Date(iso).toLocaleDateString()
-}
-
-export function TableHistoryCard({ onClose, tableId }: TableHistoryCardProps) {
+export function TableHistoryCard({ onClose, tableId, queryKey, queryFn }: TableHistoryCardProps) {
   const [search, setSearch] = useState("")
   const [showAll, setShowAll] = useState(false)
   const deferredSearch = useDeferredValue(search)
 
   const { data: fullHistory = [], isLoading } = useQuery({
-    queryKey: [tableId, "history"],
-    queryFn: fetchOrderHistory,
+    queryKey,
+    queryFn,
   })
 
   const history = useMemo(() => {

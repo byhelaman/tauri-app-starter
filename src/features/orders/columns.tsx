@@ -81,6 +81,7 @@ export function createColumns(
       cell: ({ row }) => renderCell(row.getValue("customer") as string, {
         enableEditing: true,
         validate: isRequiredText,
+        validationMessage: "Customer name cannot be empty.",
         onCommit: (value, isValid) => onCellChange(row.original.id ?? row.original.code, "customer", value, isValid),
       }),
     },
@@ -93,6 +94,7 @@ export function createColumns(
       cell: ({ row }) => renderCell(row.getValue("product") as string, {
         enableEditing: true,
         validate: isRequiredText,
+        validationMessage: "Product name cannot be empty.",
         onCommit: (value, isValid) => onCellChange(row.original.id ?? row.original.code, "product", value, isValid),
       }),
     },
@@ -106,6 +108,7 @@ export function createColumns(
       cell: ({ row }) => renderCell(row.getValue("category") as string, {
         enableEditing: true,
         validate: isRequiredText,
+        validationMessage: "Category cannot be empty.",
         onCommit: (value, isValid) => onCellChange(row.original.id ?? row.original.code, "category", value, isValid),
       }),
     },
@@ -132,6 +135,7 @@ export function createColumns(
         enableEditing: true,
         className: "font-mono",
         validate: (value) => CODE_PATTERN.test(value.trim()),
+        validationMessage: "The value entered doesn't match the required format.",
         onCommit: (value, isValid) => onCellChange(row.original.id ?? row.original.code, "code", value, isValid),
       }),
     },
@@ -170,6 +174,7 @@ export function createColumns(
       cell: ({ row }) => renderCell(row.getValue("channel") as string, {
         enableEditing: true,
         validate: (value) => CHANNELS.includes(value.trim() as (typeof CHANNELS)[number]),
+        validationMessage: "Please select a valid option from the list.",
         autocompleteOptions: CHANNELS.map(c => ({ label: c, value: c })),
         onCommit: (value, isValid) => onCellChange(row.original.id ?? row.original.code, "channel", value, isValid),
       }),
@@ -184,6 +189,7 @@ export function createColumns(
       cell: ({ row }) => renderCell(row.getValue("region") as string, {
         enableEditing: true,
         validate: isRequiredText,
+        validationMessage: "Region cannot be empty.",
         onCommit: (value, isValid) => onCellChange(row.original.id ?? row.original.code, "region", value, isValid),
       }),
     },
@@ -197,6 +203,7 @@ export function createColumns(
       cell: ({ row }) => renderCell(row.getValue("payment") as string, {
         enableEditing: true,
         validate: isRequiredText,
+        validationMessage: "Payment method cannot be empty.",
         onCommit: (value, isValid) => onCellChange(row.original.id ?? row.original.code, "payment", value, isValid),
       }),
     },
@@ -225,6 +232,7 @@ export function createColumns(
         enableEditing: true,
         className: "font-mono",
         validate: isValidQuantity,
+        validationMessage: "Please enter a valid quantity.",
         onCommit: (value, isValid) => onCellChange(row.original.id ?? row.original.code, "quantity", value, isValid),
       }),
     },

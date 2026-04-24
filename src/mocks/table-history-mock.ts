@@ -1,4 +1,4 @@
-import type { HistoryEntry } from "./data-table-types"
+import type { HistoryEntry } from "@/components/data-table/data-table-types"
 
 export const TABLE_HISTORY_MOCK: HistoryEntry[] = [
   {

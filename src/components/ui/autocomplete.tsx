@@ -122,7 +122,7 @@ export function Autocomplete({
           </div>
         </PopoverTrigger>
         <PopoverContent
-          className="p-0 w-36"
+          className="p-0 w-(--radix-popover-trigger-width) min-w-36"
           align="start"
           onOpenAutoFocus={(e) => e.preventDefault()}
           onMouseDown={(e) => e.preventDefault()}

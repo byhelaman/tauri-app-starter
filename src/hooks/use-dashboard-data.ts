@@ -1,22 +1,11 @@
 import { useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { DollarSignIcon, PackageCheckIcon, PackageIcon, TruckIcon, XCircleIcon, PlusIcon, PencilIcon, TrashIcon } from "lucide-react"
+import { DollarSignIcon, PackageCheckIcon, PackageIcon, TruckIcon, PlusIcon, PencilIcon, TrashIcon } from "lucide-react"
 import { useOrders } from "@/features/orders/hooks/useOrders"
 import { fetchOrderHistory } from "@/features/orders/api"
+import { formatRelativeTime } from "@/lib/date-utils"
 import type { DashboardStat, ActivityEntry, UpcomingEntry } from "@/mocks/dashboard"
 
-function formatRelativeTime(iso: string): string {
-  const now = Date.now()
-  const then = new Date(iso).getTime()
-  const diff = now - then
-  const minutes = Math.floor(diff / 1000 / 60)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days === 1) return "yesterday"
-  return `${days}d ago`
-}
 
 export function useDashboardData() {
   const { orders, isOrdersLoading } = useOrders()
@@ -27,7 +16,14 @@ export function useDashboardData() {
   })
 
   const stats = useMemo<DashboardStat[]>(() => {
-    if (!orders.length) return []
+    if (!orders.length) {
+      return [
+        { label: "Orders this week", value: "0", detail: "Based on last 7 days", change: "None", tone: "neutral", icon: PackageIcon },
+        { label: "Revenue", value: "$0", detail: "Net after refunds", change: "None", tone: "neutral", icon: DollarSignIcon },
+        { label: "Pending shipments", value: "0", detail: "0 need review", change: "None", tone: "neutral", icon: TruckIcon },
+        { label: "Completion rate", value: "0%", detail: "On-time delivery", change: "None", tone: "neutral", icon: PackageCheckIcon },
+      ]
+    }
 
     const now = new Date()
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)

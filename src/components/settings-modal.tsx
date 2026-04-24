@@ -35,6 +35,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Skeleton } from "@/components/ui/skeleton"
+import { FormSkeleton } from "@/components/ui/field-skeleton"
 
 interface SettingsModalProps {
   open: boolean
@@ -69,7 +70,6 @@ function SettingRow({
   )
 }
 
-import { FormSkeleton } from "@/components/ui/field-skeleton"
 
 function ApplicationSkeleton() {
   return (
