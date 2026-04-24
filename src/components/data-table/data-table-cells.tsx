@@ -83,7 +83,7 @@ function InlineEditableCell({
       setPendingFocusAction(null)
     }
   }, [isEditing, pendingFocusAction])
-
+  
   function handleCommit(currentValue: string) {
     if (!enableEditing) {
       setIsEditing(false)

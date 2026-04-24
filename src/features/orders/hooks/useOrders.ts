@@ -102,6 +102,12 @@ export function useOrders() {
     },
   })
 
+  const { mutate: mutateUpdateOrder } = updateOrderMutation
+  const { mutate: mutateUpdateQueue } = updateQueueOrderMutation
+  const { mutate: mutateDeleteQueue } = deleteQueueOrderMutation
+  const { mutate: mutateDeleteOrder } = deleteOrderMutation
+  const { mutate: mutateBulkDelete } = deleteBulkOrdersMutation
+
   const updateOrderById = useCallback((orderId: string, updater: (order: Order) => Order) => {
     const currentOrders = queryClient.getQueryData<Order[]>(["orders"]) || []
     const current = currentOrders.find((order) => order.id === orderId)
@@ -110,8 +116,8 @@ export function useOrders() {
     const updated = updater(current)
     if (updated === current) return
 
-    updateOrderMutation.mutate(updated)
-  }, [queryClient, updateOrderMutation])
+    mutateUpdateOrder(updated)
+  }, [queryClient, mutateUpdateOrder])
 
   const handleStatusChange = useCallback((orderId: string, status: Status) => {
     updateOrderById(orderId, (order) => ({ ...order, status }))
@@ -140,29 +146,29 @@ export function useOrders() {
   }, [updateOrderById])
 
   const handleQueueStatusChange = useCallback((code: string, status: QueueStatus) => {
-    updateQueueOrderMutation.mutate({ code, status })
-  }, [updateQueueOrderMutation])
+    mutateUpdateQueue({ code, status })
+  }, [mutateUpdateQueue])
 
   const handleQueuePriorityToggle = useCallback((code: string) => {
     const currentOrders = queryClient.getQueryData<QueueOrder[]>(["queueOrders"]) || []
     const order = currentOrders.find(o => o.code === code)
     if (order) {
-      updateQueueOrderMutation.mutate({ code, priority: !order.priority })
+      mutateUpdateQueue({ code, priority: !order.priority })
     }
-  }, [queryClient, updateQueueOrderMutation])
+  }, [queryClient, mutateUpdateQueue])
 
   const handleQueueRemove = useCallback((code: string) => {
-    deleteQueueOrderMutation.mutate(code)
+    mutateDeleteQueue(code)
     toast.success("Removed from queue")
-  }, [deleteQueueOrderMutation])
+  }, [mutateDeleteQueue])
 
   const deleteOrder = useCallback((id: string) => {
-    deleteOrderMutation.mutate(id)
-  }, [deleteOrderMutation])
+    mutateDeleteOrder(id)
+  }, [mutateDeleteOrder])
 
   const deleteBulkOrders = useCallback((ids: string[]) => {
-    deleteBulkOrdersMutation.mutate(ids)
-  }, [deleteBulkOrdersMutation])
+    mutateBulkDelete(ids)
+  }, [mutateBulkDelete])
 
   return {
     orders,
