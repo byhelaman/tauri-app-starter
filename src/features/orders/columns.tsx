@@ -170,6 +170,7 @@ export function createColumns(
       cell: ({ row }) => renderCell(row.getValue("channel") as string, {
         enableEditing: true,
         validate: (value) => CHANNELS.includes(value.trim() as (typeof CHANNELS)[number]),
+        autocompleteOptions: CHANNELS.map(c => ({ label: c, value: c })),
         onCommit: (value, isValid) => onCellChange(row.original.id ?? row.original.code, "channel", value, isValid),
       }),
     },

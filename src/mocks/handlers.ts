@@ -3,7 +3,7 @@ import { generateOrders, generateQueueOrders } from "./orders"
 import { TABLE_HISTORY_MOCK } from "@/components/data-table/table-history-mock"
 
 // In-memory state for realistic CRUD
-let orders = generateOrders(250)
+let orders = generateOrders(100)
 let queueOrders = generateQueueOrders(25)
 let orderHistory = [...TABLE_HISTORY_MOCK]
 

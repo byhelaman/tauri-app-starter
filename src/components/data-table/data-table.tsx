@@ -181,7 +181,7 @@ export function DataTable<TData, TValue>({
 
       <div
         className={cn(
-          "flex flex-1 min-h-0 w-full overflow-hidden rounded-lg border",
+          "flex flex-1 min-h-0 w-full overflow-hidden rounded-md border",
           !fitHeight && "max-h-[calc(100svh-17rem)]"
         )}
       >

@@ -147,6 +147,7 @@ export function useOrders() {
         case "time": return { ...order, time: value }
         case "code": return { ...order, code: value }
         case "channel": return { ...order, channel: value }
+        case "priority": return { ...order, priority: value }
         case "quantity": {
           const normalized = value.trim()
           return {

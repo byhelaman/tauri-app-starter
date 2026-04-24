@@ -3,6 +3,7 @@ import type { ColumnDef, FilterFn } from "@tanstack/react-table"
 import { cn } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import { Autocomplete } from "@/components/ui/autocomplete"
 
 
 export interface InlineEditableCellOptions {
@@ -10,6 +11,8 @@ export interface InlineEditableCellOptions {
   enableEditing?: boolean
   validate?: (value: string) => boolean
   onCommit?: (value: string, isValid: boolean) => void
+  autocompleteOptions?: { label: string; value: string }[]
+  restrictive?: boolean
 }
 
 function normalizeCellOptions(classNameOrOptions?: string | InlineEditableCellOptions): InlineEditableCellOptions {
@@ -48,6 +51,8 @@ function InlineEditableCell({
   enableEditing = false,
   validate,
   onCommit,
+  autocompleteOptions,
+  restrictive = false,
 }: {
   value: string | number
 } & InlineEditableCellOptions) {
@@ -137,10 +142,10 @@ function InlineEditableCell({
     }
 
     if (e.key === "Enter" || e.key === "F2") {
-      e.preventDefault()
-      setInitialEditValue(null)
-      setIsEditing(true)
-      return
+      if (enableEditing) {
+        setInitialEditValue(null)
+        setIsEditing(true)
+      }
     }
 
     if (enableEditing && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -157,6 +162,29 @@ function InlineEditableCell({
     if (text) {
       e.preventDefault()
       handleCommit(text)
+    }
+  }
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    let direction: "up" | "down" | "left" | "right" | null = null
+
+    if (e.key === "Enter") {
+      direction = "down"
+    } else if (initialEditValue !== null) {
+      if (e.key === "ArrowUp") direction = "up"
+      else if (e.key === "ArrowDown") direction = "down"
+      else if (e.key === "ArrowLeft") direction = "left"
+      else if (e.key === "ArrowRight") direction = "right"
+    }
+
+    if (direction) {
+      e.preventDefault()
+      handleCommit(e.currentTarget.value)
+      setPendingFocusAction(direction)
+    } else if (e.key === "Escape") {
+      e.preventDefault()
+      setIsEditing(false)
+      setPendingFocusAction("current")
     }
   }
 
@@ -195,48 +223,51 @@ function InlineEditableCell({
       )}>
         <span className="truncate">{nextValue}</span>
       </div>
-      <Input
-        ref={inputRef}
-        readOnly={!enableEditing}
-        defaultValue={initialEditValue !== null ? initialEditValue : nextValue}
-        autoFocus
-        onBlur={(e) => {
-          if (enableEditing) {
-            handleCommit(e.currentTarget.value)
-          } else {
-            setIsEditing(false)
-          }
-        }}
-        onKeyDown={(e) => {
-          let direction: "up" | "down" | "left" | "right" | null = null
-
-          if (e.key === "Enter") {
-            direction = "down"
-          } else if (initialEditValue !== null) {
-            // "Modo de sobrescritura" (se escribió directamente en la celda)
-            // Las flechas guardan inmediatamente y mueven el foco
-            if (e.key === "ArrowUp") direction = "up"
-            else if (e.key === "ArrowDown") direction = "down"
-            else if (e.key === "ArrowLeft") direction = "left"
-            else if (e.key === "ArrowRight") direction = "right"
-          }
-
-          if (direction) {
-            e.preventDefault()
-            handleCommit(e.currentTarget.value)
-            setPendingFocusAction(direction)
-          } else if (e.key === "Escape") {
-            e.preventDefault()
-            setIsEditing(false)
+      {autocompleteOptions ? (
+        <Autocomplete
+          options={autocompleteOptions}
+          value={initialEditValue !== null ? initialEditValue : nextValue}
+          restrictive={restrictive}
+          onChange={(val) => {
+            handleCommit(val)
             setPendingFocusAction("current")
-          }
-        }}
-        aria-invalid={(wasBlurred && hasError) || undefined}
-        className={cn(
-          "absolute inset-0 h-8 w-full bg-background shadow-sm",
-          className
-        )}
-      />
+          }}
+          onBlur={(committedValue) => {
+            if (committedValue !== undefined) {
+              handleCommit(committedValue)
+            } else {
+              setIsEditing(false)
+            }
+          }}
+          onKeyDown={handleInputKeyDown}
+          autoFocus
+          wrapperClassName="absolute inset-0"
+          className={cn(
+            "h-full w-full bg-background shadow-sm",
+            className
+          )}
+        />
+      ) : (
+        <Input
+          ref={inputRef}
+          readOnly={!enableEditing}
+          defaultValue={initialEditValue !== null ? initialEditValue : nextValue}
+          autoFocus
+          onBlur={(e) => {
+            if (enableEditing) {
+              handleCommit(e.currentTarget.value)
+            } else {
+              setIsEditing(false)
+            }
+          }}
+          onKeyDown={handleInputKeyDown}
+          aria-invalid={(wasBlurred && hasError) || undefined}
+          className={cn(
+            "absolute inset-0 h-8 w-full bg-background shadow-sm",
+            className
+          )}
+        />
+      )}
     </div>
   )
 }
