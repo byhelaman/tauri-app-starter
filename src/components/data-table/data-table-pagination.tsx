@@ -23,7 +23,7 @@ export function DataTablePagination<TData>({
     <div className="flex items-center justify-between">
       <p className="text-sm text-muted-foreground">
         {table.getFilteredSelectedRowModel().rows.length} of{" "}
-        {table.getFilteredRowModel().rows.length} row(s) selected.
+        {table.getRowCount()} row(s) selected.
       </p>
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">

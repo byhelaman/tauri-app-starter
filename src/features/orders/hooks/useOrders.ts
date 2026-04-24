@@ -1,30 +1,71 @@
-import { useCallback } from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useCallback, useState, useRef, useEffect } from "react"
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query"
+import { type PaginationState, type ColumnFiltersState } from "@tanstack/react-table"
 import { toast } from "sonner"
 import * as api from "../api"
 import type { Order, EditableOrderField, Status } from "../columns"
 import type { QueueOrder, QueueStatus } from "../modal-columns"
 
-export function useOrders() {
+export function useOrders({ defaultPageSize = 25, statsOnly = false } = {}) {
   const queryClient = useQueryClient()
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: defaultPageSize,
+  })
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [globalFilter, setGlobalFilter] = useState("")
 
-  const { data: orders = [], isLoading: isOrdersLoading } = useQuery({
-    queryKey: ["orders"],
-    queryFn: api.fetchOrders,
+  // Reiniciar a la primera página cuando cambian los filtros
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, pageIndex: 0 }))
+  }, [columnFilters, globalFilter])
+
+  // Query ligera de estadísticas para el dashboard (obtiene todos los pedidos sin la sobrecarga de paginación)
+  const { data: allOrdersData, isLoading: isAllOrdersLoading } = useQuery({
+    queryKey: ["orders", "stats"],
+    queryFn: () => api.fetchOrders({ limit: 1000, offset: 0 }),
+    staleTime: 30_000, // Cache por 30s para evitar refetches excesivos
   })
 
-  const { data: queueOrders = [], isLoading: isQueueLoading } = useQuery({
+  const orders = allOrdersData?.data ?? []
+  const totalOrders = allOrdersData?.total ?? 0
+  const isOrdersLoading = isAllOrdersLoading
+
+  // Query paginada del lado del servidor para la DataTable principal
+  const { data: pageResponse, isFetching: isPageFetching } = useQuery({
+    queryKey: ["orders", "paginated", pagination, columnFilters, globalFilter],
+    queryFn: () => api.fetchOrders({ 
+      limit: pagination.pageSize, 
+      offset: pagination.pageIndex * pagination.pageSize,
+      search: globalFilter,
+      filters: columnFilters,
+    }),
+    placeholderData: keepPreviousData,
+    enabled: !statsOnly,
+  })
+
+  const rowCountRef = useRef(0)
+  if (pageResponse?.total !== undefined) {
+    rowCountRef.current = pageResponse.total
+  }
+  const cachedRowCount = rowCountRef.current
+
+  const { data: queueData, isLoading: isQueueLoading } = useQuery({
     queryKey: ["queueOrders"],
     queryFn: api.fetchQueueOrders,
+    enabled: !statsOnly,
   })
+
+  const queueOrders = queueData?.data ?? []
+  const totalQueueOrders = queueData?.total ?? 0
 
   const updateOrderMutation = useMutation({
     mutationFn: api.updateOrder,
-    onMutate: async (newOrder) => {
+    onMutate: async (updatedOrder) => {
       await queryClient.cancelQueries({ queryKey: ["orders"] })
       const previousOrders = queryClient.getQueryData<Order[]>(["orders"])
       queryClient.setQueryData<Order[]>(["orders"], (old = []) => {
-        return old.map(order => order.id === newOrder.id ? { ...order, ...newOrder } : order)
+        return old.map(order => order.id === updatedOrder.id ? { ...order, ...updatedOrder } : order)
       })
       return { previousOrders }
     },
@@ -116,11 +157,11 @@ export function useOrders() {
     },
   })
 
-  const { mutate: mutateUpdateOrder } = updateOrderMutation
-  const { mutate: mutateUpdateQueue } = updateQueueOrderMutation
-  const { mutate: mutateDeleteQueue } = deleteQueueOrderMutation
-  const { mutate: mutateDeleteOrder } = deleteOrderMutation
-  const { mutate: mutateBulkDelete } = deleteBulkOrdersMutation
+  const { mutate: doUpdateOrder } = updateOrderMutation
+  const { mutate: doUpdateQueue } = updateQueueOrderMutation
+  const { mutate: doDeleteQueue } = deleteQueueOrderMutation
+  const { mutate: doDeleteOrder } = deleteOrderMutation
+  const { mutate: doBulkDelete } = deleteBulkOrdersMutation
 
   const updateOrderById = useCallback((orderId: string, updater: (order: Order) => Order) => {
     const currentOrders = queryClient.getQueryData<Order[]>(["orders"]) || []
@@ -130,8 +171,8 @@ export function useOrders() {
     const updated = updater(current)
     if (updated === current) return
 
-    mutateUpdateOrder(updated)
-  }, [queryClient, mutateUpdateOrder])
+    doUpdateOrder(updated)
+  }, [queryClient, doUpdateOrder])
 
   const handleStatusChange = useCallback((orderId: string, status: Status) => {
     updateOrderById(orderId, (order) => ({ ...order, status }))
@@ -161,34 +202,45 @@ export function useOrders() {
   }, [updateOrderById])
 
   const handleQueueStatusChange = useCallback((code: string, status: QueueStatus) => {
-    mutateUpdateQueue({ code, status })
-  }, [mutateUpdateQueue])
+    doUpdateQueue({ code, status })
+  }, [doUpdateQueue])
 
   const handleQueuePriorityToggle = useCallback((code: string) => {
     const currentOrders = queryClient.getQueryData<QueueOrder[]>(["queueOrders"]) || []
     const order = currentOrders.find(o => o.code === code)
     if (order) {
-      mutateUpdateQueue({ code, priority: !order.priority })
+      doUpdateQueue({ code, priority: !order.priority })
     }
-  }, [queryClient, mutateUpdateQueue])
+  }, [queryClient, doUpdateQueue])
 
   const handleQueueRemove = useCallback((code: string) => {
-    mutateDeleteQueue(code)
+    doDeleteQueue(code)
     toast.success("Removed from queue")
-  }, [mutateDeleteQueue])
+  }, [doDeleteQueue])
 
   const deleteOrder = useCallback((id: string) => {
-    mutateDeleteOrder(id)
-  }, [mutateDeleteOrder])
+    doDeleteOrder(id)
+  }, [doDeleteOrder])
 
   const deleteBulkOrders = useCallback((ids: string[]) => {
-    mutateBulkDelete(ids)
-  }, [mutateBulkDelete])
+    doBulkDelete(ids)
+  }, [doBulkDelete])
 
   return {
     orders,
     isOrdersLoading,
+    totalOrders,
+    pageData: pageResponse?.data ?? [],
+    rowCount: cachedRowCount,
+    isPageLoading: isPageFetching,
+    pagination,
+    setPagination,
+    columnFilters,
+    setColumnFilters,
+    globalFilter,
+    setGlobalFilter,
     queueOrders,
+    totalQueueOrders,
     isQueueLoading,
     actions: {
       createOrder: createOrderMutation.mutate,

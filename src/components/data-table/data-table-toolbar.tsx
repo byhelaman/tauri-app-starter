@@ -86,7 +86,7 @@ export function DataTableToolbar<TData>({
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchInput(e.target.value)}
           />
           {isFiltered && (
-            <InputGroupAddon align="inline-end">{table.getFilteredRowModel().rows.length} results</InputGroupAddon>
+            <InputGroupAddon align="inline-end">{table.getRowCount()} results</InputGroupAddon>
           )}
         </InputGroup>
       )}

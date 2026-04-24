@@ -1,21 +1,39 @@
 import type { Order } from "@/features/orders/columns"
 import type { QueueOrder } from "@/features/orders/modal-columns"
 import type { HistoryEntry } from "@/components/data-table/data-table-types"
+import type { ColumnFiltersState } from "@tanstack/react-table"
 
-export const fetchOrders = async (): Promise<Order[]> => {
-  const res = await fetch("/api/orders")
+export const fetchOrders = async ({ 
+  limit = 20, 
+  offset = 0,
+  search = "",
+  filters = []
+}: { 
+  limit?: number, 
+  offset?: number,
+  search?: string,
+  filters?: ColumnFiltersState
+} = {}): Promise<{ data: Order[], total: number }> => {
+  const params = new URLSearchParams({
+    limit: limit.toString(),
+    offset: offset.toString(),
+  })
+  if (search) params.append("search", search)
+  if (filters.length > 0) params.append("filters", JSON.stringify(filters))
+
+  const res = await fetch(`/api/orders?${params.toString()}`)
   if (!res.ok) throw new Error("Failed to fetch orders")
   return res.json()
 }
 
-export const fetchQueueOrders = async (): Promise<QueueOrder[]> => {
+export const fetchQueueOrders = async (): Promise<{ data: QueueOrder[], total: number }> => {
   const res = await fetch("/api/queue-orders")
   if (!res.ok) throw new Error("Failed to fetch queue orders")
   return res.json()
 }
 
-export const fetchOrderHistory = async (): Promise<HistoryEntry[]> => {
-  const res = await fetch("/api/orders/history")
+export const fetchOrderHistory = async ({ limit = 20, offset = 0 } = {}): Promise<HistoryEntry[]> => {
+  const res = await fetch(`/api/orders/history?limit=${limit}&offset=${offset}`)
   if (!res.ok) throw new Error("Failed to fetch history")
   return res.json()
 }

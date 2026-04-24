@@ -1,4 +1,4 @@
-import { http, HttpResponse } from "msw"
+import { http, HttpResponse, delay } from "msw"
 import { generateOrders, generateQueueOrders } from "./orders"
 import { TABLE_HISTORY_MOCK } from "./table-history-mock"
 import type { HistoryDetail } from "@/components/data-table/data-table-types"
@@ -22,9 +22,59 @@ function addHistoryEntry(action: "create" | "update" | "delete", description: st
 }
 
 export const handlers = [
-  // Get all orders
-  http.get("/api/orders", () => {
-    return HttpResponse.json(orders)
+  // Get all orders (paginated)
+  http.get("/api/orders", ({ request }) => {
+    const url = new URL(request.url)
+    const limit = Number.parseInt(url.searchParams.get("limit") || "20", 10)
+    const offset = Number.parseInt(url.searchParams.get("offset") || "0", 10)
+    const search = url.searchParams.get("search")?.toLowerCase() || ""
+    const filtersRaw = url.searchParams.get("filters")
+    let filters: { id: string; value: unknown }[] = []
+    if (filtersRaw) {
+      try {
+        filters = JSON.parse(filtersRaw)
+      } catch {
+        // ignore malformed filter JSON
+      }
+    }
+
+    // 5% chance of returning 429 Too Many Requests
+    if (Math.random() < 0.05) {
+      return new HttpResponse(null, {
+        status: 429,
+        statusText: "Too Many Requests",
+      })
+    }
+
+    let filteredOrders = [...orders]
+
+    // Apply search (Dynamic global search across all fields)
+    if (search) {
+      filteredOrders = filteredOrders.filter(order => 
+        Object.values(order).some(val => 
+          String(val).toLowerCase().includes(search)
+        )
+      )
+    }
+
+    // Apply column filters (basic example for status/channel)
+    if (filters.length > 0) {
+      for (const filter of filters) {
+        const { id, value } = filter
+        if (Array.isArray(value) && value.length > 0 && id in orders[0]) {
+          filteredOrders = filteredOrders.filter(order => 
+            value.includes(String(order[id as keyof Order]))
+          )
+        }
+      }
+    }
+
+    const paginatedOrders = filteredOrders.slice(offset, offset + limit)
+
+    return HttpResponse.json({
+      data: paginatedOrders,
+      total: filteredOrders.length,
+    })
   }),
 
   // Create an order
@@ -60,7 +110,7 @@ export const handlers = [
         oldValue: oldOrder[key] as string | number | undefined,
         newValue: updates[key] as string | number | undefined
       }))
-      .filter(d => d.oldValue !== d.newValue)
+      .filter(detail => detail.oldValue !== detail.newValue)
 
     // Apply updates
     orders[orderIndex] = { ...oldOrder, ...updates }
@@ -89,13 +139,23 @@ export const handlers = [
   }),
 
   // Get queue orders
-  http.get("/api/queue-orders", () => {
-    return HttpResponse.json(queueOrders)
+  http.get("/api/queue-orders", async () => {
+    await delay(300)
+    return HttpResponse.json({
+      data: queueOrders,
+      total: queueOrders.length
+    })
   }),
 
-  // Get order history
-  http.get("/api/orders/history", () => {
-    return HttpResponse.json(orderHistory)
+  // Get order history (paginated)
+  http.get("/api/orders/history", async ({ request }) => {
+    await delay(400)
+    const url = new URL(request.url)
+    const limit = Number(url.searchParams.get("limit")) || 20
+    const offset = Number(url.searchParams.get("offset")) || 0
+    
+    const paginatedHistory = orderHistory.slice(offset, offset + limit)
+    return HttpResponse.json(paginatedHistory)
   }),
 
   // Patch a queue order

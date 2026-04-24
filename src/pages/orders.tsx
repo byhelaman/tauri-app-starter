@@ -84,24 +84,31 @@ const QUEUE_STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
 
 export function OrdersPage() {
   const {
-    orders,
-    isOrdersLoading,
+    pageData,
+    isPageLoading,
+    pagination,
+    setPagination,
+    columnFilters,
+    setColumnFilters,
+    globalFilter,
+    setGlobalFilter,
+    rowCount,
     queueOrders,
     isQueueLoading,
     actions
-  } = useOrders()
+  } = useOrders({ defaultPageSize: 25 })
 
-  const [bulkDeleteTarget, setBulkDeleteTarget] = useState<{ selected: Order[], clearSelection: () => void } | null>(null)
-  const [rowDeleteTarget, setRowDeleteTarget] = useState<Order | null>(null)
-  const [importOpen, setImportOpen] = useState(false)
-  const [tableModalOpen, setTableModalOpen] = useState(false)
-  const [addOrderOpen, setAddOrderOpen] = useState(false)
+  const [isBulkDeleteAlertOpen, setIsBulkDeleteAlertOpen] = useState<{ selected: Order[], clearSelection: () => void } | null>(null)
+  const [orderToDelete, setOrderToDelete] = useState<Order | null>(null)
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
+  const [isQueueDialogOpen, setIsQueueDialogOpen] = useState(false)
+  const [isAddOrderDialogOpen, setIsAddOrderDialogOpen] = useState(false)
 
   const { toolbarActions, rowClassName } = useTableHighlights()
   const { toolbarActions: queueToolbarActions, rowClassName: queueRowClassName } = useQueueHighlights()
 
   const handleDeleteRequest = useCallback((order: Order) => {
-    setRowDeleteTarget(order)
+    setOrderToDelete(order)
   }, [])
 
   const columns = useMemo(
@@ -118,7 +125,6 @@ export function OrdersPage() {
     toast.success("Order code copied")
   }, [])
 
-  const tableData = orders
 
   return (
     <main className="h-full overflow-hidden flex flex-col p-6 gap-6">
@@ -127,31 +133,40 @@ export function OrdersPage() {
         description="Track customer orders and their fulfillment status."
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setTableModalOpen(true)}>
+            <Button variant="outline" onClick={() => setIsQueueDialogOpen(true)}>
               <ListTodo />
               Queue
             </Button>
-            <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
               <Upload />
               Import
             </Button>
-            <Button onClick={() => setAddOrderOpen(true)}>
+            <Button onClick={() => setIsAddOrderDialogOpen(true)}>
               <Plus />
               Add Order
             </Button>
           </div>
         }
       />
-      <ImportDialog open={importOpen} onOpenChange={setImportOpen} title="Import orders" />
+      <ImportDialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen} title="Import orders" />
       <OrderDialog
-        open={addOrderOpen}
-        onOpenChange={setAddOrderOpen}
+        open={isAddOrderDialogOpen}
+        onOpenChange={setIsAddOrderDialogOpen}
         onSubmit={(newOrder) => actions.createOrder(newOrder)}
       />
       <DataTable
         columns={columns}
-        data={tableData}
-        isLoading={isOrdersLoading}
+        data={pageData}
+        isLoading={isPageLoading}
+        manualPagination={true}
+        pageCount={Math.ceil(rowCount / pagination.pageSize)}
+        rowCount={rowCount}
+        pagination={pagination}
+        onPaginationChange={setPagination}
+        columnFilters={columnFilters}
+        onColumnFiltersChange={setColumnFilters}
+        globalFilter={globalFilter}
+        onGlobalFilterChange={setGlobalFilter}
         tableId="orders"
         sidePanel={(onClose) => (
           <TableHistoryCard 
@@ -226,7 +241,7 @@ export function OrdersPage() {
               variant="destructive"
               size="sm"
               aria-label="Delete"
-              onClick={() => setBulkDeleteTarget({ selected, clearSelection })}
+              onClick={() => setIsBulkDeleteAlertOpen({ selected, clearSelection })}
             >
               <Trash2 />
               Delete
@@ -238,7 +253,7 @@ export function OrdersPage() {
         defaultPageSize={25}
       />
 
-      <Dialog open={tableModalOpen} onOpenChange={setTableModalOpen}>
+      <Dialog open={isQueueDialogOpen} onOpenChange={setIsQueueDialogOpen}>
         <DialogContent
           className="w-[95vw]! h-auto! max-w-310! max-h-205!"
           onInteractOutside={(event) => event.preventDefault()}
@@ -310,14 +325,14 @@ export function OrdersPage() {
       </Dialog>
 
       <AlertDialog
-        open={!!rowDeleteTarget}
-        onOpenChange={(open) => { if (!open) setRowDeleteTarget(null) }}
+        open={!!orderToDelete}
+        onOpenChange={(open) => { if (!open) setOrderToDelete(null) }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete order?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete <span className="font-medium text-foreground">{rowDeleteTarget?.code}</span>. This action cannot be undone.
+              This will permanently delete <span className="font-medium text-foreground">{orderToDelete?.code}</span>. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -325,10 +340,10 @@ export function OrdersPage() {
             <AlertDialogAction
               variant="destructive"
               onClick={() => {
-                if (!rowDeleteTarget) return
-                actions.deleteOrder(rowDeleteTarget.id)
+                if (!orderToDelete) return
+                actions.deleteOrder(orderToDelete.id)
                 toast.success("Order deleted")
-                setRowDeleteTarget(null)
+                setOrderToDelete(null)
               }}
             >
               Delete
@@ -338,12 +353,12 @@ export function OrdersPage() {
       </AlertDialog>
 
       <AlertDialog
-        open={!!bulkDeleteTarget}
-        onOpenChange={(open) => { if (!open) setBulkDeleteTarget(null) }}
+        open={!!isBulkDeleteAlertOpen}
+        onOpenChange={(open) => { if (!open) setIsBulkDeleteAlertOpen(null) }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {bulkDeleteTarget?.selected.length} orders?</AlertDialogTitle>
+            <AlertDialogTitle>Delete {isBulkDeleteAlertOpen?.selected.length} orders?</AlertDialogTitle>
             <AlertDialogDescription>
               This will permanently delete the selected orders. This action cannot be undone.
             </AlertDialogDescription>
@@ -353,12 +368,12 @@ export function OrdersPage() {
             <AlertDialogAction
               variant="destructive"
               onClick={() => {
-                if (!bulkDeleteTarget) return
-                const ids = bulkDeleteTarget.selected.map((order) => order.id)
+                if (!isBulkDeleteAlertOpen) return
+                const ids = isBulkDeleteAlertOpen.selected.map((order) => order.id)
                 actions.deleteBulkOrders(ids)
-                toast.success(`${bulkDeleteTarget.selected.length} orders deleted`)
-                bulkDeleteTarget.clearSelection()
-                setBulkDeleteTarget(null)
+                toast.success(`${isBulkDeleteAlertOpen.selected.length} orders deleted`)
+                isBulkDeleteAlertOpen.clearSelection()
+                setIsBulkDeleteAlertOpen(null)
               }}
             >
               Delete

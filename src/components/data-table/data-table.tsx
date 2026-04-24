@@ -15,6 +15,8 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
+  type PaginationState,
+  type OnChangeFn,
 } from "@tanstack/react-table"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -51,6 +53,15 @@ interface DataTableProps<TData, TValue> {
   isLoading?: boolean
   getRowId?: (row: TData) => string
   sidePanel?: (onClose: () => void) => React.ReactNode
+  manualPagination?: boolean
+  pageCount?: number
+  rowCount?: number
+  pagination?: PaginationState
+  onPaginationChange?: OnChangeFn<PaginationState>
+  columnFilters?: ColumnFiltersState
+  onColumnFiltersChange?: OnChangeFn<ColumnFiltersState>
+  globalFilter?: string
+  onGlobalFilterChange?: OnChangeFn<string>
 }
 
 export function DataTable<TData, TValue>({
@@ -68,10 +79,19 @@ export function DataTable<TData, TValue>({
   isLoading = false,
   getRowId,
   sidePanel,
+  manualPagination,
+  pageCount,
+  rowCount,
+  pagination,
+  onPaginationChange,
+  columnFilters,
+  onColumnFiltersChange,
+  globalFilter,
+  onGlobalFilterChange,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [globalFilter, setGlobalFilter] = useState("")
+  const [localColumnFilters, setLocalColumnFilters] = useState<ColumnFiltersState>([])
+  const [localGlobalFilter, setLocalGlobalFilter] = useState("")
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({ left: ["select"], right: [] })
   const [rowSelection, setRowSelection] = useState({})
@@ -130,8 +150,8 @@ export function DataTable<TData, TValue>({
     isMultiSortEvent: () => true,
     getRowId,
     onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onGlobalFilterChange: setGlobalFilter,
+    onColumnFiltersChange: onColumnFiltersChange ?? setLocalColumnFilters,
+    onGlobalFilterChange: onGlobalFilterChange ?? setLocalGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -143,8 +163,21 @@ export function DataTable<TData, TValue>({
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
     autoResetPageIndex: false,
-    initialState: { pagination: { pageSize: defaultPageSize } },
-    state: { sorting, columnFilters, globalFilter, columnPinning, columnVisibility, rowSelection },
+    manualPagination,
+    manualFiltering: !!manualPagination,
+    pageCount,
+    rowCount,
+    onPaginationChange,
+    initialState: { pagination: { pageSize: defaultPageSize, pageIndex: 0 } },
+    state: { 
+      sorting, 
+      columnFilters: columnFilters ?? localColumnFilters, 
+      globalFilter: globalFilter ?? localGlobalFilter, 
+      columnPinning, 
+      columnVisibility, 
+      rowSelection,
+      ...(manualPagination ? { pagination } : {})
+    },
   })
 
   // Ensure page index doesn't go out of bounds when data shrinks (e.g. bulk deleting items on the last page)
@@ -217,43 +250,50 @@ export function DataTable<TData, TValue>({
               ))}
             </TableHeader>
             <TableBody>
-              {isLoading ? (
-                <DataTableSkeleton table={table} rowCount={defaultPageSize} leftEdgeId={leftEdgeId} rightEdgeId={rightEdgeId} />
-              ) : table.getRowModel().rows?.length ? (
-                table.getRowModel().rows.map((row) => {
-                  const rowEl = (
-                    <TableRow key={row.id} className={cn("group/row group", rowClassName?.(row.original))} data-state={row.getIsSelected() && "selected"}>
-                      {row.getVisibleCells().map((cell) => {
-                        const pin = cell.column.getIsPinned()
-                        const isFirst = pin === "left" && cell.column.getStart("left") === 0
-                        const isEdge = pin === "left" ? cell.column.id === leftEdgeId : pin === "right" ? cell.column.id === rightEdgeId : false
-                        return (
-                          <TableCell
-                            key={cell.id}
-                            className={cn(
-                              cell.column.getIsPinned() &&
-                              "relative z-10 group-hover/row:z-30 border-b group-last/row:border-b-0 bg-(--highlight-bg,var(--table-bg,var(--color-background))) transition-colors group-hover:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-has-data-open:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-has-aria-expanded:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-data-[state=selected]:bg-muted"
-                            )}
-                            style={{
-                              ...(cell.column.getIsPinned() ? undefined : getColumnSizeStyle(cell.column.columnDef)),
-                              ...getPinnedColumnStyle(cell.column, false, isEdge, isFirst)
-                            }}
-                          >
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </TableCell>
-                        )
-                      })}
-                    </TableRow>
-                  )
-                  if (!rowContextMenu) return rowEl
-                  return (
-                    <ContextMenu key={row.id}>
-                      <ContextMenuTrigger asChild>{rowEl}</ContextMenuTrigger>
-                      <ContextMenuContent>{rowContextMenu(row.original)}</ContextMenuContent>
-                    </ContextMenu>
-                  )
-                })
-              ) : (
+              {table.getRowModel().rows.map((row) => {
+                const rowEl = (
+                  <TableRow key={row.id} className={cn("group/row group", rowClassName?.(row.original))} data-state={row.getIsSelected() && "selected"}>
+                    {row.getVisibleCells().map((cell) => {
+                      const pin = cell.column.getIsPinned()
+                      const isFirst = pin === "left" && cell.column.getStart("left") === 0
+                      const isEdge = pin === "left" ? cell.column.id === leftEdgeId : pin === "right" ? cell.column.id === rightEdgeId : false
+                      return (
+                        <TableCell
+                          key={cell.id}
+                          className={cn(
+                            cell.column.getIsPinned() &&
+                            "relative z-10 group-hover/row:z-30 border-b group-last/row:border-b-0 bg-(--highlight-bg,var(--table-bg,var(--color-background))) transition-colors group-hover:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-has-data-open:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-has-aria-expanded:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-data-[state=selected]:bg-muted"
+                          )}
+                          style={{
+                            ...(cell.column.getIsPinned() ? undefined : getColumnSizeStyle(cell.column.columnDef)),
+                            ...getPinnedColumnStyle(cell.column, false, isEdge, isFirst)
+                          }}
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      )
+                    })}
+                  </TableRow>
+                )
+                if (!rowContextMenu) return rowEl
+                return (
+                  <ContextMenu key={row.id}>
+                    <ContextMenuTrigger asChild>{rowEl}</ContextMenuTrigger>
+                    <ContextMenuContent>{rowContextMenu(row.original)}</ContextMenuContent>
+                  </ContextMenu>
+                )
+              })}
+
+              {isLoading && table.getRowModel().rows.length < table.getState().pagination.pageSize && (
+                <DataTableSkeleton 
+                  table={table} 
+                  rowCount={table.getState().pagination.pageSize - table.getRowModel().rows.length} 
+                  leftEdgeId={leftEdgeId} 
+                  rightEdgeId={rightEdgeId} 
+                />
+              )}
+
+              {!isLoading && table.getRowModel().rows?.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">No results.</TableCell>
                 </TableRow>

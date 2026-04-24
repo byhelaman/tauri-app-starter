@@ -1,6 +1,6 @@
 import { useDeferredValue, useMemo, useState } from "react"
-import { useQuery } from "@tanstack/react-query"
-import { ArrowRight, SearchIcon, PlusIcon, PencilIcon, TrashIcon, XIcon } from "lucide-react"
+import { useInfiniteQuery } from "@tanstack/react-query"
+import { ArrowRight, SearchIcon, PlusIcon, PencilIcon, TrashIcon, XIcon, Loader2 } from "lucide-react"
 import {
   Card,
   CardHeader,
@@ -32,28 +32,41 @@ interface TableHistoryCardProps {
   onClose: () => void
   tableId: string
   queryKey: unknown[]
-  queryFn: () => Promise<HistoryEntry[]>
+  queryFn: (params: { limit: number, offset: number }) => Promise<HistoryEntry[]>
+  pageSize?: number
 }
 
-export function TableHistoryCard({ onClose, tableId, queryKey, queryFn }: TableHistoryCardProps) {
+export function TableHistoryCard({ 
+  onClose, 
+  tableId, 
+  queryKey, 
+  queryFn,
+  pageSize = 20 
+}: TableHistoryCardProps) {
   const [search, setSearch] = useState("")
-  const [showAll, setShowAll] = useState(false)
   const deferredSearch = useDeferredValue(search)
 
-  const { data: fullHistory = [], isLoading } = useQuery({
+  const { 
+    data, 
+    isLoading, 
+    fetchNextPage, 
+    hasNextPage, 
+    isFetchingNextPage 
+  } = useInfiniteQuery({
     queryKey,
-    queryFn,
+    queryFn: ({ pageParam = 0 }) => queryFn({ limit: pageSize, offset: pageParam as number }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (lastPage.length < pageSize) return undefined
+      return allPages.length * pageSize
+    },
   })
 
-  const history = useMemo(() => {
-    if (showAll) return fullHistory
-    const eightHoursAgo = Date.now() - 8 * 60 * 60 * 1000
-    return fullHistory.filter(h => new Date(h.createdAt).getTime() > eightHoursAgo)
-  }, [fullHistory, showAll])
+  const allEntries = useMemo(() => data?.pages.flat() ?? [], [data])
 
   const filtered = useMemo(
-    () => filterByMultiSearch(history, deferredSearch, (e) => [e.description, e.actorEmail, e.action]),
-    [history, deferredSearch],
+    () => filterByMultiSearch(allEntries, deferredSearch, (e) => [e.description, e.actorEmail, e.action]),
+    [allEntries, deferredSearch],
   )
 
   const getActionIcon = (action: HistoryEntry["action"]) => {
@@ -147,14 +160,20 @@ export function TableHistoryCard({ onClose, tableId, queryKey, queryFn }: TableH
                 </ItemActions>
               </Item>
             ))}
-            {!showAll && fullHistory.length > history.length && (
-              <div className="w-full flex justify-center">
+            {hasNextPage && (
+              <div className="w-full flex justify-center mt-2 mb-4">
                 <Button 
                   variant="ghost" 
-                  className="w-fit text-muted-foreground" 
-                  onClick={() => setShowAll(true)}
+                  size="sm"
+                  className="w-fit text-muted-foreground gap-2" 
+                  onClick={() => fetchNextPage()}
+                  disabled={isFetchingNextPage}
                 >
-                  Load more changes
+                  {isFetchingNextPage ? (
+                    <Loader2 className="size-3 animate-spin" />
+                  ) : (
+                    "Load More Changes"
+                  )}
                 </Button>
               </div>
             )}

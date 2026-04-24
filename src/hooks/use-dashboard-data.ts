@@ -1,18 +1,19 @@
 import { useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { DollarSignIcon, PackageCheckIcon, PackageIcon, TruckIcon, PlusIcon, PencilIcon, TrashIcon } from "lucide-react"
+import { PackageCheckIcon, PackageIcon, TruckIcon, PlusIcon, PencilIcon, TrashIcon, DollarSignIcon } from "lucide-react"
 import { useOrders } from "@/features/orders/hooks/useOrders"
 import { fetchOrderHistory } from "@/features/orders/api"
 import { formatRelativeTime } from "@/lib/date-utils"
+import type { HistoryEntry } from "@/components/data-table/data-table-types"
 import type { DashboardStat, ActivityEntry, UpcomingEntry } from "@/mocks/dashboard"
 
 
 export function useDashboardData() {
-  const { orders, isOrdersLoading } = useOrders()
+  const { orders, isOrdersLoading } = useOrders({ statsOnly: true })
 
-  const { data: history = [], isLoading: isHistoryLoading } = useQuery({
+  const { data: recentActivity = [] as HistoryEntry[], isLoading: isHistoryLoading } = useQuery<HistoryEntry[]>({
     queryKey: ["dashboard", "history"],
-    queryFn: fetchOrderHistory,
+    queryFn: () => fetchOrderHistory({ limit: 5 }),
   })
 
   const stats = useMemo<DashboardStat[]>(() => {
@@ -28,11 +29,11 @@ export function useDashboardData() {
     const now = new Date()
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
-    const recentOrders = orders.filter(o => new Date(o.date) >= oneWeekAgo)
-    const pendingOrders = orders.filter(o => o.status === "pending" || o.status === "processing")
-    const deliveredOrders = orders.filter(o => o.status === "delivered")
+    const recentOrders = orders.filter(order => new Date(order.date) >= oneWeekAgo)
+    const pendingOrders = orders.filter(order => order.status === "pending" || order.status === "processing")
+    const deliveredOrders = orders.filter(order => order.status === "delivered")
     
-    const revenue = deliveredOrders.reduce((sum, o) => sum + Number(o.amount), 0)
+    const revenue = deliveredOrders.reduce((sum, order) => sum + Number(order.amount), 0)
     
     const completionRate = orders.length > 0 ? (deliveredOrders.length / orders.length) * 100 : 0
 
@@ -56,7 +57,7 @@ export function useDashboardData() {
       {
         label: "Pending shipments",
         value: pendingOrders.length.toString(),
-        detail: `${orders.filter(o => o.status === "pending").length} need review`,
+        detail: `${orders.filter(order => order.status === "pending").length} need review`,
         change: "Attention",
         tone: "warning",
         icon: TruckIcon,
@@ -73,7 +74,7 @@ export function useDashboardData() {
   }, [orders])
 
   const activity = useMemo<ActivityEntry[]>(() => {
-    return history.slice(0, 5).map(entry => {
+    return recentActivity.slice(0, 5).map(entry => {
       let icon = PencilIcon
       if (entry.action === "create") icon = PlusIcon
       if (entry.action === "delete") icon = TrashIcon
@@ -86,17 +87,17 @@ export function useDashboardData() {
         icon,
       }
     })
-  }, [history])
+  }, [recentActivity])
 
   const upcoming = useMemo<UpcomingEntry[]>(() => {
-    const pending = orders.filter(o => o.status === "pending" || o.status === "processing").slice(0, 5)
-    return pending.map((o, i) => {
+    const pending = orders.filter(order => order.status === "pending" || order.status === "processing").slice(0, 5)
+    return pending.map((order, i) => {
       const days = i + 1
       return {
-        title: `${o.code} ship date`,
-        description: `${o.customer} · ${o.product}`,
+        title: `${order.code} ship date`,
+        description: `${order.customer} · ${order.product}`,
         when: days === 1 ? "Tomorrow" : `In ${days} days`,
-        tag: o.status === "processing" ? "Shipment" : "Review",
+        tag: order.status === "processing" ? "Shipment" : "Review",
       }
     })
   }, [orders])
