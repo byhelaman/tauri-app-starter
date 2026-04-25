@@ -7,12 +7,14 @@ export const fetchOrders = async ({
   limit = 20, 
   offset = 0,
   search = "",
-  filters = []
+  filters = [],
+  date,
 }: { 
   limit?: number, 
   offset?: number,
   search?: string,
-  filters?: ColumnFiltersState
+  filters?: ColumnFiltersState,
+  date?: string, // ISO date string "YYYY-MM-DD"
 } = {}): Promise<{ data: Order[], total: number }> => {
   const params = new URLSearchParams({
     limit: limit.toString(),
@@ -20,6 +22,7 @@ export const fetchOrders = async ({
   })
   if (search) params.append("search", search)
   if (filters.length > 0) params.append("filters", JSON.stringify(filters))
+  if (date) params.append("date", date)
 
   const res = await fetch(`/api/orders?${params.toString()}`)
   if (!res.ok) throw new Error("Failed to fetch orders")

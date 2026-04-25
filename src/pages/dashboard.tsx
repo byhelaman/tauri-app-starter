@@ -5,6 +5,14 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/page-header"
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Card,
   CardContent,
   CardDescription,
@@ -44,8 +52,9 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 export function DashboardPage() {
   const { user } = useAuth()
-  const { stats, activity, upcoming, isLoading } = useDashboardData()
   const [crash, setCrash] = useState(false)
+  const [period, setPeriod] = useState("7d")
+  const { stats, activity, upcoming, isLoading } = useDashboardData({ period })
 
   if (crash) return <ThrowError />
 
@@ -70,7 +79,20 @@ export function DashboardPage() {
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold">Statistics</h2>
-          <span className="text-xs text-muted-foreground">Last 7 days</span>
+          <Select value={period} onValueChange={setPeriod}>
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Select period" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+                <SelectItem value="3m">Last 3 months</SelectItem>
+                <SelectItem value="6m">Last 6 months</SelectItem>
+                <SelectItem value="1y">Last year</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {isLoading ? (

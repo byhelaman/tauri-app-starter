@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react"
+import { format } from "date-fns"
 import { toast } from "sonner"
 import {
   CheckCircle2,
@@ -22,6 +23,8 @@ import {
   type Order,
 } from "@/features/orders/columns"
 import { DataTable } from "@/components/data-table/data-table"
+import { DatePicker } from "@/components/ui/date-picker"
+import { Separator } from "@/components/ui/separator"
 import type { FacetedFilterOption } from "@/components/data-table/data-table-types"
 import { ImportDialog } from "@/components/data-table/import-dialog"
 import { buildBulkCopyText } from "@/components/data-table/bulk-copy"
@@ -83,6 +86,16 @@ const QUEUE_STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
 ]
 
 export function OrdersPage() {
+  const [isBulkDeleteAlertOpen, setIsBulkDeleteAlertOpen] = useState<{ selected: Order[], clearSelection: () => void } | null>(null)
+  const [orderToDelete, setOrderToDelete] = useState<Order | null>(null)
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
+  const [isQueueDialogOpen, setIsQueueDialogOpen] = useState(false)
+  const [isAddOrderDialogOpen, setIsAddOrderDialogOpen] = useState(false)
+  const [selectedDate, setSelectedDate] = useState<Date>()
+
+  // Format date for the API ("YYYY-MM-DD") — undefined when no date is selected
+  const dateFilter = selectedDate ? format(selectedDate, "yyyy-MM-dd") : undefined
+
   const {
     pageData,
     isPageLoading,
@@ -96,13 +109,7 @@ export function OrdersPage() {
     queueOrders,
     isQueueLoading,
     actions
-  } = useOrders({ defaultPageSize: 25 })
-
-  const [isBulkDeleteAlertOpen, setIsBulkDeleteAlertOpen] = useState<{ selected: Order[], clearSelection: () => void } | null>(null)
-  const [orderToDelete, setOrderToDelete] = useState<Order | null>(null)
-  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
-  const [isQueueDialogOpen, setIsQueueDialogOpen] = useState(false)
-  const [isAddOrderDialogOpen, setIsAddOrderDialogOpen] = useState(false)
+  } = useOrders({ defaultPageSize: 25, dateFilter })
 
   const { toolbarActions, rowClassName } = useTableHighlights()
   const { toolbarActions: queueToolbarActions, rowClassName: queueRowClassName } = useQueueHighlights()
@@ -132,7 +139,7 @@ export function OrdersPage() {
         title="Orders"
         description="Track customer orders and their fulfillment status."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center jus gap-2">
             <Button variant="outline" onClick={() => setIsQueueDialogOpen(true)}>
               <ListTodo />
               Queue
@@ -145,6 +152,8 @@ export function OrdersPage() {
               <Plus />
               Add Order
             </Button>
+            <Separator orientation="vertical" className="h-6 mx-1 my-auto" />
+            <DatePicker date={selectedDate} setDate={setSelectedDate} />
           </div>
         }
       />

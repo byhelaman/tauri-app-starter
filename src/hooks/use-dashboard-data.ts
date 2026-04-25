@@ -7,8 +7,24 @@ import { formatRelativeTime } from "@/lib/date-utils"
 import type { HistoryEntry } from "@/components/data-table/data-table-types"
 import type { DashboardStat, ActivityEntry, UpcomingEntry } from "@/mocks/dashboard"
 
+// Maps period keys to milliseconds for the time window
+const PERIOD_MS: Record<string, number> = {
+  "7d":  7  * 24 * 60 * 60 * 1000,
+  "30d": 30 * 24 * 60 * 60 * 1000,
+  "3m":  90 * 24 * 60 * 60 * 1000,
+  "6m":  180 * 24 * 60 * 60 * 1000,
+  "1y":  365 * 24 * 60 * 60 * 1000,
+}
 
-export function useDashboardData() {
+const PERIOD_LABELS: Record<string, string> = {
+  "7d":  "last 7 days",
+  "30d": "last 30 days",
+  "3m":  "last 3 months",
+  "6m":  "last 6 months",
+  "1y":  "last year",
+}
+
+export function useDashboardData({ period = "7d" }: { period?: string } = {}) {
   const { orders, isOrdersLoading } = useOrders({ statsOnly: true })
 
   const { data: recentActivity = [] as HistoryEntry[], isLoading: isHistoryLoading } = useQuery<HistoryEntry[]>({
@@ -19,7 +35,7 @@ export function useDashboardData() {
   const stats = useMemo<DashboardStat[]>(() => {
     if (!orders.length) {
       return [
-        { label: "Orders this week", value: "0", detail: "Based on last 7 days", change: "None", tone: "neutral", icon: PackageIcon },
+        { label: "Orders", value: "0", detail: `Based on ${PERIOD_LABELS[period] ?? period}`, change: "None", tone: "neutral", icon: PackageIcon },
         { label: "Revenue", value: "$0", detail: "Net after refunds", change: "None", tone: "neutral", icon: DollarSignIcon },
         { label: "Pending shipments", value: "0", detail: "0 need review", change: "None", tone: "neutral", icon: TruckIcon },
         { label: "Completion rate", value: "0%", detail: "On-time delivery", change: "None", tone: "neutral", icon: PackageCheckIcon },
@@ -27,28 +43,33 @@ export function useDashboardData() {
     }
 
     const now = new Date()
-    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    const windowMs = PERIOD_MS[period] ?? PERIOD_MS["7d"]
+    const cutoff = new Date(now.getTime() - windowMs)
 
-    const recentOrders = orders.filter(order => new Date(order.date) >= oneWeekAgo)
+    const recentOrders = orders.filter(order => new Date(order.date) >= cutoff)
     const pendingOrders = orders.filter(order => order.status === "pending" || order.status === "processing")
     const deliveredOrders = orders.filter(order => order.status === "delivered")
     
-    const revenue = deliveredOrders.reduce((sum, order) => sum + Number(order.amount), 0)
+    // Revenue is computed from delivered orders within the period
+    const deliveredInPeriod = orders.filter(order => 
+      order.status === "delivered" && new Date(order.date) >= cutoff
+    )
+    const revenue = deliveredInPeriod.reduce((sum, order) => sum + Number(order.amount), 0)
     
     const completionRate = orders.length > 0 ? (deliveredOrders.length / orders.length) * 100 : 0
 
     return [
       {
-        label: "Orders this week",
+        label: "Orders",
         value: recentOrders.length.toString(),
-        detail: "Based on last 7 days",
+        detail: `Based on ${PERIOD_LABELS[period] ?? period}`,
         change: "Active",
         tone: "positive",
         icon: PackageIcon,
       },
       {
         label: "Revenue",
-        value: `$${(revenue / 1000).toFixed(1)}k`,
+        value: revenue >= 1000 ? `$${(revenue / 1000).toFixed(1)}k` : `$${revenue.toFixed(0)}`,
         detail: "Net after refunds",
         change: "Stable",
         tone: "positive",
@@ -71,7 +92,7 @@ export function useDashboardData() {
         icon: PackageCheckIcon,
       },
     ]
-  }, [orders])
+  }, [orders, period])
 
   const activity = useMemo<ActivityEntry[]>(() => {
     return recentActivity.slice(0, 5).map(entry => {

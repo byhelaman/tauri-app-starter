@@ -28,6 +28,7 @@ export const handlers = [
     const limit = Number.parseInt(url.searchParams.get("limit") || "20", 10)
     const offset = Number.parseInt(url.searchParams.get("offset") || "0", 10)
     const search = url.searchParams.get("search")?.toLowerCase() || ""
+    const date = url.searchParams.get("date") || ""
     const filtersRaw = url.searchParams.get("filters")
     let filters: { id: string; value: unknown }[] = []
     if (filtersRaw) {
@@ -47,6 +48,11 @@ export const handlers = [
     }
 
     let filteredOrders = [...orders]
+
+    // Apply date filter (exact match on order.date "YYYY-MM-DD")
+    if (date) {
+      filteredOrders = filteredOrders.filter(order => order.date === date)
+    }
 
     // Apply search (Dynamic global search across all fields)
     if (search) {
