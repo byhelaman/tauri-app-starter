@@ -127,7 +127,7 @@ BEGIN
 
     EXECUTE format(
         'SELECT jsonb_agg(row_to_json(q)) FROM (SELECT * FROM (%s) inner_q LIMIT 500) q',
-        query
+        trim(trailing ';' from trim(query))
     ) INTO result;
 
     RETURN COALESCE(result, '[]'::JSONB);
