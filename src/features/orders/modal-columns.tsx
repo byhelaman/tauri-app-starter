@@ -24,7 +24,8 @@ export type QueueStatus = "queued" | "processing" | "ready" | "delivered"
 
 export interface QueueOrder {
   id: string
-  time: string
+  start_time: string
+  end_time: string
   code: string
   customer: string
   status: QueueStatus
@@ -48,7 +49,8 @@ export function createQueueColumns(
   return [
     createSelectColumn<QueueOrder>(),
     {
-      accessorKey: "time",
+      id: "time",
+      accessorFn: (row) => row.start_time && row.end_time ? `${row.start_time} - ${row.end_time}` : "",
       minSize: 140,
       maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Time" className="justify-center" />,

@@ -263,7 +263,8 @@ export function useOrders({ defaultPageSize = 25, statsOnly = false, dateFilter 
       case "customer": delta = { customer: value }; break
       case "product": delta = { product: value }; break
       case "category": delta = { category: value }; break
-      case "time": delta = { time: value }; break
+      case "start_time": delta = { start_time: value }; break
+      case "end_time": delta = { end_time: value }; break
       case "code": delta = { code: value }; break
       case "channel": delta = { channel: value }; break
       case "priority": delta = { priority: value }; break

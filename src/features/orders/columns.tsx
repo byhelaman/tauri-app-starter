@@ -20,7 +20,8 @@ export interface Order {
   customer: string
   product: string
   category: string
-  time: string
+  start_time: string
+  end_time: string
   code: string
   status: Status
   channel: string
@@ -36,7 +37,8 @@ export type EditableOrderField =
   | "customer"
   | "product"
   | "category"
-  | "time"
+  | "start_time"
+  | "end_time"
   | "code"
   | "channel"
   | "quantity"
@@ -113,7 +115,8 @@ export function createColumns(
       }),
     },
     {
-      accessorKey: "time",
+      id: "time",
+      accessorFn: (row) => row.start_time && row.end_time ? `${row.start_time} - ${row.end_time}` : "",
       minSize: 140,
       maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Time" className="justify-center" />,

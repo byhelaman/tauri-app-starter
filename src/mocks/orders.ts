@@ -23,7 +23,8 @@ export const generateOrders = (count = 100): Order[] => {
       customer: faker.helpers.arrayElement(customers),
       product: faker.helpers.arrayElement(products),
       category: faker.helpers.arrayElement(categories),
-      time: `${String(hr).padStart(2, '0')}:${String(min).padStart(2, '0')} - ${String(hr + 1).padStart(2, '0')}:${String(min).padStart(2, '0')}`,
+      start_time: `${String(hr).padStart(2, '0')}:${String(min).padStart(2, '0')}`,
+      end_time: `${String(hr + 1).padStart(2, '0')}:${String(min).padStart(2, '0')}`,
       code: `ORD-${faker.string.alphanumeric({ length: 5, casing: 'upper' })}`,
       status: faker.helpers.arrayElement(statuses),
       channel: faker.helpers.arrayElement(channels) as "Online" | "Retail" | "Partner" | "Phone",
@@ -43,7 +44,8 @@ export const generateQueueOrders = (count = 12): QueueOrder[] => {
     
     return {
       id: faker.string.uuid(),
-      time: `${String(hr).padStart(2, '0')}:${String(min).padStart(2, '0')} - ${String(hr + 1).padStart(2, '0')}:${String(min).padStart(2, '0')}`,
+      start_time: `${String(hr).padStart(2, '0')}:${String(min).padStart(2, '0')}`,
+      end_time: `${String(hr + 1).padStart(2, '0')}:${String(min).padStart(2, '0')}`,
       code: `ORD-${faker.string.alphanumeric({ length: 6, casing: 'upper' })}`,
       customer: faker.helpers.arrayElement(customers),
       status: faker.helpers.arrayElement(queueStatuses),

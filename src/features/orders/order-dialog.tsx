@@ -2,6 +2,7 @@ import { useEffect } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
+import { Clock2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -13,6 +14,8 @@ import {
   DialogBody,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { InputGroup, InputGroupInput, InputGroupAddon } from "@/components/ui/input-group"
+import { DatePickerInput } from "@/components/ui/date-picker"
 import {
   Select,
   SelectContent,
@@ -33,6 +36,15 @@ const STATUSES: Status[] = ["pending", "processing", "shipped", "delivered", "ca
 const CHANNELS = ["Online", "Retail", "Partner", "Phone"]
 const PRIORITIES = ["Low", "Medium", "High"]
 
+function getDefaultTimes() {
+  const now = new Date()
+  const formatter = new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })
+  const start_time = formatter.format(now)
+  now.setHours(now.getHours() + 1)
+  const end_time = formatter.format(now)
+  return { start_time, end_time }
+}
+
 const orderSchema = z.object({
   customer: z.string().min(1, "Customer name is required"),
   code: z.string().optional(),
@@ -44,7 +56,8 @@ const orderSchema = z.object({
   channel: z.string().min(1, "Channel is required"),
   amount: z.number().min(0, "Amount must be at least 0"),
   date: z.string(),
-  time: z.string(),
+  start_time: z.string(),
+  end_time: z.string(),
 })
 
 type OrderFormValues = z.infer<typeof orderSchema>
@@ -69,7 +82,7 @@ export function OrderDialog({ open, onOpenChange, onSubmit }: OrderDialogProps) 
       channel: "Online",
       priority: "Medium",
       date: new Date().toISOString().split("T")[0],
-      time: new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date()),
+      ...getDefaultTimes(),
       quantity: 1,
       amount: 0,
     },
@@ -83,7 +96,7 @@ export function OrderDialog({ open, onOpenChange, onSubmit }: OrderDialogProps) 
         channel: "Online",
         priority: "Medium",
         date: new Date().toISOString().split("T")[0],
-        time: new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date()),
+        ...getDefaultTimes(),
         quantity: 1,
         amount: 0,
       })
@@ -111,7 +124,52 @@ export function OrderDialog({ open, onOpenChange, onSubmit }: OrderDialogProps) 
         <form className="contents" onSubmit={handleSubmit(onFormSubmit)}>
           <DialogBody className="mt-1 py-1">
             <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="date">Date</FieldLabel>
+                  <Controller
+                    name="date"
+                    control={control}
+                    render={({ field }) => (
+                      <DatePickerInput
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
+                    )}
+                  />
+                  <FieldError errors={[errors.date]} />
+                </Field>
               <div className="grid grid-cols-2 gap-4">
+                <Field>
+                  <FieldLabel htmlFor="start_time">Start Time</FieldLabel>
+                  <InputGroup>
+                    <InputGroupInput
+                      id="start_time"
+                      type="time"
+                      {...register("start_time")}
+                      className="appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+                    />
+                    <InputGroupAddon>
+                      <Clock2Icon className="text-muted-foreground" />
+                    </InputGroupAddon>
+                  </InputGroup>
+                  <FieldError errors={[errors.start_time]} />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="end_time">End Time</FieldLabel>
+                  <InputGroup>
+                    <InputGroupInput
+                      id="end_time"
+                      type="time"
+                      {...register("end_time")}
+                      className="appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+                    />
+                    <InputGroupAddon>
+                      <Clock2Icon className="text-muted-foreground" />
+                    </InputGroupAddon>
+                  </InputGroup>
+                  <FieldError errors={[errors.end_time]} />
+                </Field>
+              </div>
                 <Field>
                   <FieldLabel>Customer</FieldLabel>
                   <Input
@@ -121,6 +179,7 @@ export function OrderDialog({ open, onOpenChange, onSubmit }: OrderDialogProps) 
                   />
                   <FieldError errors={[errors.customer]} />
                 </Field>
+              <div className="grid grid-cols-2 gap-4">
                 <Field>
                   <FieldLabel>Code</FieldLabel>
                   <Input
