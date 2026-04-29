@@ -100,17 +100,15 @@ export function OrdersPage() {
   const {
     pageData,
     isPageLoading,
-    pagination,
-    setPagination,
+    infiniteScroll,
     columnFilters,
     setColumnFilters,
     globalFilter,
     setGlobalFilter,
-    rowCount,
     queueOrders,
     isQueueLoading,
     actions
-  } = useOrders({ defaultPageSize: 25, dateFilter })
+  } = useOrders({ dateFilter })
 
   const { toolbarActions, rowClassName } = useTableHighlights()
   const { toolbarActions: queueToolbarActions, rowClassName: queueRowClassName } = useQueueHighlights()
@@ -175,11 +173,7 @@ export function OrdersPage() {
         columns={columns}
         data={pageData}
         isLoading={isPageLoading}
-        manualPagination={true}
-        pageCount={Math.ceil(rowCount / pagination.pageSize)}
-        rowCount={rowCount}
-        pagination={pagination}
-        onPaginationChange={setPagination}
+        infiniteScroll={infiniteScroll}
         columnFilters={columnFilters}
         onColumnFiltersChange={setColumnFilters}
         globalFilter={globalFilter}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { cn, joinSearchValues, matchesSearchGroups, normalizeSearchGroups } from "@/lib/utils"
 import {
   type ColumnDef,
@@ -18,6 +18,7 @@ import {
   type PaginationState,
   type OnChangeFn,
 } from "@tanstack/react-table"
+import { useVirtualizer } from "@tanstack/react-virtual"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -35,6 +36,7 @@ import { DataTableSkeleton } from "./data-table-skeleton"
 import type {
   DataTableLayoutConfig,
   DataTableToolbarConfig,
+  InfiniteScrollConfig,
 } from "./data-table-types"
 import { getColumnSizeStyle, getPinnedColumnStyle } from "./data-table-utils"
 
@@ -62,6 +64,10 @@ interface DataTableProps<TData, TValue> {
   onColumnFiltersChange?: OnChangeFn<ColumnFiltersState>
   globalFilter?: string
   onGlobalFilterChange?: OnChangeFn<string>
+  /** Activa modo infinite scroll con virtualización. Oculta el paginador. */
+  infiniteScroll?: InfiniteScrollConfig
+  /** Alto estimado de cada fila en px para el virtualizer (default 40) */
+  estimatedRowHeight?: number
 }
 
 export function DataTable<TData, TValue>({
@@ -88,6 +94,8 @@ export function DataTable<TData, TValue>({
   onColumnFiltersChange,
   globalFilter,
   onGlobalFilterChange,
+  infiniteScroll,
+  estimatedRowHeight = 40,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [localColumnFilters, setLocalColumnFilters] = useState<ColumnFiltersState>([])
@@ -95,6 +103,7 @@ export function DataTable<TData, TValue>({
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({ left: ["select"], right: [] })
   const [rowSelection, setRowSelection] = useState({})
+  const scrollRef = useRef<HTMLDivElement>(null)
   const [isSidePanelOpen, setIsSidePanelOpen] = useState(() => {
     try {
       const saved = localStorage.getItem(`data-table-panel-${tableId}`)
@@ -197,6 +206,36 @@ export function DataTable<TData, TValue>({
   const leftEdgeId = [...leftPinned].reverse().find(id => table.getColumn(id)?.getCanPin())
   const rightEdgeId = [...rightPinned].reverse().find(id => table.getColumn(id)?.getCanPin())
 
+  // ── Virtualizador de filas (solo en modo infinite scroll) ──────────────────
+  const rows = table.getRowModel().rows
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => estimatedRowHeight,
+    overscan: 10,
+    // Habilitado siempre pero solo consumido cuando infiniteScroll está activo
+  })
+
+  // Calcula los spacers para el enfoque spacer-row (compatible con <table> HTML)
+  const virtualRows = infiniteScroll ? rowVirtualizer.getVirtualItems() : null
+  const totalSize   = rowVirtualizer.getTotalSize()
+  const lastVirtual = virtualRows ? virtualRows[virtualRows.length - 1] : undefined
+  const paddingTop    = virtualRows && virtualRows.length > 0 ? virtualRows[0].start : 0
+  const paddingBottom = lastVirtual ? totalSize - lastVirtual.end : 0
+
+  // Dispara fetchNextPage cuando el usuario se acerca al final del dataset
+  useEffect(() => {
+    if (!infiniteScroll || !virtualRows) return
+    const { fetchNextPage, hasNextPage, isFetchingNextPage, threshold = 100 } = infiniteScroll
+    if (!hasNextPage || isFetchingNextPage) return
+    const lastVirtualRow = virtualRows[virtualRows.length - 1]
+    if (!lastVirtualRow) return
+    if (lastVirtualRow.index >= rows.length - threshold) {
+      fetchNextPage()
+    }
+  }, [virtualRows, rows.length, infiniteScroll])
+
+
   return (
     <div className={cn("relative flex flex-col gap-4", fitHeight && "h-full min-h-0", className)}>
       <DataTableToolbar
@@ -219,6 +258,7 @@ export function DataTable<TData, TValue>({
         )}
       >
         <div
+          ref={scrollRef}
           className={cn("overflow-auto flex-1 scrollbar", scrollAreaClassName)}
           style={{ scrollPadding: `${headerHeight}px ${rightPinnedWidth}px ${cellPadding}px ${leftPinnedWidth}px` }}
         >
@@ -250,7 +290,14 @@ export function DataTable<TData, TValue>({
               ))}
             </TableHeader>
             <TableBody>
-              {table.getRowModel().rows.map((row) => {
+              {/* Spacer superior — ocupa el espacio de filas no renderizadas (spacer-row approach) */}
+              {paddingTop > 0 && (
+                <TableRow><TableCell colSpan={columns.length} style={{ height: paddingTop, padding: 0, border: 0 }} /></TableRow>
+              )}
+
+              {(virtualRows ?? rows).map((item) => {
+                const row = virtualRows ? rows[(item as { index: number }).index] : (item as typeof rows[0])
+                if (!row) return null
                 const rowEl = (
                   <TableRow key={row.id} className={cn("group/row group", rowClassName?.(row.original))} data-state={row.getIsSelected() && "selected"}>
                     {row.getVisibleCells().map((cell) => {
@@ -284,21 +331,50 @@ export function DataTable<TData, TValue>({
                 )
               })}
 
-              {isLoading && table.getRowModel().rows.length < table.getState().pagination.pageSize && (
+              {/* Skeleton de carga inicial (paginación clásica) */}
+              {isLoading && !infiniteScroll && rows.length < table.getState().pagination.pageSize && (
                 <DataTableSkeleton 
                   table={table} 
-                  rowCount={table.getState().pagination.pageSize - table.getRowModel().rows.length} 
+                  rowCount={table.getState().pagination.pageSize - rows.length} 
                   leftEdgeId={leftEdgeId} 
                   rightEdgeId={rightEdgeId} 
                 />
               )}
 
-              {!isLoading && table.getRowModel().rows?.length === 0 && (
+              {/* Skeleton de carga INICIAL en modo infinite scroll
+                  (isLoading=true, isFetchingNextPage=false aún) */}
+              {isLoading && !!infiniteScroll && (
+                <DataTableSkeleton
+                  table={table}
+                  rowCount={100}
+                  leftEdgeId={leftEdgeId}
+                  rightEdgeId={rightEdgeId}
+                />
+              )}
+
+              {/* Skeleton al cargar chunks adicionales — ANTES del spacer inferior
+                  para quedar visible en el viewport al llegar al fondo */}
+              {!isLoading && infiniteScroll?.isFetchingNextPage && (
+                <DataTableSkeleton
+                  table={table}
+                  rowCount={5}
+                  leftEdgeId={leftEdgeId}
+                  rightEdgeId={rightEdgeId}
+                />
+              )}
+
+              {/* Spacer inferior — ocupa el espacio de filas aún no visibles */}
+              {paddingBottom > 0 && (
+                <TableRow><TableCell colSpan={columns.length} style={{ height: paddingBottom, padding: 0, border: 0 }} /></TableRow>
+              )}
+
+              {!isLoading && rows.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">No results.</TableCell>
                 </TableRow>
               )}
             </TableBody>
+
           </Table>
         </div>
 
@@ -309,7 +385,8 @@ export function DataTable<TData, TValue>({
         )}
       </div>
 
-      <DataTablePagination table={table} pageSizeOptions={pageSizeOptions} />
+      {/* Paginador clásico — oculto en modo infinite scroll */}
+      {!infiniteScroll && <DataTablePagination table={table} pageSizeOptions={pageSizeOptions} />}
 
       {bulkActions && table.getFilteredSelectedRowModel().rows.length > 0 && (
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10">

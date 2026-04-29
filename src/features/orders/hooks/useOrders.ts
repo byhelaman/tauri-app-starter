@@ -1,60 +1,60 @@
 import { useCallback, useState } from "react"
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query"
-import { type PaginationState, type ColumnFiltersState, type Updater } from "@tanstack/react-table"
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query"
+import { type ColumnFiltersState, type Updater } from "@tanstack/react-table"
 import { toast } from "sonner"
 import * as api from "../api"
 import type { Order, EditableOrderField, Status } from "../columns"
 import type { QueueOrder, QueueStatus } from "../modal-columns"
 import { useOrdersRealtime } from "./useOrdersRealtime"
 
-export function useOrders({ defaultPageSize = 25, dateFilter }: { defaultPageSize?: number, dateFilter?: string } = {}) {
+/** Número de filas por chunk en modo infinite scroll */
+const ORDER_CHUNK = 1000
+
+export function useOrders({ dateFilter }: { dateFilter?: string } = {}) {
   const queryClient = useQueryClient()
   useOrdersRealtime()
-  const [pagination, setPagination] = useState<PaginationState>({
-    pageIndex: 0,
-    pageSize: defaultPageSize,
-  })
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = useState("")
 
-
-  // Reset page index when filters change to avoid showing an empty page.
-  // Accepts Updater<T> (value or function) to match TanStack Table's OnChangeFn.
+  // Resetea los filtros sin necesidad de resetear una página (ya no hay paginación)
   const handleSetColumnFilters = useCallback((updater: Updater<ColumnFiltersState>) => {
-    setColumnFilters(prev => {
-      const next = typeof updater === "function" ? updater(prev) : updater
-      setPagination(p => p.pageIndex === 0 ? p : { ...p, pageIndex: 0 })
-      return next
-    })
+    setColumnFilters(prev => typeof updater === "function" ? updater(prev) : updater)
   }, [])
 
   const handleSetGlobalFilter = useCallback((updater: Updater<string>) => {
-    setGlobalFilter(prev => {
-      const next = typeof updater === "function" ? updater(prev) : updater
-      setPagination(p => p.pageIndex === 0 ? p : { ...p, pageIndex: 0 })
-      return next
-    })
+    setGlobalFilter(prev => typeof updater === "function" ? updater(prev) : updater)
   }, [])
 
+  // Clave de query — incluye filtros para que al cambiar se refetche desde chunk 0
+  const ordersQueryKey = ["orders", "infinite", columnFilters, globalFilter, dateFilter]
 
-  // Stable reference for the current paginated query key
-  const paginatedQueryKey = ["orders", "paginated", pagination, columnFilters, globalFilter, dateFilter]
-
-  // Server-side paginated query for the main DataTable
-  const { data: pageResponse, isFetching: isPageFetching } = useQuery({
-    queryKey: paginatedQueryKey,
-    queryFn: () => api.fetchOrders({
-      limit: pagination.pageSize,
-      offset: pagination.pageIndex * pagination.pageSize,
-      search: globalFilter,
+  const {
+    data: infiniteData,
+    isFetching: isPageFetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ordersQueryKey,
+    queryFn: ({ pageParam = 0 }) => api.fetchOrders({
+      limit:   ORDER_CHUNK,
+      offset:  pageParam as number,
+      search:  globalFilter,
       filters: columnFilters,
-      date: dateFilter,
+      date:    dateFilter,
     }),
-    placeholderData: keepPreviousData,
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      // Si la última página está llena, puede haber más
+      if (lastPage.data.length < ORDER_CHUNK) return undefined
+      return allPages.length * ORDER_CHUNK
+    },
     enabled: true,
   })
 
-  const cachedRowCount = pageResponse?.total ?? 0
+  // Aplana todas las páginas en un único array para la DataTable
+  const pageData = infiniteData?.pages.flatMap(p => p.data) ?? []
+  const cachedRowCount = infiniteData?.pages[0]?.total ?? 0
 
   // TODO: Activar suscripción realtime de órdenes cuando las tablas de Supabase estén listas
 
@@ -67,45 +67,32 @@ export function useOrders({ defaultPageSize = 25, dateFilter }: { defaultPageSiz
   const queueOrders = queueData?.data ?? []
   const totalQueueOrders = queueData?.total ?? 0
 
-  // ── Order update mutation with entity-level rollback ──────────────────
+  // ── Order update mutation con rollback por entidad ────────────────────
   const updateOrderMutation = useMutation({
     mutationFn: api.updateOrder,
     onMutate: async (delta) => {
-      // Cancel only the paginated query — not stats or history
-      const queryKey = [...paginatedQueryKey]
-      await queryClient.cancelQueries({ queryKey })
-
-      // Save ONLY the affected entity for surgical rollback
-      const previousPage = queryClient.getQueryData<{ data: Order[], total: number }>(queryKey)
-      const previousOrder = previousPage?.data.find(o => o.id === delta.id)
-
-      // Optimistic patch
-      queryClient.setQueryData<{ data: Order[], total: number }>(queryKey, (old) => {
+      await queryClient.cancelQueries({ queryKey: ordersQueryKey })
+      const previous = queryClient.getQueryData<InfiniteData<{ data: Order[]; total: number }>>(ordersQueryKey)
+      // Parche optimista: actualiza la entidad en todas las páginas
+      queryClient.setQueryData<InfiniteData<{ data: Order[]; total: number }>>(ordersQueryKey, (old) => {
         if (!old) return old
         return {
           ...old,
-          data: old.data.map(o => o.id === delta.id ? { ...o, ...delta } : o)
+          pages: old.pages.map(page => ({
+            ...page,
+            data: page.data.map(o => o.id === delta.id ? { ...o, ...delta } : o)
+          }))
         }
       })
-
-      return { previousOrder, queryKey }
+      return { previous }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders", "stats"] })
       queryClient.invalidateQueries({ queryKey: ["orders", "history"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard", "history"] })
     },
-    onError: (_err, delta, context) => {
-      // Rollback only the single entity that failed — other concurrent
-      // changes from realtime or other mutations remain untouched
-      if (!context?.previousOrder || !context?.queryKey) return
-      queryClient.setQueryData<{ data: Order[], total: number }>(context.queryKey, (old) => {
-        if (!old) return old
-        return {
-          ...old,
-          data: old.data.map(o => o.id === delta.id ? context.previousOrder! : o)
-        }
-      })
+    onError: (_err, _delta, context) => {
+      if (context?.previous) queryClient.setQueryData(ordersQueryKey, context.previous)
       toast.error("Failed to update order")
     },
   })
@@ -123,65 +110,53 @@ export function useOrders({ defaultPageSize = 25, dateFilter }: { defaultPageSiz
     }
   })
 
-  // ── Order delete mutation with entity-level rollback ──────────────────
+  // ── Order delete mutation con rollback por entidad ────────────────────
   const deleteOrderMutation = useMutation({
     mutationFn: api.deleteOrder,
     onMutate: async (id) => {
-      const queryKey = [...paginatedQueryKey]
-      await queryClient.cancelQueries({ queryKey })
-
-      const previousPage = queryClient.getQueryData<{ data: Order[], total: number }>(queryKey)
-      const deletedOrder = previousPage?.data.find(o => o.id === id)
-
-      queryClient.setQueryData<{ data: Order[], total: number }>(queryKey, (old) => {
+      await queryClient.cancelQueries({ queryKey: ordersQueryKey })
+      const previous = queryClient.getQueryData<InfiniteData<{ data: Order[]; total: number }>>(ordersQueryKey)
+      queryClient.setQueryData<InfiniteData<{ data: Order[]; total: number }>>(ordersQueryKey, (old) => {
         if (!old) return old
-        return { ...old, data: old.data.filter(o => o.id !== id) }
+        return {
+          ...old,
+          pages: old.pages.map(page => ({ ...page, data: page.data.filter(o => o.id !== id) }))
+        }
       })
-
-      return { deletedOrder, queryKey }
+      return { previous }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard", "history"] })
     },
     onError: (_err, _id, context) => {
-      if (!context?.deletedOrder || !context?.queryKey) return
-      queryClient.setQueryData<{ data: Order[], total: number }>(context.queryKey, (old) => {
-        if (!old) return old
-        return { ...old, data: [...old.data, context.deletedOrder!] }
-      })
+      if (context?.previous) queryClient.setQueryData(ordersQueryKey, context.previous)
       toast.error("Failed to delete order")
     },
   })
 
-  // ── Bulk delete mutation with entity-level rollback ───────────────────
+  // ── Bulk delete mutation con rollback ─────────────────────────────────
   const deleteBulkOrdersMutation = useMutation({
     mutationFn: api.bulkDeleteOrders,
     onMutate: async (ids) => {
       const idSet = new Set(ids)
-      const queryKey = [...paginatedQueryKey]
-      await queryClient.cancelQueries({ queryKey })
-
-      const previousPage = queryClient.getQueryData<{ data: Order[], total: number }>(queryKey)
-      const deletedOrders = previousPage?.data.filter(o => idSet.has(o.id)) ?? []
-
-      queryClient.setQueryData<{ data: Order[], total: number }>(queryKey, (old) => {
+      await queryClient.cancelQueries({ queryKey: ordersQueryKey })
+      const previous = queryClient.getQueryData<InfiniteData<{ data: Order[]; total: number }>>(ordersQueryKey)
+      queryClient.setQueryData<InfiniteData<{ data: Order[]; total: number }>>(ordersQueryKey, (old) => {
         if (!old) return old
-        return { ...old, data: old.data.filter(o => !idSet.has(o.id)) }
+        return {
+          ...old,
+          pages: old.pages.map(page => ({ ...page, data: page.data.filter(o => !idSet.has(o.id)) }))
+        }
       })
-
-      return { deletedOrders, queryKey }
+      return { previous }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard", "history"] })
     },
     onError: (_err, _ids, context) => {
-      if (!context?.deletedOrders?.length || !context?.queryKey) return
-      queryClient.setQueryData<{ data: Order[], total: number }>(context.queryKey, (old) => {
-        if (!old) return old
-        return { ...old, data: [...old.data, ...context.deletedOrders] }
-      })
+      if (context?.previous) queryClient.setQueryData(ordersQueryKey, context.previous)
       toast.error("Failed to delete orders")
     },
   })
@@ -298,11 +273,15 @@ export function useOrders({ defaultPageSize = 25, dateFilter }: { defaultPageSiz
   }, [doBulkDelete])
 
   return {
-    pageData: pageResponse?.data ?? [],
+    pageData,
     rowCount: cachedRowCount,
     isPageLoading: isPageFetching,
-    pagination,
-    setPagination,
+    // Props para infinite scroll en DataTable
+    infiniteScroll: {
+      fetchNextPage,
+      hasNextPage,
+      isFetchingNextPage,
+    },
     columnFilters,
     setColumnFilters: handleSetColumnFilters,
     globalFilter,

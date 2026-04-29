@@ -38,6 +38,19 @@ export interface DataTableLayoutConfig {
   tableHeaderClassName?: string
 }
 
+/** Configuración para modo infinite scroll (sin paginación visible) */
+export interface InfiniteScrollConfig {
+  /** Obtiene la siguiente página de datos */
+  fetchNextPage: () => void
+  /** Indica si hay más páginas disponibles */
+  hasNextPage: boolean
+  /** Indica si está cargando la siguiente página */
+  isFetchingNextPage: boolean
+  /** Filas antes del final del dataset que disparan el fetch (default 100) */
+  threshold?: number
+}
+
+
 export interface HistoryDetail {
   field: string
   oldValue?: string | number
