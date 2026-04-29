@@ -1,26 +1,34 @@
 import { useQuery } from "@tanstack/react-query"
-import * as api from "@/features/orders/api"
-import type { Order } from "@/features/orders/columns"
+import { supabase } from "@/lib/supabase"
+
+interface OrdersStats {
+  total:      number
+  revenue:    number
+  by_status:  Record<string, number>
+  by_channel: Record<string, number>
+}
 
 /**
  * Hook dedicado a estadísticas de órdenes para el dashboard.
- *
- * Separado de useOrders para evitar que la página de órdenes
- * ejecute esta query costosa (limit: 1000) cuando no la necesita.
- *
- * TODO: Reemplazar con una RPC de agregación server-side
- *       (SELECT COUNT, SUM, etc.) cuando el volumen de órdenes crezca.
+ * Usa la RPC get_orders_stats() — una sola query de agregación server-side,
+ * sin cargar filas individuales.
  */
-export function useOrdersStats(): { orders: Order[]; totalOrders: number; isOrdersLoading: boolean } {
+export function useOrdersStats() {
   const { data, isLoading } = useQuery({
     queryKey: ["orders", "stats"],
-    queryFn: () => api.fetchOrders({ limit: 1000, offset: 0 }),
+    queryFn: async (): Promise<OrdersStats> => {
+      if (!supabase) return { total: 0, revenue: 0, by_status: {}, by_channel: {} }
+      const { data, error } = await supabase.rpc("get_orders_stats")
+      if (error) throw new Error(error.message)
+      return data as OrdersStats
+    },
     staleTime: 30_000,
+    enabled: !!supabase,
   })
 
   return {
-    orders: data?.data ?? [],
-    totalOrders: data?.total ?? 0,
+    stats:           data ?? { total: 0, revenue: 0, by_status: {}, by_channel: {} },
+    totalOrders:     data?.total ?? 0,
     isOrdersLoading: isLoading,
   }
 }

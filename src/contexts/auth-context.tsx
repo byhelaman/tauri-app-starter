@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Session, User } from "@supabase/supabase-js"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 import { chatHistoryKey } from "@/features/chat/use-chat"
-import { type AuthClaims, EMPTY_CLAIMS, parseClaims } from "@/lib/auth-utils"
+import { type AuthClaims, parseClaims } from "@/lib/auth-utils"
 
 
 type AuthContextType = {

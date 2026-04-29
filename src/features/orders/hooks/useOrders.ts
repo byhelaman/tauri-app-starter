@@ -5,16 +5,18 @@ import { toast } from "sonner"
 import * as api from "../api"
 import type { Order, EditableOrderField, Status } from "../columns"
 import type { QueueOrder, QueueStatus } from "../modal-columns"
-// TODO: Conectar useOrdersRealtime cuando las tablas de Supabase estén listas
+import { useOrdersRealtime } from "./useOrdersRealtime"
 
 export function useOrders({ defaultPageSize = 25, dateFilter }: { defaultPageSize?: number, dateFilter?: string } = {}) {
   const queryClient = useQueryClient()
+  useOrdersRealtime()
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: defaultPageSize,
   })
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = useState("")
+
 
   // Reset page index when filters change to avoid showing an empty page.
   // Accepts Updater<T> (value or function) to match TanStack Table's OnChangeFn.
