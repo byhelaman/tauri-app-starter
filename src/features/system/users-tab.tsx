@@ -59,7 +59,7 @@ export function UsersTab({ users, roles, actorLevel, onUpdateRole, onUpdateDispl
     const [resetPasswordUser, setResetPasswordUser] = useState<SystemUser | null>(null)
     const [removeUser, setRemoveUser] = useState<SystemUser | null>(null)
     const [inviteBusy, setInviteBusy] = useState(false)
-    const [roleBusy, setRoleBusy] = useState(false)
+    const [roleBusyId, setRoleBusyId] = useState<string | null>(null) // trackea solo el usuario en proceso
     const [resetBusy, setResetBusy] = useState(false)
     const [removeBusy, setRemoveBusy] = useState(false)
 
@@ -76,11 +76,11 @@ export function UsersTab({ users, roles, actorLevel, onUpdateRole, onUpdateDispl
     )
 
     async function handleRoleChange(userId: string, role: string) {
-        setRoleBusy(true)
+        setRoleBusyId(userId)
         try {
             await onUpdateRole(userId, role)
         } finally {
-            setRoleBusy(false)
+            setRoleBusyId(null)
         }
     }
 
@@ -193,7 +193,7 @@ export function UsersTab({ users, roles, actorLevel, onUpdateRole, onUpdateDispl
                                 >
                                     {user.status}
                                 </Badge>
-                                <Select value={user.role} onValueChange={(v) => void handleRoleChange(user.id, v)} disabled={!canManageUsers || roleBusy || loading}>
+                                <Select value={user.role} onValueChange={(v) => void handleRoleChange(user.id, v)} disabled={!canManageUsers || roleBusyId === user.id || loading}>
                                     <SelectTrigger className="w-28" size="sm">
                                         <SelectValue />
                                     </SelectTrigger>

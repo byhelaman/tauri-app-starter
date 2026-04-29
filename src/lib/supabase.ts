@@ -85,12 +85,17 @@ export const stopSessionRefresh = () => {
   }
 }
 
-if (supabase && typeof window !== "undefined") {
+/**
+ * Configura los listeners de refresco de sesión para Tauri desktop.
+ * Llamar UNA vez al inicio de la app (desde main.tsx). Devuelve una función de cleanup.
+ * Supabase no puede detectar foreground/background en entornos no-browser,
+ * por lo que lo gestionamos manualmente con eventos de visibilidad y foco.
+ */
+export function setupDesktopSessionRefresh(): () => void {
+  if (!supabase || typeof window === "undefined") return () => {}
   const client = supabase
   startSessionRefresh()
 
-  // Reanudar refresh y verificar expiración cuando la app vuelve a primer plano (focus o visibilidad).
-  // Pausar cuando la app pasa a segundo plano para no consumir tokens innecesariamente.
   const handleResume = async () => {
     startSessionRefresh()
     const { data: { session } } = await client.auth.getSession()
@@ -102,11 +107,20 @@ if (supabase && typeof window !== "undefined") {
     }
   }
 
-  document.addEventListener("visibilitychange", () => {
+  const handleVisibility = () => {
     if (document.visibilityState === "visible") void handleResume()
     else stopSessionRefresh()
-  })
+  }
+  const handleFocus = () => void handleResume()
 
-  window.addEventListener("focus", () => void handleResume())
+  document.addEventListener("visibilitychange", handleVisibility)
+  window.addEventListener("focus", handleFocus)
   window.addEventListener("blur", stopSessionRefresh)
+
+  return () => {
+    document.removeEventListener("visibilitychange", handleVisibility)
+    window.removeEventListener("focus", handleFocus)
+    window.removeEventListener("blur", stopSessionRefresh)
+    stopSessionRefresh()
+  }
 }

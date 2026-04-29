@@ -1,7 +1,7 @@
 import { useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { PackageCheckIcon, PackageIcon, TruckIcon, PlusIcon, PencilIcon, TrashIcon, DollarSignIcon } from "lucide-react"
-import { useOrders } from "@/features/orders/hooks/useOrders"
+import { useOrdersStats } from "@/features/orders/hooks/useOrdersStats"
 import { fetchOrderHistory } from "@/features/orders/api"
 import { formatRelativeTime } from "@/lib/date-utils"
 import type { HistoryEntry } from "@/components/data-table/data-table-types"
@@ -27,7 +27,7 @@ const PERIOD_LABELS: Record<string, string> = {
 }
 
 export function useDashboardData({ period = "7d" }: { period?: string } = {}) {
-  const { orders, isOrdersLoading } = useOrders({ statsOnly: true })
+  const { orders, isOrdersLoading } = useOrdersStats()
 
   const { data: recentActivity = [] as HistoryEntry[], isLoading: isHistoryLoading } = useQuery<HistoryEntry[]>({
     queryKey: ["dashboard", "history"],

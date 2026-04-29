@@ -61,45 +61,65 @@ export function useSystemData(open: boolean) {
 
     const updateUserRole = async (userId: string, role: string) => {
         const result = await api.updateUserRole(userId, role)
-        if (result.error) toast.error("Failed to update role")
+        if (result.error) toast.error(result.error)
         else invalidate()
     }
 
     const updateUserDisplayName = async (userId: string, displayName: string) => {
         const result = await api.updateUserDisplayName(userId, displayName)
-        if (result.error) toast.error("Failed to update name")
+        if (result.error) toast.error(result.error)
         else invalidate()
     }
 
     const removeUser = async (userId: string) => {
         const result = await api.removeUser(userId)
-        if (result.error) toast.error("Failed to remove user")
+        if (result.error) toast.error(result.error)
         else invalidate()
     }
 
     const togglePermission = async (role: string, permission: string, enabled: boolean) => {
-        await api.togglePermission(role, permission, enabled)
-        invalidate()
+        try {
+            await api.togglePermission(role, permission, enabled)
+            invalidate()
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Failed to toggle permission")
+        }
     }
 
     const addRole = async (role: RoleDefinition) => {
-        await api.addRole(role)
-        invalidate()
+        try {
+            await api.addRole(role)
+            invalidate()
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Failed to create role")
+        }
     }
 
     const duplicateRole = async (sourceName: string, newName: string) => {
-        await api.duplicateRole(sourceName, newName)
-        invalidate()
+        try {
+            await api.duplicateRole(sourceName, newName)
+            invalidate()
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Failed to duplicate role")
+        }
     }
 
     const editRole = async (original: string, updated: Partial<RoleDefinition>) => {
-        await api.editRole(original, updated)
-        invalidate()
+        try {
+            await api.editRole(original, updated)
+            invalidate()
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Failed to update role")
+        }
     }
 
     const removeRole = async (name: string) => {
-        await api.removeRole(name)
-        invalidate()
+        try {
+            await api.removeRole(name)
+            invalidate()
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Failed to delete role")
+        }
     }
 
     return {

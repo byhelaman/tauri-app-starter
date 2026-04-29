@@ -5,10 +5,9 @@ import { toast } from "sonner"
 import * as api from "../api"
 import type { Order, EditableOrderField, Status } from "../columns"
 import type { QueueOrder, QueueStatus } from "../modal-columns"
-// TODO: Uncomment when Supabase tables are ready
-// import { useOrdersRealtime } from "./useOrdersRealtime"
+// TODO: Conectar useOrdersRealtime cuando las tablas de Supabase estén listas
 
-export function useOrders({ defaultPageSize = 25, statsOnly = false, dateFilter }: { defaultPageSize?: number, statsOnly?: boolean, dateFilter?: string } = {}) {
+export function useOrders({ defaultPageSize = 25, dateFilter }: { defaultPageSize?: number, dateFilter?: string } = {}) {
   const queryClient = useQueryClient()
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
@@ -35,18 +34,6 @@ export function useOrders({ defaultPageSize = 25, statsOnly = false, dateFilter 
     })
   }, [])
 
-  // TODO: Replace with a server-side aggregate query (SELECT COUNT, SUM, etc.)
-  // when migrating to Supabase. Fetching all rows just to compute dashboard
-  // stats is wasteful and won't scale beyond a few thousand orders.
-  const { data: allOrdersData, isLoading: isAllOrdersLoading } = useQuery({
-    queryKey: ["orders", "stats"],
-    queryFn: () => api.fetchOrders({ limit: 1000, offset: 0 }),
-    staleTime: 30_000,
-  })
-
-  const orders = allOrdersData?.data ?? []
-  const totalOrders = allOrdersData?.total ?? 0
-  const isOrdersLoading = isAllOrdersLoading
 
   // Stable reference for the current paginated query key
   const paginatedQueryKey = ["orders", "paginated", pagination, columnFilters, globalFilter, dateFilter]
@@ -62,18 +49,17 @@ export function useOrders({ defaultPageSize = 25, statsOnly = false, dateFilter 
       date: dateFilter,
     }),
     placeholderData: keepPreviousData,
-    enabled: !statsOnly,
+    enabled: true,
   })
 
   const cachedRowCount = pageResponse?.total ?? 0
 
-  // TODO: Activate realtime subscription when Supabase tables are ready
-  // useOrdersRealtime()
+  // TODO: Activar suscripción realtime de órdenes cuando las tablas de Supabase estén listas
 
   const { data: queueData, isLoading: isQueueLoading } = useQuery({
     queryKey: ["queueOrders"],
     queryFn: api.fetchQueueOrders,
-    enabled: !statsOnly,
+    enabled: true,
   })
 
   const queueOrders = queueData?.data ?? []
@@ -310,9 +296,6 @@ export function useOrders({ defaultPageSize = 25, statsOnly = false, dateFilter 
   }, [doBulkDelete])
 
   return {
-    orders,
-    isOrdersLoading,
-    totalOrders,
     pageData: pageResponse?.data ?? [],
     rowCount: cachedRowCount,
     isPageLoading: isPageFetching,

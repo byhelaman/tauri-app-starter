@@ -11,6 +11,7 @@ export interface Message {
 
 const STORAGE_KEY_HISTORY = "ai_chat_history"
 const MAX_HISTORY = 100
+const MAX_CONTEXT_MESSAGES = 20 // Límite de mensajes enviados al servidor para evitar payloads grandes
 
 export function chatHistoryKey(userId: string): string {
     return `${STORAGE_KEY_HISTORY}:${userId}`
@@ -94,7 +95,7 @@ export function useChat(apiKey: string, model: string, userId: string | null) {
                     "apikey": anonKey,
                 },
                 body: JSON.stringify({
-                    messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
+                    messages: updatedMessages.slice(-MAX_CONTEXT_MESSAGES).map(m => ({ role: m.role, content: m.content })),
                     apiKey,
                     model,
                 }),
@@ -216,10 +217,13 @@ export function useChat(apiKey: string, model: string, userId: string | null) {
     }
 
     function handleRetry() {
-        const lastUserMsg = [...messages].reverse().find(m => m.role === "user")
-        if (!lastUserMsg) return
-        setMessages(prev => prev.slice(0, -1))
-        setInput(lastUserMsg.content)
+        // Encontrar el índice del último mensaje del usuario
+        const lastUserIdx = messages.map(m => m.role).lastIndexOf("user")
+        if (lastUserIdx === -1) return
+        const content = messages[lastUserIdx].content
+        // Eliminar desde el último mensaje de usuario en adelante (usuario + respuesta de error)
+        setMessages(prev => prev.slice(0, lastUserIdx))
+        setInput(content)
     }
 
     return {

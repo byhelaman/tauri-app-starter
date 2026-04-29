@@ -55,26 +55,13 @@ export async function fetchSystemData(canViewUsers: boolean): Promise<SystemData
     ? client.rpc("get_all_users")
     : Promise.resolve({ data: [] as RpcUser[], error: null })
 
-  const [usersResult, rolesResult, permissionsResult, matrixResult, auditResult] = await Promise.allSettled([
+  const [usersRes, rolesRes, permissionsRes, matrixRes, auditRes] = await Promise.all([
     usersPromise,
     client.rpc("get_all_roles"),
     client.rpc("get_all_permissions"),
     client.rpc("get_role_permission_matrix"),
     client.rpc("get_audit_log", { p_limit: 100, p_offset: 0 }),
   ])
-
-  // Unwrap settled results — report the first rejection but continue rendering available data
-  if (usersResult.status === "rejected") throw usersResult.reason
-  if (rolesResult.status === "rejected") throw rolesResult.reason
-  if (permissionsResult.status === "rejected") throw permissionsResult.reason
-  if (matrixResult.status === "rejected") throw matrixResult.reason
-  if (auditResult.status === "rejected") throw auditResult.reason
-
-  const usersRes = usersResult.value
-  const rolesRes = rolesResult.value
-  const permissionsRes = permissionsResult.value
-  const matrixRes = matrixResult.value
-  const auditRes = auditResult.value
 
   if (usersRes.error) throw usersRes.error
   if (rolesRes.error) throw rolesRes.error
@@ -142,7 +129,7 @@ export async function fetchSystemData(canViewUsers: boolean): Promise<SystemData
 export async function updateUserRole(userId: string, role: string) {
   if (!supabase) return { error: "Supabase is not configured" }
   const { error } = await supabase.rpc("update_user_role", { target_user_id: userId, new_role: role })
-  if (error) { toast.error(error.message); return { error: error.message } }
+  if (error) return { error: error.message }
   toast.success("User role updated")
   return { error: null }
 }
@@ -153,7 +140,7 @@ export async function updateUserDisplayName(userId: string, displayName: string)
     target_user_id: userId,
     new_display_name: displayName,
   })
-  if (error) { toast.error(error.message); return { error: error.message } }
+  if (error) return { error: error.message }
   toast.success("User profile updated")
   return { error: null }
 }
@@ -176,7 +163,7 @@ export async function updateUserEmail(userId: string, newEmail: string) {
 export async function removeUser(userId: string) {
   if (!supabase) return { error: "Supabase is not configured" }
   const { error } = await supabase.rpc("delete_user", { target_user_id: userId })
-  if (error) { toast.error(error.message); return { error: error.message } }
+  if (error) return { error: error.message }
   toast.success("User removed")
   return { error: null }
 }
@@ -214,7 +201,7 @@ export async function addRole(role: RoleDefinition) {
     role_description: role.description,
     role_level: role.level,
   })
-  if (error) { toast.error(error.message); return }
+  if (error) throw new Error(error.message)
   toast.success("Role created")
 }
 
@@ -226,7 +213,7 @@ export async function editRole(original: string, updated: Partial<RoleDefinition
     new_description: updated.description ?? null,
     new_level: updated.level ?? null,
   })
-  if (error) { toast.error(error.message); return }
+  if (error) throw new Error(error.message)
   toast.success("Role updated")
 }
 
@@ -236,14 +223,14 @@ export async function duplicateRole(sourceName: string, newName: string) {
     p_source_role: sourceName,
     p_new_name: newName,
   })
-  if (error) { toast.error(error.message); return }
+  if (error) throw new Error(error.message)
   toast.success("Role duplicated")
 }
 
 export async function removeRole(name: string) {
   if (!supabase) return
   const { data, error } = await supabase.rpc("delete_role", { role_name: name })
-  if (error) { toast.error(error.message); return }
+  if (error) throw new Error(error.message)
 
   const details = (data ?? {}) as { downgraded_users?: number; fallback_role?: string }
   if (typeof details.downgraded_users === "number" && details.downgraded_users > 0) {
@@ -259,6 +246,6 @@ export async function togglePermission(role: string, permission: string, enabled
   const rpc = enabled ? "assign_role_permission" : "remove_role_permission"
   const { error } = await supabase.rpc(rpc, { target_role: role, permission_name: permission })
 
-  if (error) { toast.error(error.message); return }
+  if (error) throw new Error(error.message)
   toast.success(enabled ? "Permission assigned" : "Permission removed")
 }
