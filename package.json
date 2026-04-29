@@ -44,7 +44,6 @@
     "react-hook-form": "^7",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7",
-    "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
     "sonner": "^2",
     "tailwind-merge": "^3.5.0",

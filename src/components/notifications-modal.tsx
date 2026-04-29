@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { BellIcon, CheckCheckIcon, XIcon } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { formatRelativeTime } from "@/lib/date-utils"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -66,29 +67,14 @@ async function sendOsNotification(title: string, body: string) {
   }
 }
 
-function formatRelativeTime(iso: string): string {
-  const now = Date.now()
-  const then = new Date(iso).getTime()
-  const diff = now - then
-  const seconds = Math.floor(diff / 1000)
-  if (seconds < 60) return "just now"
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days === 1) return "yesterday"
-  if (days < 7) return `${days}d ago`
-  return new Date(iso).toLocaleDateString()
-}
+
 
 interface NotificationsModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onUnreadCountChange?: (count: number) => void
 }
 
-export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: NotificationsModalProps) {
+export function NotificationsModal({ open, onOpenChange }: NotificationsModalProps) {
   const queryClient = useQueryClient()
 
   const { data: notifications = [], isLoading } = useQuery({
@@ -111,12 +97,8 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
 
   const unreadCount = notifications.filter((n) => !n.read).length
 
-  // Sincronización del contador hacia el padre (badge del sidebar/navbar)
-  useEffect(() => {
-    onUnreadCountChange?.(unreadCount)
-  }, [unreadCount, onUnreadCountChange])
 
-  // Realtime subscription — Actualización reactiva basada en invalidación
+  // Realtime: actualiza la cache en INSERT (nuevas), UPDATE (leídas) y DELETE (descartadas)
   useEffect(() => {
     if (!supabase) return
 
@@ -129,7 +111,22 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
           const row = payload.new as RpcNotification
           // Notificación al SO
           void sendOsNotification(row.title, row.body)
-          // Invalidamos la cache para que React Query refresque los datos de forma limpia
+          void queryClient.invalidateQueries({ queryKey: ["notifications"] })
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "notifications" },
+        () => {
+          // Mantiene el badge sincronizado cuando se marca como leída en otra pestaña
+          void queryClient.invalidateQueries({ queryKey: ["notifications"] })
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "notifications" },
+        () => {
+          // Elimina la notificación descartada en otra pestaña
           void queryClient.invalidateQueries({ queryKey: ["notifications"] })
         }
       )
@@ -208,11 +205,10 @@ export function NotificationsModal({ open, onOpenChange, onUnreadCountChange }: 
   })
 
   async function sendTest() {
+    if (!import.meta.env.DEV) return
     const title = "Test notification"
     const body = "This came from the OS notification system."
     await sendOsNotification(title, body)
-    // Para tests, simplemente invalidamos para ver si llega algo nuevo (si el RPC lo creara)
-    // Opcionalmente podríamos añadirlo manualmente a la cache, pero invalidar es más limpio.
     void queryClient.invalidateQueries({ queryKey: ["notifications"] })
   }
 

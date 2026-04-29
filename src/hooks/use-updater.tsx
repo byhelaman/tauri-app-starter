@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react"
 import { check, type Update } from "@tauri-apps/plugin-updater"
 import { relaunch } from "@tauri-apps/plugin-process"
+import { loadSettings } from "@/lib/settings"
 
 // Forma mínima para una actualización simulada en modo desarrollo.
 interface SimulatedUpdate extends Pick<Update, "version" | "body"> {
@@ -29,20 +30,6 @@ interface UseUpdaterReturn {
 }
 
 const POLL_INTERVAL = 4 * 60 * 60 * 1000 // 4 horas
-const SETTINGS_STORAGE_KEY = "app-settings"
-
-function readAutoUpdateSetting(): boolean {
-  if (typeof window === "undefined") return false
-
-  try {
-    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY)
-    if (!raw) return false
-    const parsed = JSON.parse(raw) as { autoUpdate?: unknown }
-    return parsed.autoUpdate === true
-  } catch {
-    return false
-  }
-}
 
 export function useUpdater(): UseUpdaterReturn {
   const [update, setUpdate] = useState<Update | null>(null)
@@ -50,7 +37,7 @@ export function useUpdater(): UseUpdaterReturn {
   const [isDownloading, setIsDownloading] = useState(false)
   const [progress, setProgress] = useState<UpdateProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(readAutoUpdateSetting)
+  const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(() => loadSettings().autoUpdate)
 
   const checkForUpdates = useCallback(async (): Promise<Update | null> => {
     setIsChecking(true)
@@ -71,7 +58,7 @@ export function useUpdater(): UseUpdaterReturn {
   // Mantiene el updater sincronizado con cambios de Settings en esta ventana y entre pestañas.
   useEffect(() => {
     function refreshAutoUpdateSetting() {
-      setAutoUpdateEnabled(readAutoUpdateSetting())
+      setAutoUpdateEnabled(loadSettings().autoUpdate)
     }
 
     window.addEventListener("storage", refreshAutoUpdateSetting)

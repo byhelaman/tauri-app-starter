@@ -13,6 +13,7 @@ const PERIOD_MS: Record<string, number> = {
   "30d": 30 * 24 * 60 * 60 * 1000,
   "3m":  90 * 24 * 60 * 60 * 1000,
   "6m":  180 * 24 * 60 * 60 * 1000,
+  "9m":  270 * 24 * 60 * 60 * 1000,
   "1y":  365 * 24 * 60 * 60 * 1000,
 }
 
@@ -21,6 +22,7 @@ const PERIOD_LABELS: Record<string, string> = {
   "30d": "last 30 days",
   "3m":  "last 3 months",
   "6m":  "last 6 months",
+  "9m":  "last 9 months",
   "1y":  "last year",
 }
 

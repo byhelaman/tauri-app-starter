@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react"
+import { lazy, Suspense, useEffect, useState } from "react"
 import { Outlet, useLocation, useNavigate } from "react-router-dom"
 import { BellIcon, ChevronDown, Settings } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
 import { UserNav } from "@/components/user-nav"
 import { CommandPalette } from "@/components/command-palette"
 import { NotificationsModal } from "@/components/notifications-modal"
@@ -8,12 +9,19 @@ import { ProfileModal } from "@/components/profile-modal"
 import { SettingsModal } from "@/components/settings-modal"
 import { SystemModal } from "@/features/system/system-modal"
 import { ShortcutsModal } from "@/components/shortcuts-modal"
-import { ChatWidget } from "@/features/chat/chat-widget"
 import { useAuth } from "@/contexts/auth-context"
 import { type AppSettings, SETTINGS_STORAGE_KEY, loadSettings, syncGeneralSettings } from "@/lib/settings"
 import { Titlebar } from "@/components/window-controls"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { supabase } from "@/lib/supabase"
+import { useAppShortcuts } from "@/hooks/use-app-shortcuts"
+
+// U-02: Lazy-load ChatWidget — react-markdown y remark-gfm son pesados.
+// Solo se carga cuando el usuario tiene el permiso ai.chat, y se monta al primer render.
+const ChatWidget = lazy(() =>
+  import("@/features/chat/chat-widget").then((m) => ({ default: m.ChatWidget }))
+)
 
 const NAV_ITEMS = [
   { label: "Dashboard", to: "/" },
@@ -36,6 +44,9 @@ export function AppLayout() {
     hasPermission("users.view") ||
     hasPermission("users.manage")
 
+  // C-01: Atajos de teclado extraídos a un hook dedicado
+  useAppShortcuts({ canOpenSystem, onSetModal: setModal })
+
   useEffect(() => {
     try {
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
@@ -46,52 +57,19 @@ export function AppLayout() {
     syncGeneralSettings(settings)
   }, [settings])
 
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      const mod = e.metaKey || e.ctrlKey
-      const key = e.key.toLowerCase()
-
-      // Modals
-      if (mod && e.shiftKey && e.code === "KeyP") {
-        e.preventDefault()
-        setModal("profile")
-      }
-      if (e.altKey && !mod && !e.shiftKey && e.code === "KeyS") {
-        e.preventDefault()
-        setModal("settings")
-      }
-      if (canOpenSystem && e.shiftKey && mod && !e.altKey && e.code === "KeyS") {
-        e.preventDefault()
-        setModal("system")
-      }
-      if (mod && key === "n") {
-        e.preventDefault()
-        setModal("notifications")
-      }
-      if (mod && e.key === "/") {
-        e.preventDefault()
-        setModal("shortcuts")
-      }
-
-      // Navigation (Ctrl/Cmd + 1…N)
-      if (mod && !e.shiftKey && !e.altKey) {
-        const idx = parseInt(key, 10) - 1
-        if (idx >= 0 && idx < NAV_ITEMS.length) {
-          e.preventDefault()
-          navigate(NAV_ITEMS[idx].to)
-        }
-      }
-
-      // Close modal
-      if (e.key === "Escape") {
-        setModal(null)
-      }
-    }
-    document.addEventListener("keydown", handleKey)
-    return () => document.removeEventListener("keydown", handleKey)
-  }, [canOpenSystem, navigate])
-
-  const [unreadCount, setUnreadCount] = useState(0)
+  // U-01: Cargar unreadCount al montar sin esperar que se abra el modal.
+  // La query usa el mismo queryKey que NotificationsModal para compartir la cache.
+  const { data: notifications = [] } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: async () => {
+      if (!supabase) return []
+      const { data, error } = await supabase.rpc("get_my_notifications", { p_limit: 50 })
+      if (error) throw error
+      return (data ?? []) as { id: number; read: boolean }[]
+    },
+    enabled: !!supabase,
+  })
+  const unreadCount = notifications.filter((n) => !n.read).length
 
   return (
     <div className="flex flex-col h-svh">
@@ -192,7 +170,6 @@ export function AppLayout() {
       <NotificationsModal
         open={modal === "notifications"}
         onOpenChange={(open) => setModal(open ? "notifications" : null)}
-        onUnreadCountChange={setUnreadCount}
       />
       <SystemModal
         open={canOpenSystem && modal === "system"}
@@ -202,7 +179,12 @@ export function AppLayout() {
         open={modal === "shortcuts"}
         onOpenChange={(open) => setModal(open ? "shortcuts" : null)}
       />
-      {hasPermission("ai.chat") && <ChatWidget key={user?.id ?? "anon"} />}
+      {/* U-02: Suspense con fallback null — el botón no aparece hasta que el chunk carga */}
+      {hasPermission("ai.chat") && (
+        <Suspense fallback={null}>
+          <ChatWidget key={user?.id ?? "anon"} />
+        </Suspense>
+      )}
     </div>
   )
 }

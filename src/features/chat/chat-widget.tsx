@@ -231,7 +231,7 @@ export function ChatWidget() {
                         )}
                         {messages.map((msg, i) => (
                             <div
-                                key={i}
+                                key={msg.id}
                                 className={cn(
                                     "group flex flex-col gap-0.5",
                                     msg.role === "user" ? "items-end" : "items-start"

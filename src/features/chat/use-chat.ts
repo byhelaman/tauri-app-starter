@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import { supabase, getSupabaseConfig } from "@/lib/supabase"
+import { processSSEStream } from "./sse-utils"
 
 export interface Message {
+    id: string
     role: "user" | "assistant"
     content: string
     isError?: boolean
@@ -33,7 +35,6 @@ function saveHistory(userId: string | null, messages: Message[]) {
     }
 }
 
-import { processSSEStream } from "./sse-utils"
 
 export function useChat(apiKey: string, model: string, userId: string | null) {
     const [messages, setMessages] = useState<Message[]>(() => loadHistory(userId))
@@ -69,7 +70,7 @@ export function useChat(apiKey: string, model: string, userId: string | null) {
         const controller = new AbortController()
         abortRef.current = controller
 
-        const userMessage: Message = { role: "user", content }
+        const userMessage: Message = { id: crypto.randomUUID(), role: "user", content }
         const updatedMessages = [...history, userMessage]
         const streamingMsgIdx = updatedMessages.length
 
@@ -116,7 +117,7 @@ export function useChat(apiKey: string, model: string, userId: string | null) {
                         setStatusText(event.text)
                     } else if (event.type === "token") {
                         if (!assistantAdded) {
-                            setMessages(prev => [...prev, { role: "assistant", content: "" }])
+                            setMessages(prev => [...prev, { id: crypto.randomUUID(), role: "assistant", content: "" }])
                             setStreamingIdx(streamingMsgIdx)
                             assistantAdded = true
                             setLoading(false)
@@ -134,7 +135,7 @@ export function useChat(apiKey: string, model: string, userId: string | null) {
                         setLoading(false)
                         setStatusText("")
                     } else if (event.type === "error") {
-                        const errMsg: Message = { role: "assistant", content: `Error: ${event.text}`, isError: true }
+                        const errMsg: Message = { id: crypto.randomUUID(), role: "assistant", content: `Error: ${event.text}`, isError: true }
                         setStreamingIdx(null)
                         setMessages(prev => {
                             const next = assistantAdded ? [...prev.slice(0, -1), errMsg] : [...prev, errMsg]
@@ -150,7 +151,7 @@ export function useChat(apiKey: string, model: string, userId: string | null) {
 
             if (!assistantAdded) {
                 setMessages(prev => {
-                    const next = [...prev, { role: "assistant" as const, content: "No response", isError: true }]
+                    const next = [...prev, { id: crypto.randomUUID(), role: "assistant" as const, content: "No response", isError: true }]
                     saveHistory(userId, next)
                     return next
                 })
@@ -161,6 +162,7 @@ export function useChat(apiKey: string, model: string, userId: string | null) {
             if (abortRef.current !== controller) return
             setMessages(prev => {
                 const next = [...prev, {
+                    id: crypto.randomUUID(),
                     role: "assistant" as const,
                     content: `Error: ${err instanceof Error ? err.message : String(err)}`,
                     isError: true,

@@ -5,7 +5,15 @@ import "./index.css";
 
 import App from "./App";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Evita refetch en cada montaje para datos que no cambian con frecuencia.
+      // Los componentes que necesiten datos frescos pueden sobrescribir con staleTime: 0.
+      staleTime: 1000 * 60, // 1 minuto
+    },
+  },
+});
 
 if (import.meta.env.PROD) {
   window.addEventListener("contextmenu", (e) => e.preventDefault());

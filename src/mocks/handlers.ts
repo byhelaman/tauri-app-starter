@@ -8,7 +8,7 @@ import type { Order } from "@/features/orders/columns"
 // In-memory state for realistic CRUD
 let orders = generateOrders(100)
 let queueOrders = generateQueueOrders(25)
-let orderHistory = [...TABLE_HISTORY_MOCK]
+const orderHistory = [...TABLE_HISTORY_MOCK]
 
 function addHistoryEntry(action: "create" | "update" | "delete", description: string, details?: HistoryDetail[]) {
   orderHistory.unshift({

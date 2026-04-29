@@ -34,9 +34,17 @@ function parseClaims(session: Session | null): AuthClaims {
     if (!payload) return EMPTY_CLAIMS
     const normalized = payload.replace(/-/g, "+").replace(/_/g, "/")
     const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4)
-    // atob produce bytes, no UTF-8 — decodificar explícitamente para soportar caracteres no-ASCII
-    const bytes = Uint8Array.from(atob(padded), (c) => c.charCodeAt(0))
-    const raw: unknown = JSON.parse(new TextDecoder().decode(bytes))
+    // atob puede lanzar DOMException si el string no es base64 válido.
+    // TextDecoder maneja correctamente caracteres UTF-8 no-ASCII en los claims.
+    let decoded: string
+    try {
+      const bytes = Uint8Array.from(atob(padded), (c) => c.charCodeAt(0))
+      decoded = new TextDecoder().decode(bytes)
+    } catch {
+      // JWT payload inválido — devolver claims vacíos sin contaminar la sesión
+      return EMPTY_CLAIMS
+    }
+    const raw: unknown = JSON.parse(decoded)
     const parsed = jwtClaimsSchema.parse(raw)
 
     return {

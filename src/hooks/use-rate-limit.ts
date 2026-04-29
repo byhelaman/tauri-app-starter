@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 /**
  * Limitador de frecuencia del lado del cliente para mejorar la UX (throttling de envío de formularios).
@@ -68,7 +68,7 @@ export function useRateLimit({
   })
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  function startCountdown() {
+  const startCountdown = useCallback(() => {
     if (timer.current) clearInterval(timer.current)
     timer.current = setInterval(() => {
       setLockoutRemaining((prev) => {
@@ -81,16 +81,17 @@ export function useRateLimit({
         return prev - 1
       })
     }, 1000)
-  }
+  }, [storageKey])
 
   // Resume countdown if app reloaded mid-lockout
   useEffect(() => {
     if (lockoutRemaining > 0) startCountdown()
     return () => { if (timer.current) clearInterval(timer.current) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // startCountdown is stable (useCallback with stable storageKey dep)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function recordFailure() {
+  const recordFailure = useCallback(() => {
     setAttempts((prev) => {
       const next = prev + 1
       if (next >= maxAttempts) {
@@ -103,14 +104,14 @@ export function useRateLimit({
       }
       return next
     })
-  }
+  }, [maxAttempts, lockoutSeconds, storageKey, startCountdown])
 
-  function reset() {
+  const reset = useCallback(() => {
     setAttempts(0)
     setLockoutRemaining(0)
     if (timer.current) clearInterval(timer.current)
     if (storageKey) clearStorage(storageKey)
-  }
+  }, [storageKey])
 
   return {
     attempts,

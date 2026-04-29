@@ -89,6 +89,7 @@ export function DashboardPage() {
                 <SelectItem value="30d">Last 30 days</SelectItem>
                 <SelectItem value="3m">Last 3 months</SelectItem>
                 <SelectItem value="6m">Last 6 months</SelectItem>
+                <SelectItem value="9m">Last 9 months</SelectItem>
                 <SelectItem value="1y">Last year</SelectItem>
               </SelectGroup>
             </SelectContent>

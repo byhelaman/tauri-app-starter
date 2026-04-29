@@ -200,9 +200,6 @@ Deno.serve(async (req: Request) => {
 
     const { messages, apiKey, model } = body
 
-    if (typeof apiKey !== "string" || apiKey.trim().length < 8 || apiKey.length > 512) {
-        return json(400, { success: false, message: "Invalid apiKey" }, origin)
-    }
     if (typeof model !== "string" || model.trim().length === 0 || model.length > 128) {
         return json(400, { success: false, message: "Invalid model" }, origin)
     }
@@ -211,6 +208,13 @@ Deno.serve(async (req: Request) => {
     }
     if (messages.length > 100) {
         return json(400, { success: false, message: "Too many messages (max 100)" }, origin)
+    }
+
+    // apiKey es la clave personal del usuario en Vercel AI Gateway (modelo BYOK).
+    // Cada usuario es responsable de su propio consumo; la clave se valida aquí
+    // y se usa únicamente para llamar al gateway — nunca se almacena ni se loguea.
+    if (typeof apiKey !== "string" || apiKey.trim().length < 8 || apiKey.length > 512) {
+        return json(400, { success: false, message: "Invalid apiKey" }, origin)
     }
 
     const validRoles = new Set(["user", "assistant"])
