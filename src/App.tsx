@@ -19,12 +19,14 @@ import { Shell } from "@/components/window-controls"
 function App() {
   if (!isSupabaseConfigured) {
     return (
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-        <Shell>
-          <SetupPage />
-        </Shell>
-        <Toaster />
-      </ThemeProvider>
+      <ErrorBoundary>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <Shell>
+            <SetupPage />
+          </Shell>
+          <Toaster />
+        </ThemeProvider>
+      </ErrorBoundary>
     )
   }
 
