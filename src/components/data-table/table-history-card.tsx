@@ -120,7 +120,7 @@ export function TableHistoryCard({
                   <Skeleton className="h-3 w-1/2" />
                 </ItemContent>
                 <ItemActions>
-                  <Skeleton className="h-4 w-12" />
+                  <Skeleton className="h-3 w-10" />
                 </ItemActions>
               </Item>
             ))}
@@ -170,7 +170,7 @@ export function TableHistoryCard({
                   disabled={isFetchingNextPage}
                 >
                   {isFetchingNextPage ? (
-                    <Loader2 className="size-3 animate-spin" />
+                    <Loader2 className="size-3.5 animate-spin" />
                   ) : (
                     "Load More Changes"
                   )}

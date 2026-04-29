@@ -1,10 +1,12 @@
-import { useEffect } from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useEffect, useMemo } from "react"
+import { useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query"
+import { notificationsQueryOptions, type AppNotification } from "@/features/notifications/api"
 import { toast } from "sonner"
-import { BellIcon, CheckCheckIcon, XIcon } from "lucide-react"
+import { BellIcon, CheckCheckIcon, XIcon, Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { formatRelativeTime } from "@/lib/date-utils"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Dialog,
   DialogContent,
@@ -33,23 +35,6 @@ import {
 } from "@/components/ui/empty"
 import { cn } from "@/lib/utils"
 
-interface Notification {
-  id: number
-  title: string
-  body: string
-  type: "info" | "success" | "warning"
-  read: boolean
-  createdAt: string
-}
-
-interface RpcNotification {
-  id: number
-  title: string
-  body: string
-  type: string
-  read: boolean
-  created_at: string
-}
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
 
@@ -74,27 +59,21 @@ interface NotificationsModalProps {
   onOpenChange: (open: boolean) => void
 }
 
+// Local type for Realtime payload (snake_case from Postgres)
+interface RpcNotification { id: number; title: string; body: string; created_at: string }
+
 export function NotificationsModal({ open, onOpenChange }: NotificationsModalProps) {
   const queryClient = useQueryClient()
 
-  const { data: notifications = [], isLoading } = useQuery({
-    queryKey: ["notifications"],
-    queryFn: async () => {
-      if (!supabase) return []
-      const { data, error } = await supabase.rpc("get_my_notifications", { p_limit: 50 })
-      if (error) throw error
-      return ((data ?? []) as RpcNotification[]).map((n) => ({
-        id: n.id,
-        title: n.title,
-        body: n.body,
-        type: n.type as Notification["type"],
-        read: n.read,
-        createdAt: n.created_at,
-      }))
-    },
-    enabled: !!supabase,
-  })
+  const {
+    data,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery(notificationsQueryOptions)
 
+  const notifications = useMemo(() => data?.pages.flat() ?? [], [data])
   const unreadCount = notifications.filter((n) => !n.read).length
 
 
@@ -144,10 +123,11 @@ export function NotificationsModal({ open, onOpenChange }: NotificationsModalPro
     },
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: ["notifications"] })
-      const previous = queryClient.getQueryData<Notification[]>(["notifications"])
-      queryClient.setQueryData<Notification[]>(["notifications"], (old) => 
-        old?.map(n => ({ ...n, read: true }))
-      )
+      const previous = queryClient.getQueryData<InfiniteData<AppNotification[]>>(["notifications"])
+      queryClient.setQueryData<InfiniteData<AppNotification[]>>(["notifications"], (old) => {
+        if (!old) return old
+        return { ...old, pages: old.pages.map(page => page.map(n => ({ ...n, read: true }))) }
+      })
       return { previous }
     },
     onError: (_, __, context) => {
@@ -167,10 +147,11 @@ export function NotificationsModal({ open, onOpenChange }: NotificationsModalPro
     },
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: ["notifications"] })
-      const previous = queryClient.getQueryData<Notification[]>(["notifications"])
-      queryClient.setQueryData<Notification[]>(["notifications"], (old) => 
-        old?.map(n => n.id === id ? { ...n, read: true } : n)
-      )
+      const previous = queryClient.getQueryData<InfiniteData<AppNotification[]>>(["notifications"])
+      queryClient.setQueryData<InfiniteData<AppNotification[]>>(["notifications"], (old) => {
+        if (!old) return old
+        return { ...old, pages: old.pages.map(page => page.map(n => n.id === id ? { ...n, read: true } : n)) }
+      })
       return { previous }
     },
     onError: (_, __, context) => {
@@ -189,10 +170,11 @@ export function NotificationsModal({ open, onOpenChange }: NotificationsModalPro
     },
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: ["notifications"] })
-      const previous = queryClient.getQueryData<Notification[]>(["notifications"])
-      queryClient.setQueryData<Notification[]>(["notifications"], (old) => 
-        old?.filter(n => n.id !== id)
-      )
+      const previous = queryClient.getQueryData<InfiniteData<AppNotification[]>>(["notifications"])
+      queryClient.setQueryData<InfiniteData<AppNotification[]>>(["notifications"], (old) => {
+        if (!old) return old
+        return { ...old, pages: old.pages.map(page => page.filter(n => n.id !== id)) }
+      })
       return { previous }
     },
     onError: (_, __, context) => {
@@ -238,7 +220,24 @@ export function NotificationsModal({ open, onOpenChange }: NotificationsModalPro
         </DialogHeader>
 
         <DialogBody className="mt-1 py-1">
-          {notifications.length === 0 && !isLoading ? (
+          {isLoading ? (
+            <ItemGroup>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Item key={i} size="sm">
+                  <ItemMedia variant="icon">
+                    <Skeleton className="size-8 rounded-md" />
+                  </ItemMedia>
+                  <ItemContent className="space-y-1 py-1">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-1/2" />
+                  </ItemContent>
+                  <ItemActions>
+                    <Skeleton className="h-3 w-10" />
+                  </ItemActions>
+                </Item>
+              ))}
+            </ItemGroup>
+          ) : notifications.length === 0 ? (
             <Empty>
               <EmptyHeader>
                 <EmptyMedia variant="icon">
@@ -292,6 +291,21 @@ export function NotificationsModal({ open, onOpenChange }: NotificationsModalPro
                   </ItemActions>
                 </Item>
               ))}
+              {hasNextPage && (
+                <div className="w-full flex justify-center py-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground gap-2"
+                    onClick={() => fetchNextPage()}
+                    disabled={isFetchingNextPage}
+                  >
+                    {isFetchingNextPage
+                      ? <Loader2 className="size-3.5 animate-spin" />
+                      : "Load more"}
+                  </Button>
+                </div>
+              )}
             </ItemGroup>
           )}
         </DialogBody>

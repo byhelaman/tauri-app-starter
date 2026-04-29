@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useState } from "react"
 import { Outlet, useLocation, useNavigate } from "react-router-dom"
 import { BellIcon, ChevronDown, Settings } from "lucide-react"
-import { useQuery } from "@tanstack/react-query"
+import { useInfiniteQuery } from "@tanstack/react-query"
+import { notificationsQueryOptions } from "@/features/notifications/api"
 import { UserNav } from "@/components/user-nav"
 import { CommandPalette } from "@/components/command-palette"
 import { NotificationsModal } from "@/components/notifications-modal"
@@ -14,7 +15,6 @@ import { type AppSettings, SETTINGS_STORAGE_KEY, loadSettings, syncGeneralSettin
 import { Titlebar } from "@/components/window-controls"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { supabase } from "@/lib/supabase"
 import { useAppShortcuts } from "@/hooks/use-app-shortcuts"
 
 // U-02: Lazy-load ChatWidget — react-markdown y remark-gfm son pesados.
@@ -58,18 +58,11 @@ export function AppLayout() {
   }, [settings])
 
   // U-01: Cargar unreadCount al montar sin esperar que se abra el modal.
-  // La query usa el mismo queryKey que NotificationsModal para compartir la cache.
-  const { data: notifications = [] } = useQuery({
-    queryKey: ["notifications"],
-    queryFn: async () => {
-      if (!supabase) return []
-      const { data, error } = await supabase.rpc("get_my_notifications", { p_limit: 50 })
-      if (error) throw error
-      return (data ?? []) as { id: number; read: boolean }[]
-    },
-    enabled: !!supabase,
-  })
-  const unreadCount = notifications.filter((n) => !n.read).length
+  // Usa useInfiniteQuery con el MISMO queryKey y PAGE_SIZE que NotificationsModal
+  // para compartir el caché — useQuery y useInfiniteQuery con el mismo key
+  // producen estructuras incompatibles y crashean.
+  const { data: notifData } = useInfiniteQuery(notificationsQueryOptions)
+  const unreadCount = (notifData?.pages.flat() ?? []).filter((n) => !n.read).length
 
   return (
     <div className="flex flex-col h-svh">

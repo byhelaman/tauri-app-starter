@@ -202,7 +202,7 @@ export function DashboardPage() {
                       <Skeleton className="h-3 w-1/2" />
                     </ItemContent>
                     <ItemActions className="flex-col items-end gap-1.5">
-                      <Skeleton className="h-5 w-16 rounded-full" />
+                      <Skeleton className="h-4 w-16 rounded-full" />
                       <Skeleton className="h-3 w-12" />
                     </ItemActions>
                   </Item>
