@@ -94,6 +94,19 @@ export function useOrdersRealtime() {
         }
       )
 
+      // ── Order history: INSERT (trigger de auditoría) ──────────
+      // Solo invalidamos — el panel Changes hará refetch automático.
+      // No filtramos por updated_by porque los INSERTs de history
+      // son siempre de otros usuarios (los propios ya los invalida onSuccess).
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "order_history" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["orders", "history"] })
+          queryClient.invalidateQueries({ queryKey: ["dashboard", "history"] })
+        }
+      )
+
     channel.subscribe((status) => {
       if (status === "SUBSCRIBED") {
         // Catch-up refetch tras reconexión (laptop sleep, WiFi drop)

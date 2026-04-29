@@ -464,8 +464,3 @@ BEGIN
     END LOOP;
 END;
 $$;
-
--- ============================================================
--- FIN: ejecuta después de habilitar Realtime en el dashboard
---   Database → Replication → Source → orders ✓  queue_orders ✓
--- ============================================================
