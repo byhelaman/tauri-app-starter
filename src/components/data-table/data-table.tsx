@@ -40,14 +40,27 @@ import type {
 } from "./data-table-types"
 import { getColumnSizeStyle, getPinnedColumnStyle } from "./data-table-utils"
 
+/**
+ * Tamaño de "página" virtual en modo infinite scroll.
+ * Sobreescribimos pageSize al máximo posible para que getPaginationRowModel()
+ * no filtre las filas cargadas — el virtualizer se encarga de renderizar solo las visibles.
+ */
+const VIRTUAL_PAGE_SIZE = Number.MAX_SAFE_INTEGER
+
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
+
   tableId: string
   toolbar?: DataTableToolbarConfig<TData>
   layout?: DataTableLayoutConfig
   className?: string
-  bulkActions?: (selectedRows: TData[], clearSelection: () => void) => ReactNode
+  bulkActions?: (
+    selectedRows: TData[],
+    clearSelection: () => void,
+    isSelectAllByFilter: boolean,
+    excludedIds: Set<string>
+  ) => ReactNode
   rowContextMenu?: (row: TData) => ReactNode
   defaultPageSize?: number
   pageSizeOptions?: number[]
@@ -121,7 +134,23 @@ export function DataTable<TData, TValue>({
     }
   }, [isSidePanelOpen, tableId])
 
-  const clearSelection = () => setRowSelection({})
+  const [isSelectAllByFilter, setIsSelectAllByFilter] = useState(false)
+  const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set())
+
+  const clearSelection = () => {
+    setRowSelection({})
+    setIsSelectAllByFilter(false)
+    setExcludedIds(new Set())
+  }
+
+  const toggleExclusion = (id: string) => {
+    setExcludedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const fitHeight = layout?.fitHeight ?? false
   const scrollAreaClassName = layout?.scrollAreaClassName
@@ -185,8 +214,21 @@ export function DataTable<TData, TValue>({
       columnPinning, 
       columnVisibility, 
       rowSelection,
-      ...(manualPagination ? { pagination } : {})
+      // En modo infinite scroll, el virtualizer maneja qué filas renderizar —
+      // por eso sobreescribimos pageSize a MAX para que getPaginationRowModel()
+      // no limite los rows y todos los datos cargados queden disponibles.
+      ...(infiniteScroll
+        ? { pagination: { pageIndex: 0, pageSize: VIRTUAL_PAGE_SIZE } }
+        : manualPagination ? { pagination } : {}
+      )
     },
+    meta: {
+      isSelectAllByFilter,
+      excludedIds,
+      toggleExclusion,
+      clearSelection,
+    },
+
   })
 
   // Ensure page index doesn't go out of bounds when data shrinks (e.g. bulk deleting items on the last page)
@@ -197,6 +239,24 @@ export function DataTable<TData, TValue>({
       table.setPageIndex(pageCount - 1)
     }
   }, [table, table.getState().pagination.pageIndex, table.getPageCount()])
+
+  // ── "Select All por filtro" — estado real para infinite scroll ─────────────────
+  // Cuando el usuario selecciona todas las filas cargadas y el servidor tiene más,
+  // activamos el flag. Los checkboxes de fila usan meta.toggleExclusion() en lugar
+  // de row.toggleSelected(), por lo que TanStack's rowSelection no cambia en
+  // modo exclusión — el effect solo reacciona al "Select All" inicial.
+  useEffect(() => {
+    if (!infiniteScroll) return
+    const allLoaded = table.getIsAllRowsSelected()
+    const hasMoreOnServer = (infiniteScroll.totalRowCount ?? 0) > table.getRowModel().rows.length
+    setIsSelectAllByFilter(allLoaded && hasMoreOnServer)
+  }, [table.getState().rowSelection]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Resetear cuando los filtros cambian: la selección "todos por filtro" ya no es válida
+  useEffect(() => {
+    setIsSelectAllByFilter(false)
+    setExcludedIds(new Set())
+  }, [table.getState().globalFilter, table.getState().columnFilters]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const cellPadding = 8
   const { left: leftPinned = [], right: rightPinned = [] } = table.getState().columnPinning
@@ -249,12 +309,16 @@ export function DataTable<TData, TValue>({
         searchDebounceMs={toolbar?.searchDebounceMs}
         showViewOptions={toolbar?.showViewOptions}
         onSidePanelToggle={sidePanel ? () => setIsSidePanelOpen(!isSidePanelOpen) : undefined}
+        infiniteScroll={infiniteScroll}
+        isSelectAllByFilter={isSelectAllByFilter}
+        excludedIds={excludedIds}
       />
+
 
       <div
         className={cn(
           "flex flex-1 min-h-0 w-full overflow-hidden rounded-md border",
-          !fitHeight && "max-h-[calc(100svh-17rem)]"
+          !fitHeight && "max-h-[calc(100svh-14rem)]"
         )}
       >
         <div
@@ -388,14 +452,25 @@ export function DataTable<TData, TValue>({
       {/* Paginador clásico — oculto en modo infinite scroll */}
       {!infiniteScroll && <DataTablePagination table={table} pageSizeOptions={pageSizeOptions} />}
 
-      {bulkActions && table.getFilteredSelectedRowModel().rows.length > 0 && (
+      {bulkActions && (table.getFilteredSelectedRowModel().rows.length > 0 || isSelectAllByFilter) && (
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10">
           <div className="flex items-center gap-3 rounded-lg border bg-background p-2 shadow-lg">
-            <span className="pl-2 text-sm">{table.getFilteredSelectedRowModel().rows.length} selected</span>
-            <div className="h-4 w-px bg-border" />
-            {bulkActions(table.getFilteredSelectedRowModel().rows.map((r) => r.original), clearSelection)}
-            <div className="h-4 w-px bg-border" />
-            <Button variant="ghost" size="icon-sm" onClick={clearSelection}><X /></Button>
+            {(() => {
+              const selectedRows = table.getFilteredSelectedRowModel().rows
+              // En modo select-all-by-filter: total del servidor menos exclusiones
+              const displayCount = isSelectAllByFilter
+                ? ((infiniteScroll?.totalRowCount ?? 0) - excludedIds.size).toLocaleString()
+                : selectedRows.length.toLocaleString()
+              return (
+                <>
+                  <span className="pl-2 text-sm">{displayCount} selected</span>
+                  <div className="h-4 w-px bg-border" />
+                  {bulkActions(selectedRows.map((r) => r.original), clearSelection, isSelectAllByFilter, excludedIds)}
+                  <div className="h-4 w-px bg-border" />
+                  <Button variant="ghost" size="icon-sm" onClick={clearSelection}><X /></Button>
+                </>
+              )
+            })()}
           </div>
         </div>
       )}

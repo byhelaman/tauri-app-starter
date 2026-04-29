@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, startTransition } from "react"
 import type { ColumnDef, FilterFn } from "@tanstack/react-table"
+import type { DataTableMeta } from "./data-table-types"
 import { cn } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -346,20 +347,48 @@ export function createSelectColumn<TData>(): ColumnDef<TData> {
     id: "select",
     minSize: 36,
     maxSize: 36,
-    header: ({ table }) => (
-      <Checkbox
-        checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
-        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Select all"
-      />
-    ),
-    cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select row"
-      />
-    ),
+    header: ({ table }) => {
+      const meta = table.options.meta as DataTableMeta | undefined
+      if (meta?.isSelectAllByFilter) {
+        // En modo "select all by filter": el header muestra indeterminate si hay exclusiones
+        const hasExclusions = meta.excludedIds.size > 0
+        return (
+          <Checkbox
+            checked={hasExclusions ? "indeterminate" : true}
+            onCheckedChange={() => meta.clearSelection()}
+            aria-label="Clear selection"
+          />
+        )
+      }
+      return (
+        <Checkbox
+          checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Select all"
+        />
+      )
+    },
+    cell: ({ row, table }) => {
+      const meta = table.options.meta as DataTableMeta | undefined
+      if (meta?.isSelectAllByFilter) {
+        // En modo "select all by filter": la fila está seleccionada a menos que esté excluida
+        const isExcluded = meta.excludedIds.has(row.id)
+        return (
+          <Checkbox
+            checked={!isExcluded}
+            onCheckedChange={() => meta.toggleExclusion(row.id)}
+            aria-label="Select row"
+          />
+        )
+      }
+      return (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+        />
+      )
+    },
     enableSorting: false,
     enableHiding: false,
     enablePinning: false,

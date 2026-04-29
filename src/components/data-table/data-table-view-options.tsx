@@ -27,17 +27,25 @@ import {
 import {
   FORMAT_META,
   formatRows,
+  formatRawRows,
   getScopeRows,
   type CopyFormat,
   type ExportFormat,
   type Scope,
 } from "./table-formats"
 import { BulkCopyDialog } from "./bulk-copy-dialog"
+import type { InfiniteScrollConfig } from "./data-table-types"
 
 interface DataTableViewOptionsProps<TData> {
   table: Table<TData>
   tableId: string
   onSidePanelToggle?: () => void
+  /** Contexto de infinite scroll para mostrar totales reales y fetch server-side */
+  infiniteScroll?: InfiniteScrollConfig
+  /** Cuando true, 'Selected' muestra el total del servidor en vez del conteo local */
+  isSelectAllByFilter?: boolean
+  /** IDs excluidos manualmente en modo select-all-by-filter */
+  excludedIds?: Set<string>
 }
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
@@ -85,10 +93,17 @@ const SCOPE_LABEL: Record<Scope, string> = {
   all: "All",
 }
 
-export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle }: DataTableViewOptionsProps<TData>) {
-  const selectedCount = table.getSelectedRowModel().rows.length
+export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle, infiniteScroll, isSelectAllByFilter, excludedIds }: DataTableViewOptionsProps<TData>) {
+  const selectedCount = isSelectAllByFilter
+    ? (infiniteScroll?.totalRowCount ?? 0) - (excludedIds?.size ?? 0)
+    : table.getSelectedRowModel().rows.length
   const filteredCount = table.getFilteredRowModel().rows.length
   const totalCount = table.getCoreRowModel().rows.length
+
+  // En infinite scroll, 'filtered' y 'all' muestran el total real del servidor
+  const serverTotal = infiniteScroll?.totalRowCount
+  const effectiveFilteredCount = serverTotal ?? filteredCount
+  const effectiveTotalCount    = serverTotal ?? totalCount
 
   const [scope, setScope] = useState<Scope>("all")
   const [bulkCopyOpen, setBulkCopyOpen] = useState(false)
@@ -96,19 +111,52 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle 
 
   const scopeCounts: Record<Scope, number> = {
     selected: selectedCount,
-    filtered: filteredCount,
-    all: totalCount,
+    filtered: effectiveFilteredCount,
+    all: effectiveTotalCount,
+  }
+
+  /** Devuelve true si el scope necesita datos del servidor (infinite scroll + scope != selected) */
+  function needsServerFetch(s: Scope): boolean {
+    return !!infiniteScroll?.fetchAllByFilter && s !== "selected"
   }
 
   async function exportAs(format: ExportFormat) {
+    const meta = FORMAT_META[format]
+    if (needsServerFetch(effectiveScope)) {
+      // Fetch todos los datos del servidor y formatea con formatRawRows
+      const toastId = "export-fetch"
+      toast.loading(`Fetching all ${scopeCounts[effectiveScope].toLocaleString()} rows...`, { id: toastId })
+      try {
+        const records = await infiniteScroll!.fetchAllByFilter!()
+        const content = formatRawRows(table, records, format, true)
+        const ok = await saveFile(content, `${tableId}-${effectiveScope}.${meta.ext}`, meta.mime, meta.ext)
+        if (ok) toast.success(`Exported ${records.length.toLocaleString()} rows as ${meta.label}`, { id: toastId })
+        else toast.dismiss(toastId)
+      } catch {
+        toast.error("Failed to fetch rows from server", { id: toastId })
+      }
+      return
+    }
     const rows = getScopeRows(table, effectiveScope)
     const content = formatRows(table, rows, format, true)
-    const meta = FORMAT_META[format]
     const ok = await saveFile(content, `${tableId}-${effectiveScope}.${meta.ext}`, meta.mime, meta.ext)
     if (ok) toast.success(`Exported ${rows.length} rows as ${meta.label}`)
   }
 
   async function copyAs(format: CopyFormat) {
+    if (needsServerFetch(effectiveScope)) {
+      const toastId = "copy-fetch"
+      toast.loading(`Fetching all ${scopeCounts[effectiveScope].toLocaleString()} rows...`, { id: toastId })
+      try {
+        const records = await infiniteScroll!.fetchAllByFilter!()
+        const content = formatRawRows(table, records, format, false)
+        await navigator.clipboard.writeText(content)
+        toast.success(`Copied ${records.length.toLocaleString()} rows as ${FORMAT_META[format].label}`, { id: toastId })
+      } catch {
+        toast.error("Failed to fetch rows from server", { id: toastId })
+      }
+      return
+    }
     const rows = getScopeRows(table, effectiveScope)
     const content = formatRows(table, rows, format, false)
     await navigator.clipboard.writeText(content)
@@ -235,7 +283,9 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle 
         scope={effectiveScope}
         open={bulkCopyOpen}
         onOpenChange={setBulkCopyOpen}
+        fetchAllByFilter={infiniteScroll?.fetchAllByFilter}
       />
+
     </div>
   )
 }

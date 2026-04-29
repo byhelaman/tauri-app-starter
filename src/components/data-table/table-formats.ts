@@ -71,3 +71,53 @@ export function formatRows<T>(
     }
   }
 }
+
+/**
+ * Formatea registros crudos del servidor (sin Row<T> de TanStack).
+ * Usa los column IDs visibles de la tabla para mantener la misma estructura.
+ */
+export function formatRawRows<T>(
+  table: Table<T>,
+  records: Record<string, unknown>[],
+  format: CopyFormat,
+  includeHeaders = true,
+): string {
+  const columns = getExportColumns(table)
+  const headers = columns.map((c) => c.id)
+  const raw = (record: Record<string, unknown>, colId: string): string => {
+    const v = record[colId]
+    return v == null ? "" : String(v)
+  }
+
+  switch (format) {
+    case "csv": {
+      const lines = records.map((r) => columns.map((c) => csvEscape(raw(r, c.id))).join(","))
+      return includeHeaders
+        ? [headers.map(csvEscape).join(","), ...lines].join("\n")
+        : lines.join("\n")
+    }
+    case "tsv": {
+      const lines = records.map((r) =>
+        columns.map((c) => raw(r, c.id).replace(/\t/g, " ")).join("\t"),
+      )
+      return includeHeaders ? [headers.join("\t"), ...lines].join("\n") : lines.join("\n")
+    }
+    case "json": {
+      const data = records.map((r) => {
+        const o: Record<string, unknown> = {}
+        columns.forEach((c) => { o[c.id] = r[c.id] })
+        return o
+      })
+      return JSON.stringify(data, null, 2)
+    }
+    case "md": {
+      const body = records.map(
+        (r) => `| ${columns.map((c) => raw(r, c.id).replace(/\|/g, "\\|")).join(" | ")} |`,
+      )
+      if (!includeHeaders) return body.join("\n")
+      const head = `| ${headers.join(" | ")} |`
+      const sep = `| ${headers.map(() => "---").join(" | ")} |`
+      return [head, sep, ...body].join("\n")
+    }
+  }
+}

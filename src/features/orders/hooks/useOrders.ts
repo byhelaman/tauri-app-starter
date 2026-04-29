@@ -161,6 +161,26 @@ export function useOrders({ dateFilter }: { dateFilter?: string } = {}) {
     },
   })
 
+  // ── Bulk delete por filtro — elimina TODAS las filas que coinciden con los filtros
+  //    activos en el servidor, sin necesidad de cargar los IDs en el cliente.
+  //    Ideal para datasets grandes con infinite scroll.
+  const deleteBulkOrdersByFilterMutation = useMutation({
+    mutationFn: (excludedIds: string[] = []) => api.bulkDeleteOrdersByFilter({
+      search:  globalFilter,
+      filters: columnFilters,
+      date:    dateFilter,
+      excludedIds,
+    }),
+    onSuccess: (deletedCount) => {
+      queryClient.invalidateQueries({ queryKey: ["orders"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard", "history"] })
+      toast.success(`${deletedCount} orders deleted`)
+    },
+    onError: () => {
+      toast.error("Failed to delete orders")
+    },
+  })
+
   // ── Queue order update mutation with entity-level rollback ────────────
   const updateQueueOrderMutation = useMutation({
     mutationFn: api.updateQueueOrder,
@@ -272,6 +292,10 @@ export function useOrders({ dateFilter }: { dateFilter?: string } = {}) {
     doBulkDelete(ids)
   }, [doBulkDelete])
 
+  const deleteBulkOrdersByFilter = useCallback((excludedIds: string[] = []) => {
+    deleteBulkOrdersByFilterMutation.mutate(excludedIds)
+  }, [deleteBulkOrdersByFilterMutation])
+
   return {
     pageData,
     rowCount: cachedRowCount,
@@ -281,7 +305,22 @@ export function useOrders({ dateFilter }: { dateFilter?: string } = {}) {
       fetchNextPage,
       hasNextPage,
       isFetchingNextPage,
+      totalRowCount: cachedRowCount,
+      // Obtiene TODAS las filas del servidor vía RPC dedicada (sin paginación ni límite artificial)
+      fetchAllByFilter: async (excludedIds?: string[]): Promise<Record<string, unknown>[]> => {
+        // Si el total aún no está disponible (primera carga no completada), no hay filas que retornar
+        if (!cachedRowCount) return []
+        const rows = await api.fetchAllOrdersByFilter({
+          search:     globalFilter,
+          filters:    columnFilters,
+          date:       dateFilter,
+          excludedIds: excludedIds ?? [],
+        })
+        return rows as unknown as Record<string, unknown>[]
+      },
+
     },
+
     columnFilters,
     setColumnFilters: handleSetColumnFilters,
     globalFilter,
@@ -290,15 +329,16 @@ export function useOrders({ dateFilter }: { dateFilter?: string } = {}) {
     totalQueueOrders,
     isQueueLoading,
     actions: {
-      createOrder: createOrderMutation.mutate,
+      createOrder:              createOrderMutation.mutate,
       deleteOrder,
       deleteBulkOrders,
+      deleteBulkOrdersByFilter,
       handleStatusChange,
       handleCellChange,
       handleQueueStatusChange,
       handleQueuePriorityToggle,
       handleQueueRemove,
     },
-    isPending: updateOrderMutation.isPending || createOrderMutation.isPending || deleteOrderMutation.isPending || deleteBulkOrdersMutation.isPending
+    isPending: updateOrderMutation.isPending || createOrderMutation.isPending || deleteOrderMutation.isPending || deleteBulkOrdersMutation.isPending || deleteBulkOrdersByFilterMutation.isPending
   }
 }

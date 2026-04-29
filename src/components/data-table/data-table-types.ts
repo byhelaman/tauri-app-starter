@@ -48,8 +48,31 @@ export interface InfiniteScrollConfig {
   isFetchingNextPage: boolean
   /** Filas antes del final del dataset que disparan el fetch (default 100) */
   threshold?: number
+  /** Total de filas en la BD para los filtros actuales (para el banner select-all) */
+  totalRowCount?: number
+  /**
+   * Obtiene TODAS las filas que coinciden con los filtros actuales desde el servidor.
+   * @param excludedIds IDs a excluir de los resultados (patrón "select all minus deselected")
+   * Usado por Export/Copy/Bulk Copy cuando el scope es 'filtered' o 'all'.
+   */
+  fetchAllByFilter?: (excludedIds?: string[]) => Promise<Record<string, unknown>[]>
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// DataTable Meta — compartido entre DataTable y column definitions vía
+// table.options.meta. Permite que las columnas accedan al estado de selección
+// "por filtro" sin prop drilling.
+// ────────────────────────────────────────────────────────────────────────────
+export interface DataTableMeta {
+  /** Indica si el modo "seleccionar todos los registros del filtro" está activo */
+  isSelectAllByFilter: boolean
+  /** IDs de filas excluidas explícitamente mientras isSelectAllByFilter=true */
+  excludedIds: Set<string>
+  /** Alterna la exclusión de una fila (desmarca en modo select-all-by-filter) */
+  toggleExclusion: (id: string) => void
+  /** Limpia toda la selección, incluyendo exclusiones y el flag de select-all */
+  clearSelection: () => void
+}
 
 export interface HistoryDetail {
   field: string

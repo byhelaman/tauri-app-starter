@@ -55,6 +55,8 @@ interface BulkCopyDialogProps<TData> {
     scope: Scope
     open: boolean
     onOpenChange: (open: boolean) => void
+    /** Cuando se provee, 'Copy now' hace fetch server-side para scope filtered/all */
+    fetchAllByFilter?: () => Promise<Record<string, unknown>[]>
 }
 
 function renderRow<TData>(tokens: Token[], row: Row<TData>): string {
@@ -129,13 +131,65 @@ function buildText<TData>(
     return lines.join("\n")
 }
 
+/** Igual que buildText pero acepta records crudos del servidor (sin Row<TData>) */
+function buildTextFromRaw(
+    records: Record<string, unknown>[],
+    format: BulkCopyFormat,
+    fields: string[],
+    headers: boolean,
+    parsed: Token[],
+): string {
+    if (records.length === 0) return ""
+
+    if (format === "custom") {
+        return records.map((record) => {
+            let out = ""
+            for (const token of parsed) {
+                if (token.type === "text") { out += token.value; continue }
+                if (!token.valid)          { out += `{${token.name}}`; continue }
+                const value = record[token.name]
+                out += value == null ? "" : String(value)
+            }
+            return out
+        }).join("\n")
+    }
+
+    if (fields.length === 0) return ""
+
+    if (format === "json") {
+        const data = records.map((record) =>
+            Object.fromEntries(fields.map((field) => [field, record[field]]))
+        )
+        return JSON.stringify(data, null, 2)
+    }
+
+    const separator = format === "csv" ? "," : format === "tsv" ? "\t" : " - "
+    const lines = records.map((record) =>
+        fields.map((field) => {
+            const text = record[field] == null ? "" : String(record[field])
+            if (format === "csv") return csvEscape(text)
+            if (format === "tsv") return text.replace(/\t/g, " ")
+            return text
+        }).join(separator)
+    )
+
+    if ((format === "csv" || format === "tsv") && headers) {
+        const headerLine = format === "csv"
+            ? fields.map(csvEscape).join(",")
+            : fields.join("\t")
+        return [headerLine, ...lines].join("\n")
+    }
+
+    return lines.join("\n")
+}
+
 function parseFormat(value: string | undefined): BulkCopyFormat {
     return value === "lines" || value === "csv" || value === "tsv" || value === "json" || value === "custom"
         ? value
         : "lines"
 }
 
-export function BulkCopyDialog<TData>({ table, tableId, scope, open, onOpenChange }: BulkCopyDialogProps<TData>) {
+export function BulkCopyDialog<TData>({ table, tableId, scope, open, onOpenChange, fetchAllByFilter }: BulkCopyDialogProps<TData>) {
     // Solo se lee una vez por tableId — los inicializadores lazy de useState lo consumen una sola vez
     const savedSettings = useMemo(() => readBulkCopySettings(tableId), [tableId])
     const [format, setFormat] = useState<BulkCopyFormat>(() => parseFormat(savedSettings?.format))
@@ -354,6 +408,36 @@ export function BulkCopyDialog<TData>({ table, tableId, scope, open, onOpenChang
                 <DialogFooter>
                     <Button variant="outline" onClick={resetToDefaults} className="mr-auto">
                         Reset
+                    </Button>
+                    <Button
+                        variant="outline"
+                        onClick={async () => {
+                            const needsServer = !!fetchAllByFilter && scope !== "selected"
+                            let text: string
+                            if (needsServer) {
+                                const toastId = "bulk-copy-fetch"
+                                toast.loading("Fetching all rows...", { id: toastId })
+                                try {
+                                    const records = await fetchAllByFilter!()
+                                    text = buildTextFromRaw(records, format, selectedFields, headers, parsed)
+                                    await navigator.clipboard.writeText(text)
+                                    toast.success(`Copied ${records.length.toLocaleString()} rows`, { id: toastId })
+                                } catch {
+                                    toast.error("Could not copy rows", { id: toastId })
+                                }
+                            } else {
+                                text = buildText(rows, format, selectedFields, headers, parsed)
+                                if (!text) { toast.error("Nothing to copy"); return }
+                                try {
+                                    await navigator.clipboard.writeText(text)
+                                    toast.success(`Copied ${rows.length} rows`)
+                                } catch {
+                                    toast.error("Could not copy to clipboard")
+                                }
+                            }
+                        }}
+                    >
+                        Copy now
                     </Button>
                     <Button onClick={saveSettings}>
                         Save Changes

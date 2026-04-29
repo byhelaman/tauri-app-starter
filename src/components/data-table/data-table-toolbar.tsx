@@ -21,7 +21,7 @@ import {
 import { DataTableFacetedFilter } from "./data-table-faceted-filter"
 import { DataTableIntervalFilter, getAvailableHours } from "./data-table-interval-filter"
 import { DataTableViewOptions } from "./data-table-view-options"
-import type { FacetedFilterConfig, IntervalFilterConfig } from "./data-table-types"
+import type { FacetedFilterConfig, IntervalFilterConfig, InfiniteScrollConfig } from "./data-table-types"
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>
@@ -34,6 +34,9 @@ interface DataTableToolbarProps<TData> {
   searchDebounceMs?: number
   showViewOptions?: boolean
   onSidePanelToggle?: () => void
+  infiniteScroll?: InfiniteScrollConfig
+  isSelectAllByFilter?: boolean
+  excludedIds?: Set<string>
 }
 
 export function DataTableToolbar<TData>({
@@ -47,6 +50,9 @@ export function DataTableToolbar<TData>({
   searchDebounceMs = 300,
   showViewOptions = true,
   onSidePanelToggle,
+  infiniteScroll,
+  isSelectAllByFilter,
+  excludedIds,
 }: DataTableToolbarProps<TData>) {
   const currentFilterValue = (table.getState().globalFilter as string) ?? ""
 
@@ -235,7 +241,7 @@ export function DataTableToolbar<TData>({
 
       {renderedActions}
 
-      {showViewOptions && <DataTableViewOptions table={table} tableId={tableId} onSidePanelToggle={onSidePanelToggle} />}
+      {showViewOptions && <DataTableViewOptions table={table} tableId={tableId} onSidePanelToggle={onSidePanelToggle} infiniteScroll={infiniteScroll} isSelectAllByFilter={isSelectAllByFilter} excludedIds={excludedIds} />}
     </div>
   )
 }

@@ -143,6 +143,58 @@ export const bulkDeleteOrders = async (ids: string[]) => {
   if (error) throw new Error(error.message)
 }
 
+/** Elimina TODAS las órdenes que coinciden con los filtros activos (sin cargar IDs en el cliente) */
+export const bulkDeleteOrdersByFilter = async ({
+  search = "",
+  filters = [] as ColumnFiltersState,
+  date,
+  excludedIds = [],
+}: {
+  search?: string
+  filters?: ColumnFiltersState
+  date?: string
+  excludedIds?: string[]
+} = {}): Promise<number> => {
+  const db = assertSupabase()
+  const { data, error } = await db.rpc("bulk_delete_orders_by_filter", {
+    p_search:       search || "",
+    p_status:       pickFilter(filters, "status"),
+    p_channel:      pickFilter(filters, "channel"),
+    p_date:         date ?? null,
+    p_start_hour:   pickHourFilter(filters),
+    p_excluded_ids: excludedIds.length > 0 ? excludedIds : [],
+  })
+  if (error) throw new Error(error.message)
+  return (data as number) ?? 0
+}
+
+/** Obtiene TODAS las órdenes que coinciden con los filtros activos (sin paginación).
+ *  Usado para Export/Copy masivo — no almacena en React Query cache. */
+export const fetchAllOrdersByFilter = async ({
+  search = "",
+  filters = [] as ColumnFiltersState,
+  date,
+  excludedIds = [],
+}: {
+  search?: string
+  filters?: ColumnFiltersState
+  date?: string
+  excludedIds?: string[]
+} = {}): Promise<Order[]> => {
+  const db = assertSupabase()
+  const { data, error } = await db.rpc("get_orders_by_filter", {
+    p_search:       search || "",
+    p_status:       pickFilter(filters, "status"),
+    p_channel:      pickFilter(filters, "channel"),
+    p_date:         date ?? null,
+    p_start_hour:   pickHourFilter(filters),
+    p_excluded_ids: excludedIds.length > 0 ? excludedIds : [],
+  })
+  if (error) throw new Error(error.message)
+  return (data as Order[]) ?? []
+}
+
+
 export const updateQueueOrder = async ({
   code,
   ...updates
