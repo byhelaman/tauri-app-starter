@@ -35,29 +35,41 @@ import type { Order, Status } from "./columns"
 const STATUSES: Status[] = ["pending", "processing", "shipped", "delivered", "cancelled"]
 const CHANNELS = ["Online", "Retail", "Partner", "Phone"]
 const PRIORITIES = ["Low", "Medium", "High"]
+const REGIONS = ["North America", "Europe", "Asia Pacific", "LATAM", "EMEA"]
+const PAYMENTS = ["Credit Card", "PayPal", "Bank Transfer", "Crypto"]
 
+/** Devuelve la hora actual y la siguiente en punto (HH:00) */
 function getDefaultTimes() {
-  const now = new Date()
-  const formatter = new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })
-  const start_time = formatter.format(now)
-  now.setHours(now.getHours() + 1)
-  const end_time = formatter.format(now)
-  return { start_time, end_time }
+  const h = new Date().getHours()
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return {
+    start_time: `${pad(h)}:00`,
+    end_time:   `${pad((h + 1) % 24)}:00`,
+  }
+}
+
+/** Genera código único que cumple CHECK (code ~ '^ORD-[A-Z0-9]{5,6}$') */
+function generateOrderCode(): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+  const suffix = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("")
+  return `ORD-${suffix}`
 }
 
 const orderSchema = z.object({
-  customer: z.string().min(1, "Customer name is required"),
-  code: z.string().optional(),
-  product: z.string().min(1, "Product name is required"),
-  category: z.string().min(1, "Category is required"),
-  quantity: z.number().min(1, "Quantity must be at least 1"),
-  status: z.enum(["pending", "processing", "shipped", "delivered", "cancelled"]),
-  priority: z.string().min(1, "Priority is required"),
-  channel: z.string().min(1, "Channel is required"),
-  amount: z.number().min(0, "Amount must be at least 0"),
-  date: z.string(),
-  start_time: z.string(),
-  end_time: z.string(),
+  customer:   z.string().min(1, "Customer name is required"),
+  code:       z.string().optional(),
+  product:    z.string().min(1, "Product name is required"),
+  category:   z.string().min(1, "Category is required"),
+  region:     z.string().min(1, "Region is required"),
+  payment:    z.string().min(1, "Payment method is required"),
+  quantity:   z.number().min(1, "Quantity must be at least 1"),
+  status:     z.enum(["pending", "processing", "shipped", "delivered", "cancelled"]),
+  priority:   z.string().min(1, "Priority is required"),
+  channel:    z.string().min(1, "Channel is required"),
+  amount:     z.number().positive("Amount must be greater than 0"),
+  date:       z.string().min(1, "Date is required"),
+  start_time: z.string().min(1, "Start time is required"),
+  end_time:   z.string().min(1, "End time is required"),
 })
 
 type OrderFormValues = z.infer<typeof orderSchema>
@@ -66,6 +78,22 @@ interface OrderDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSubmit: (order: Partial<Order>) => void
+}
+
+const DEFAULT_VALUES: OrderFormValues = {
+  status:     "pending",
+  channel:    "Online",
+  priority:   "Medium",
+  region:     "North America",
+  payment:    "Credit Card",
+  date:       new Date().toISOString().split("T")[0],
+  ...getDefaultTimes(),
+  quantity:   1,
+  amount:     1,
+  customer:   "",
+  code:       "",
+  product:    "",
+  category:   "",
 }
 
 export function OrderDialog({ open, onOpenChange, onSubmit }: OrderDialogProps) {
@@ -77,36 +105,21 @@ export function OrderDialog({ open, onOpenChange, onSubmit }: OrderDialogProps) 
     formState: { errors },
   } = useForm<OrderFormValues>({
     resolver: zodResolver(orderSchema),
-    defaultValues: {
-      status: "pending",
-      channel: "Online",
-      priority: "Medium",
-      date: new Date().toISOString().split("T")[0],
-      ...getDefaultTimes(),
-      quantity: 1,
-      amount: 0,
-    },
+    defaultValues: DEFAULT_VALUES,
   })
 
-  // Reset form when dialog opens
   useEffect(() => {
     if (open) {
       reset({
-        status: "pending",
-        channel: "Online",
-        priority: "Medium",
+        ...DEFAULT_VALUES,
         date: new Date().toISOString().split("T")[0],
         ...getDefaultTimes(),
-        quantity: 1,
-        amount: 0,
       })
     }
   }, [open, reset])
 
   const onFormSubmit = (data: OrderFormValues) => {
-    // Generate a random code if not present
-    const code = data.code || `ORD-${Math.random().toString(36).substring(2, 7).toUpperCase()}`
-    
+    const code = data.code?.trim() || generateOrderCode()
     onSubmit({ ...data, code })
     onOpenChange(false)
   }
@@ -319,6 +332,53 @@ export function OrderDialog({ open, onOpenChange, onSubmit }: OrderDialogProps) 
                     aria-invalid={!!errors.amount}
                   />
                   <FieldError errors={[errors.amount]} />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Field>
+                  <FieldLabel>Region</FieldLabel>
+                  <Controller
+                    name="region"
+                    control={control}
+                    render={({ field }) => (
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {REGIONS.map((r) => (
+                              <SelectItem key={r} value={r}>{r}</SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  <FieldError errors={[errors.region]} />
+                </Field>
+                <Field>
+                  <FieldLabel>Payment</FieldLabel>
+                  <Controller
+                    name="payment"
+                    control={control}
+                    render={({ field }) => (
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {PAYMENTS.map((p) => (
+                              <SelectItem key={p} value={p}>{p}</SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  <FieldError errors={[errors.payment]} />
                 </Field>
               </div>
             </FieldGroup>
