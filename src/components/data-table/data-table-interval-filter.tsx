@@ -13,30 +13,30 @@ import { Separator } from "@/components/ui/separator"
 interface DataTableIntervalFilterProps<TData, TValue> {
   column?: Column<TData, TValue>
   title?: string
+  /** Horas disponibles desde el servidor (e.g. ["06", "08", "14", "21"]) */
+  hours?: string[]
 }
 
-/** Extract the hour from the start_time portion of a "HH:MM - HH:MM" string */
-function extractStartHour(timeRange: string): number {
-  const startTime = timeRange.split(" - ")[0]?.trim() ?? ""
-  return parseInt(startTime.split(":")[0] ?? "", 10)
-}
-
-/** Collect all unique start hours present in the column data, sorted */
-export function getAvailableHours<TData, TValue>(column: Column<TData, TValue>): string[] {
-  const facets = column.getFacetedUniqueValues()
-  const hours = new Set<number>()
-  for (const [value] of facets) {
-    const hour = extractStartHour(String(value))
-    if (!isNaN(hour)) hours.add(hour)
-  }
-  return Array.from(hours)
-    .sort((a, b) => a - b)
-    .map((h) => String(h).padStart(2, "0"))
+/**
+ * Retorna las horas disponibles para el filtro.
+ * - Si se pasan `hours` desde el servidor: úsalas directamente.
+ * - Fallback: rango completo 00-23 (todos los valores posibles de TIME).
+ *
+ * No usamos getFacetedUniqueValues() porque con paginación server-side
+ * solo contiene las filas de la página actual, no el total de la BD.
+ */
+export function getAvailableHours<TData, TValue>(
+  _column: Column<TData, TValue>,
+  hours?: string[]
+): string[] {
+  if (hours && hours.length > 0) return hours
+  return Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"))
 }
 
 export function DataTableIntervalFilter<TData, TValue>({
   column,
   title = "Interval",
+  hours,
 }: DataTableIntervalFilterProps<TData, TValue>) {
   if (!column) return null
 
@@ -44,7 +44,7 @@ export function DataTableIntervalFilter<TData, TValue>({
   const selectedValues = new Set(
     Array.isArray(filterValue) ? (filterValue as string[]) : []
   )
-  const availableHours = getAvailableHours(column)
+  const availableHours = getAvailableHours(column, hours)
 
   const toggle = (value: string) => {
     const next = new Set(selectedValues)

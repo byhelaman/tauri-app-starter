@@ -16,6 +16,8 @@ export interface FacetedFilterConfig {
 export interface IntervalFilterConfig {
   columnId: string
   title?: string
+  /** Horas disponibles obtenidas del servidor. Si se omite, se muestran 00-23. */
+  hours?: string[]
 }
 
 export type ToolbarActionsRenderer<TData> = ReactNode | ((table: Table<TData>) => ReactNode)

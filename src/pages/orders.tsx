@@ -61,7 +61,8 @@ import {
 } from "@/features/orders/modal-columns"
 import { TableHistoryCard } from "@/components/data-table/table-history-card"
 import { OrderDialog } from "@/features/orders/order-dialog"
-import { fetchOrderHistory } from "@/features/orders/api"
+import { fetchOrderHistory, fetchOrdersStartHours } from "@/features/orders/api"
+import { useQuery } from "@tanstack/react-query"
 
 const STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
   { label: "Pending", value: "pending", icon: Clock },
@@ -113,6 +114,13 @@ export function OrdersPage() {
 
   const { toolbarActions, rowClassName } = useTableHighlights()
   const { toolbarActions: queueToolbarActions, rowClassName: queueRowClassName } = useQueueHighlights()
+
+  // Horas de inicio realmente presentes en la BD — para el filtro de Interval
+  const { data: startHours } = useQuery({
+    queryKey: ["orders", "startHours"],
+    queryFn: fetchOrdersStartHours,
+    staleTime: 5 * 60_000, // 5 min — no cambia frecuentemente
+  })
 
   const handleDeleteRequest = useCallback((order: Order) => {
     setOrderToDelete(order)
@@ -192,7 +200,7 @@ export function OrdersPage() {
             { columnId: "status", title: "Status", options: STATUS_FILTER_OPTIONS },
             { columnId: "channel", title: "Channel", options: CHANNEL_FILTER_OPTIONS },
           ],
-          intervalFilter: { columnId: "time", title: "Interval" },
+          intervalFilter: { columnId: "time", title: "Interval", hours: startHours },
           actions: toolbarActions,
           searchDebounceMs: 300,
         }}

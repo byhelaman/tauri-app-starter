@@ -152,7 +152,7 @@ export function DataTableToolbar<TData>({
                 if (!column) return null
                 const filterValue = column.getFilterValue()
                 const selectedValues = new Set(Array.isArray(filterValue) ? (filterValue as string[]) : [])
-                const availableHours = getAvailableHours(column)
+                const availableHours = getAvailableHours(column, intervalFilter.hours)
 
                 return (
                   <DropdownMenuSub>
@@ -208,6 +208,7 @@ export function DataTableToolbar<TData>({
           <DataTableIntervalFilter
             column={table.getColumn(intervalFilter.columnId)}
             title={intervalFilter.title}
+            hours={intervalFilter.hours}
           />
         )}
       </div>

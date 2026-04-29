@@ -21,6 +21,15 @@ function pickFilter(filters: ColumnFiltersState, id: string): string | null {
   return null
 }
 
+/** Extrae la primera hora seleccionada del filtro de columna 'time' */
+function pickHourFilter(filters: ColumnFiltersState): string | null {
+  const f = filters.find((f) => f.id === "time")
+  if (!f) return null
+  const v = f.value
+  if (Array.isArray(v) && v.length >= 1) return v[0] as string
+  return null
+}
+
 // ── Orders ────────────────────────────────────────────────────────────────────
 
 export const fetchOrders = async ({
@@ -39,12 +48,13 @@ export const fetchOrders = async ({
   const db = assertSupabase()
 
   const { data, error } = await db.rpc("get_orders", {
-    p_limit:   limit,
-    p_offset:  offset,
-    p_search:  search || "",
-    p_status:  pickFilter(filters, "status"),
-    p_channel: pickFilter(filters, "channel"),
-    p_date:    date ?? null,
+    p_limit:      limit,
+    p_offset:     offset,
+    p_search:     search || "",
+    p_status:     pickFilter(filters, "status"),
+    p_channel:    pickFilter(filters, "channel"),
+    p_date:       date ?? null,
+    p_start_hour: pickHourFilter(filters),
   })
 
   if (error) throw new Error(error.message)
@@ -61,6 +71,15 @@ export const fetchQueueOrders = async (): Promise<{ data: QueueOrder[]; total: n
   if (error) throw new Error(error.message)
   const result = data as { data: QueueOrder[]; total: number }
   return { data: result.data ?? [], total: result.total ?? 0 }
+}
+
+// ── Orders Start Hours (para el filtro de Interval) ────────────────────────────
+
+export const fetchOrdersStartHours = async (): Promise<string[]> => {
+  const db = assertSupabase()
+  const { data, error } = await db.rpc("get_orders_start_hours")
+  if (error) throw new Error(error.message)
+  return (data as string[]) ?? []
 }
 
 // ── Order History ─────────────────────────────────────────────────────────────
