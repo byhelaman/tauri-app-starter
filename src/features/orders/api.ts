@@ -11,22 +11,22 @@ function assertSupabase(): NonNullable<typeof supabase> {
   return supabase
 }
 
-/** Extrae el primer filtro de valor único por columnId */
-function pickFilter(filters: ColumnFiltersState, id: string): string | null {
+/** Extrae todos los valores seleccionados por columnId como array (multi-select) */
+function pickFilter(filters: ColumnFiltersState, id: string): string[] | null {
   const f = filters.find((f) => f.id === id)
   if (!f) return null
   const v = f.value
-  if (Array.isArray(v) && v.length === 1) return v[0] as string
-  if (typeof v === "string") return v
+  if (Array.isArray(v) && v.length > 0) return v as string[]
+  if (typeof v === "string" && v) return [v]
   return null
 }
 
-/** Extrae la primera hora seleccionada del filtro de columna 'time' */
-function pickHourFilter(filters: ColumnFiltersState): string | null {
+/** Extrae todas las horas seleccionadas del filtro de columna 'time' */
+function pickHourFilter(filters: ColumnFiltersState): string[] | null {
   const f = filters.find((f) => f.id === "time")
   if (!f) return null
   const v = f.value
-  if (Array.isArray(v) && v.length >= 1) return v[0] as string
+  if (Array.isArray(v) && v.length > 0) return v as string[]
   return null
 }
 
