@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react"
 import { format } from "date-fns"
 import { toast } from "sonner"
+import type { SortingState } from "@tanstack/react-table"
 import {
   CheckCircle2,
   Clock,
@@ -97,6 +98,8 @@ export function OrdersPage() {
   // Format date for the API ("YYYY-MM-DD") — undefined when no date is selected
   const dateFilter = selectedDate ? format(selectedDate, "yyyy-MM-dd") : undefined
 
+  const [sorting, setSorting] = useState<SortingState>([])
+
   const {
     pageData,
     isPageLoading,
@@ -108,7 +111,7 @@ export function OrdersPage() {
     queueOrders,
     isQueueLoading,
     actions
-  } = useOrders({ dateFilter })
+  } = useOrders({ dateFilter, sorting })
 
   const { toolbarActions, rowClassName } = useTableHighlights()
   const { toolbarActions: queueToolbarActions, rowClassName: queueRowClassName } = useQueueHighlights()
@@ -178,6 +181,8 @@ export function OrdersPage() {
         onColumnFiltersChange={setColumnFilters}
         globalFilter={globalFilter}
         onGlobalFilterChange={setGlobalFilter}
+        sorting={sorting}
+        onSortingChange={setSorting}
         tableId="orders"
         sidePanel={(onClose) => (
           <TableHistoryCard 

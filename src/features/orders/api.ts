@@ -2,7 +2,7 @@ import { supabase } from "@/lib/supabase"
 import type { Order, Status } from "@/features/orders/columns"
 import type { QueueOrder } from "@/features/orders/modal-columns"
 import type { HistoryEntry } from "@/components/data-table/data-table-types"
-import type { ColumnFiltersState } from "@tanstack/react-table"
+import type { ColumnFiltersState, SortingState } from "@tanstack/react-table"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -38,12 +38,14 @@ export const fetchOrders = async ({
   search = "",
   filters = [],
   date,
+  sorting = [],
 }: {
   limit?: number
   offset?: number
   search?: string
   filters?: ColumnFiltersState
   date?: string
+  sorting?: SortingState
 } = {}): Promise<{ data: Order[]; total: number }> => {
   const db = assertSupabase()
 
@@ -55,6 +57,8 @@ export const fetchOrders = async ({
     p_channel:    pickFilter(filters, "channel"),
     p_date:       date ?? null,
     p_start_hour: pickHourFilter(filters),
+    p_sort_col:   sorting[0]?.id ?? null,
+    p_sort_dir:   sorting[0]?.desc ? "desc" : (sorting[0] ? "asc" : null),
   })
 
   if (error) throw new Error(error.message)
@@ -175,11 +179,13 @@ export const fetchAllOrdersByFilter = async ({
   filters = [] as ColumnFiltersState,
   date,
   excludedIds = [],
+  sorting = [],
 }: {
   search?: string
   filters?: ColumnFiltersState
   date?: string
   excludedIds?: string[]
+  sorting?: SortingState
 } = {}): Promise<Order[]> => {
   const db = assertSupabase()
   const { data, error } = await db.rpc("get_orders_by_filter", {
@@ -189,6 +195,8 @@ export const fetchAllOrdersByFilter = async ({
     p_date:         date ?? null,
     p_start_hour:   pickHourFilter(filters),
     p_excluded_ids: excludedIds.length > 0 ? excludedIds : [],
+    p_sort_col:     sorting[0]?.id ?? null,
+    p_sort_dir:     sorting[0]?.desc ? "desc" : (sorting[0] ? "asc" : null),
   })
   if (error) throw new Error(error.message)
   return (data as Order[]) ?? []

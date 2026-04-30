@@ -77,6 +77,8 @@ interface DataTableProps<TData, TValue> {
   onColumnFiltersChange?: OnChangeFn<ColumnFiltersState>
   globalFilter?: string
   onGlobalFilterChange?: OnChangeFn<string>
+  sorting?: SortingState
+  onSortingChange?: OnChangeFn<SortingState>
   /** Activa modo infinite scroll con virtualización. Oculta el paginador. */
   infiniteScroll?: InfiniteScrollConfig
   /** Alto estimado de cada fila en px para el virtualizer (default 40) */
@@ -103,16 +105,26 @@ export function DataTable<TData, TValue>({
   rowCount,
   pagination,
   onPaginationChange,
-  columnFilters,
-  onColumnFiltersChange,
-  globalFilter,
-  onGlobalFilterChange,
+  columnFilters: externalColumnFilters,
+  onColumnFiltersChange: setExternalColumnFilters,
+  globalFilter: externalGlobalFilter,
+  onGlobalFilterChange: setExternalGlobalFilter,
+  sorting: externalSorting,
+  onSortingChange: setExternalSorting,
   infiniteScroll,
   estimatedRowHeight = 48,
 }: DataTableProps<TData, TValue>) {
-  const [sorting, setSorting] = useState<SortingState>([])
-  const [localColumnFilters, setLocalColumnFilters] = useState<ColumnFiltersState>([])
-  const [localGlobalFilter, setLocalGlobalFilter] = useState("")
+  const [internalSorting, setInternalSorting] = useState<SortingState>([])
+  const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>([])
+  const [internalGlobalFilter, setInternalGlobalFilter] = useState("")
+  
+  const columnFilters = externalColumnFilters ?? internalColumnFilters
+  const setColumnFilters = setExternalColumnFilters ?? setInternalColumnFilters
+  const globalFilter = externalGlobalFilter ?? internalGlobalFilter
+  const setGlobalFilter = setExternalGlobalFilter ?? setInternalGlobalFilter
+  const sorting = externalSorting ?? internalSorting
+  const setSorting = setExternalSorting ?? setInternalSorting
+  
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({ left: ["select"], right: [] })
   const [rowSelection, setRowSelection] = useState({})
@@ -207,8 +219,8 @@ export function DataTable<TData, TValue>({
     isMultiSortEvent: () => true,
     getRowId,
     onSortingChange: setSorting,
-    onColumnFiltersChange: onColumnFiltersChange ?? setLocalColumnFilters,
-    onGlobalFilterChange: onGlobalFilterChange ?? setLocalGlobalFilter,
+    onColumnFiltersChange: setColumnFilters,
+    onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -222,14 +234,15 @@ export function DataTable<TData, TValue>({
     autoResetPageIndex: false,
     manualPagination,
     manualFiltering: !!manualPagination,
+    manualSorting: !!infiniteScroll,
     pageCount,
     rowCount,
     onPaginationChange,
     initialState: { pagination: { pageSize: defaultPageSize, pageIndex: 0 } },
     state: { 
       sorting, 
-      columnFilters: columnFilters ?? localColumnFilters, 
-      globalFilter: globalFilter ?? localGlobalFilter, 
+      columnFilters, 
+      globalFilter, 
       columnPinning, 
       columnVisibility, 
       rowSelection,

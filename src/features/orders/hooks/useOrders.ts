@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react"
 import { useInfiniteQuery, useQuery, useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query"
-import { type ColumnFiltersState, type Updater } from "@tanstack/react-table"
+import { type ColumnFiltersState, type Updater, type SortingState } from "@tanstack/react-table"
 import { toast } from "sonner"
 import * as api from "../api"
 import type { Order, EditableOrderField, Status } from "../columns"
@@ -10,7 +10,7 @@ import { useOrdersRealtime } from "./useOrdersRealtime"
 /** Número de filas por chunk en modo infinite scroll */
 const ORDER_CHUNK = 100
 
-export function useOrders({ dateFilter }: { dateFilter?: string } = {}) {
+export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, sorting?: SortingState } = {}) {
   const queryClient = useQueryClient()
   useOrdersRealtime()
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -26,7 +26,7 @@ export function useOrders({ dateFilter }: { dateFilter?: string } = {}) {
   }, [])
 
   // Clave de query — incluye filtros para que al cambiar se refetche desde chunk 0
-  const ordersQueryKey = ["orders", "infinite", columnFilters, globalFilter, dateFilter]
+  const ordersQueryKey = ["orders", "infinite", columnFilters, globalFilter, dateFilter, sorting]
 
   const {
     data: infiniteData,
@@ -42,6 +42,7 @@ export function useOrders({ dateFilter }: { dateFilter?: string } = {}) {
       search:  globalFilter,
       filters: columnFilters,
       date:    dateFilter,
+      sorting,
     }),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
@@ -336,6 +337,7 @@ export function useOrders({ dateFilter }: { dateFilter?: string } = {}) {
           search:     overrideSearch ?? globalFilter,
           filters:    (overrideFilters as ColumnFiltersState) ?? columnFilters,
           date:       dateFilter,
+          sorting,
         })
         return rows.map(r => r.id)
       },
