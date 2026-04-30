@@ -134,6 +134,111 @@ CREATE TRIGGER orders_set_updated_by
     BEFORE INSERT OR UPDATE ON public.orders
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_by();
 
+-- orders_audit_trigger
+CREATE OR REPLACE FUNCTION public.orders_audit_trigger()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_actor_email TEXT;
+    v_action      TEXT;
+    v_description TEXT;
+    v_details     JSONB := '[]'::JSONB;
+    v_order_id    UUID;
+
+    -- Campos que NO se incluyen en el diff de detalles
+    excluded_fields TEXT[] := ARRAY[
+        'id', 'created_at', 'updated_at', 'updated_by'
+    ];
+    field_name TEXT;
+    old_val    TEXT;
+    new_val    TEXT;
+BEGIN
+    -- Resolver email del actor desde profiles
+    SELECT email INTO v_actor_email
+    FROM public.profiles
+    WHERE id = auth.uid();
+
+    v_actor_email := COALESCE(v_actor_email, 'system');
+
+    IF TG_OP = 'INSERT' THEN
+        v_action      := 'create';
+        v_description := 'Created order ' || NEW.code;
+        v_order_id    := NEW.id;
+
+    ELSIF TG_OP = 'UPDATE' THEN
+        v_action   := 'update';
+        v_order_id := NEW.id;
+
+        -- Detectar campos modificados y construir array de detalles
+        FOR field_name IN
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name   = 'orders'
+              AND column_name != ALL(excluded_fields)
+        LOOP
+            EXECUTE format('SELECT ($1).%I::TEXT', field_name) INTO old_val USING OLD;
+            EXECUTE format('SELECT ($1).%I::TEXT', field_name) INTO new_val USING NEW;
+
+            IF old_val IS DISTINCT FROM new_val THEN
+                v_details := v_details || jsonb_build_object(
+                    'field',    field_name,
+                    'oldValue', old_val,
+                    'newValue', new_val
+                );
+            END IF;
+        END LOOP;
+
+        -- Construir descripción legible
+        IF jsonb_array_length(v_details) = 1 THEN
+            v_description := format(
+                'Updated %s on %s: %s → %s',
+                v_details->0->>'field',
+                NEW.code,
+                v_details->0->>'oldValue',
+                v_details->0->>'newValue'
+            );
+        ELSIF jsonb_array_length(v_details) > 1 THEN
+            v_description := format(
+                'Updated %s field(s) on %s',
+                jsonb_array_length(v_details),
+                NEW.code
+            );
+        ELSE
+            -- Sin cambios reales (e.g. solo updated_at tocado) — no registrar
+            RETURN NEW;
+        END IF;
+
+    ELSIF TG_OP = 'DELETE' THEN
+        v_action      := 'delete';
+        v_description := 'Deleted order ' || OLD.code;
+        -- ↓ NULL: el orden ya no existe al ejecutarse AFTER DELETE;
+        --   la FK ON DELETE SET NULL lo pondría a NULL de todas formas
+        --   en los registros existentes. El code queda en description.
+        v_order_id    := NULL;
+    END IF;
+
+    INSERT INTO public.order_history (
+        action, description, actor_email, order_id, details
+    ) VALUES (
+        v_action, v_description, v_actor_email, v_order_id,
+        NULLIF(v_details, '[]'::JSONB)
+    );
+
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER on_order_audit
+    AFTER INSERT OR UPDATE OR DELETE ON public.orders
+    FOR EACH ROW EXECUTE FUNCTION public.orders_audit_trigger();
+
 -- ============================================================
 -- 4. RLS
 -- ============================================================
@@ -195,14 +300,17 @@ CREATE POLICY "order_history_insert_deny" ON public.order_history
 -- 5. RPCs
 -- ============================================================
 
--- get_orders — paginación server-side con filtros
+-- get_orders — paginación server-side con filtros y ordenamiento dinámico
 CREATE OR REPLACE FUNCTION public.get_orders(
-    p_limit   INT     DEFAULT 25,
-    p_offset  INT     DEFAULT 0,
-    p_search  TEXT    DEFAULT '',
-    p_status  TEXT    DEFAULT NULL,
-    p_channel TEXT    DEFAULT NULL,
-    p_date    TEXT    DEFAULT NULL   -- 'YYYY-MM-DD'
+    p_limit      INT      DEFAULT 25,
+    p_offset     INT      DEFAULT 0,
+    p_search     TEXT     DEFAULT '',
+    p_status     TEXT[]   DEFAULT NULL,
+    p_channel    TEXT[]   DEFAULT NULL,
+    p_date       TEXT     DEFAULT NULL,
+    p_start_hour TEXT[]   DEFAULT NULL,
+    p_sort_col   TEXT     DEFAULT NULL,
+    p_sort_dir   TEXT     DEFAULT NULL
 )
 RETURNS JSON
 LANGUAGE plpgsql
@@ -221,16 +329,20 @@ BEGIN
     SELECT COUNT(*) INTO v_total
     FROM public.orders o
     WHERE
-        (p_search  = '' OR p_search IS NULL OR (
+        (p_search = '' OR p_search IS NULL OR (
             o.customer ILIKE '%' || p_search || '%' OR
             o.code     ILIKE '%' || p_search || '%' OR
             o.product  ILIKE '%' || p_search || '%'
         ))
-        AND (p_status  IS NULL OR o.status  = p_status)
-        AND (p_channel IS NULL OR o.channel = p_channel)
-        AND (p_date    IS NULL OR o.date    = p_date::DATE);
+        AND (p_status IS NULL     OR array_length(p_status, 1) IS NULL     OR o.status  = ANY(p_status))
+        AND (p_channel IS NULL    OR array_length(p_channel, 1) IS NULL    OR o.channel = ANY(p_channel))
+        AND (p_date IS NULL       OR o.date = p_date::DATE)
+        AND (p_start_hour IS NULL OR array_length(p_start_hour, 1) IS NULL
+            OR EXTRACT(HOUR FROM o.start_time)::INT = ANY(
+                ARRAY(SELECT unnest(p_start_hour)::INT)
+            ));
 
-    SELECT COALESCE(json_agg(row_to_json(r) ORDER BY r.created_at DESC), '[]') INTO v_data
+    SELECT COALESCE(json_agg(row_to_json(r) ORDER BY r.rn ASC), '[]') INTO v_data
     FROM (
         SELECT
             o.id,
@@ -238,8 +350,8 @@ BEGIN
             o.customer,
             o.product,
             o.category,
-            o.start_time::TEXT,
-            o.end_time::TEXT,
+            to_char(o.start_time, 'HH24:MI') AS start_time,
+            to_char(o.end_time,   'HH24:MI') AS end_time,
             o.code,
             o.status,
             o.channel,
@@ -248,18 +360,40 @@ BEGIN
             o.region,
             o.payment,
             o.priority,
-            o.created_at
+            o.created_at,
+            ROW_NUMBER() OVER (
+                ORDER BY
+                    CASE WHEN p_sort_col = 'date' AND p_sort_dir = 'asc' THEN o.date END ASC,
+                    CASE WHEN p_sort_col = 'date' AND p_sort_dir = 'desc' THEN o.date END DESC,
+                    CASE WHEN p_sort_col = 'customer' AND p_sort_dir = 'asc' THEN o.customer END ASC,
+                    CASE WHEN p_sort_col = 'customer' AND p_sort_dir = 'desc' THEN o.customer END DESC,
+                    CASE WHEN p_sort_col = 'product' AND p_sort_dir = 'asc' THEN o.product END ASC,
+                    CASE WHEN p_sort_col = 'product' AND p_sort_dir = 'desc' THEN o.product END DESC,
+                    CASE WHEN p_sort_col = 'status' AND p_sort_dir = 'asc' THEN o.status END ASC,
+                    CASE WHEN p_sort_col = 'status' AND p_sort_dir = 'desc' THEN o.status END DESC,
+                    CASE WHEN p_sort_col = 'channel' AND p_sort_dir = 'asc' THEN o.channel END ASC,
+                    CASE WHEN p_sort_col = 'channel' AND p_sort_dir = 'desc' THEN o.channel END DESC,
+                    CASE WHEN p_sort_col = 'amount' AND p_sort_dir = 'asc' THEN o.amount END ASC,
+                    CASE WHEN p_sort_col = 'amount' AND p_sort_dir = 'desc' THEN o.amount END DESC,
+                    CASE WHEN p_sort_col = 'code' AND p_sort_dir = 'asc' THEN o.code END ASC,
+                    CASE WHEN p_sort_col = 'code' AND p_sort_dir = 'desc' THEN o.code END DESC,
+                    o.created_at DESC
+            ) as rn
         FROM public.orders o
         WHERE
-            (p_search  = '' OR p_search IS NULL OR (
+            (p_search = '' OR p_search IS NULL OR (
                 o.customer ILIKE '%' || p_search || '%' OR
                 o.code     ILIKE '%' || p_search || '%' OR
                 o.product  ILIKE '%' || p_search || '%'
             ))
-            AND (p_status  IS NULL OR o.status  = p_status)
-            AND (p_channel IS NULL OR o.channel = p_channel)
-            AND (p_date    IS NULL OR o.date    = p_date::DATE)
-        ORDER BY o.created_at DESC
+            AND (p_status IS NULL     OR array_length(p_status, 1) IS NULL     OR o.status  = ANY(p_status))
+            AND (p_channel IS NULL    OR array_length(p_channel, 1) IS NULL    OR o.channel = ANY(p_channel))
+            AND (p_date IS NULL       OR o.date = p_date::DATE)
+            AND (p_start_hour IS NULL OR array_length(p_start_hour, 1) IS NULL
+                OR EXTRACT(HOUR FROM o.start_time)::INT = ANY(
+                    ARRAY(SELECT unnest(p_start_hour)::INT)
+                ))
+        ORDER BY rn ASC
         LIMIT p_limit OFFSET p_offset
     ) r;
 
@@ -286,13 +420,41 @@ BEGIN
         'data', COALESCE((
             SELECT json_agg(row_to_json(r) ORDER BY r.created_at DESC)
             FROM (
-                SELECT id, start_time::TEXT, end_time::TEXT, code,
-                       customer, status, channel, agent, priority, created_at
+                SELECT
+                    id,
+                    to_char(start_time, 'HH24:MI') AS start_time,
+                    to_char(end_time,   'HH24:MI') AS end_time,
+                    code, customer, status, channel, agent, priority, created_at
                 FROM public.queue_orders
                 ORDER BY created_at DESC
             ) r
         ), '[]'::JSON),
         'total', (SELECT COUNT(*) FROM public.queue_orders)
+    );
+END;
+$$;
+
+-- ──────────────────────────────────────────────────────────────
+
+-- get_orders_start_hours
+-- Devuelve las horas de inicio (HH) distintas presentes en orders,
+-- ordenadas. Usada por el filtro de Interval en la UI.
+CREATE OR REPLACE FUNCTION public.get_orders_start_hours()
+RETURNS TEXT[]
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+    IF NOT public.has_permission('orders.view') THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.view';
+    END IF;
+
+    RETURN ARRAY(
+        SELECT DISTINCT to_char(start_time, 'HH24')
+        FROM public.orders
+        ORDER BY 1
     );
 END;
 $$;
@@ -390,14 +552,147 @@ BEGIN
 END;
 $$;
 
+-- ──────────────────────────────────────────────────────────────
+
+-- get_orders_by_filter
+CREATE OR REPLACE FUNCTION public.get_orders_by_filter(
+    p_search       TEXT    DEFAULT '',
+    p_status       TEXT[]  DEFAULT NULL,
+    p_channel      TEXT[]  DEFAULT NULL,
+    p_date         TEXT    DEFAULT NULL,
+    p_start_hour   TEXT[]  DEFAULT NULL,
+    p_excluded_ids UUID[]  DEFAULT ARRAY[]::UUID[],
+    p_sort_col     TEXT    DEFAULT NULL,
+    p_sort_dir     TEXT    DEFAULT NULL
+)
+RETURNS JSON
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_data JSON;
+BEGIN
+    IF NOT public.has_permission('orders.view') THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.view';
+    END IF;
+
+    SELECT COALESCE(json_agg(row_to_json(r) ORDER BY r.rn ASC), '[]') INTO v_data
+    FROM (
+        SELECT
+            o.id,
+            o.date::TEXT,
+            o.customer,
+            o.product,
+            o.category,
+            to_char(o.start_time, 'HH24:MI') AS start_time,
+            to_char(o.end_time,   'HH24:MI') AS end_time,
+            o.code,
+            o.status,
+            o.channel,
+            o.quantity,
+            o.amount,
+            o.region,
+            o.payment,
+            o.priority,
+            o.created_at,
+            ROW_NUMBER() OVER (
+                ORDER BY
+                    CASE WHEN p_sort_col = 'date' AND p_sort_dir = 'asc' THEN o.date END ASC,
+                    CASE WHEN p_sort_col = 'date' AND p_sort_dir = 'desc' THEN o.date END DESC,
+                    CASE WHEN p_sort_col = 'customer' AND p_sort_dir = 'asc' THEN o.customer END ASC,
+                    CASE WHEN p_sort_col = 'customer' AND p_sort_dir = 'desc' THEN o.customer END DESC,
+                    CASE WHEN p_sort_col = 'product' AND p_sort_dir = 'asc' THEN o.product END ASC,
+                    CASE WHEN p_sort_col = 'product' AND p_sort_dir = 'desc' THEN o.product END DESC,
+                    CASE WHEN p_sort_col = 'status' AND p_sort_dir = 'asc' THEN o.status END ASC,
+                    CASE WHEN p_sort_col = 'status' AND p_sort_dir = 'desc' THEN o.status END DESC,
+                    CASE WHEN p_sort_col = 'channel' AND p_sort_dir = 'asc' THEN o.channel END ASC,
+                    CASE WHEN p_sort_col = 'channel' AND p_sort_dir = 'desc' THEN o.channel END DESC,
+                    CASE WHEN p_sort_col = 'amount' AND p_sort_dir = 'asc' THEN o.amount END ASC,
+                    CASE WHEN p_sort_col = 'amount' AND p_sort_dir = 'desc' THEN o.amount END DESC,
+                    CASE WHEN p_sort_col = 'code' AND p_sort_dir = 'asc' THEN o.code END ASC,
+                    CASE WHEN p_sort_col = 'code' AND p_sort_dir = 'desc' THEN o.code END DESC,
+                    o.created_at DESC
+            ) as rn
+        FROM public.orders o
+        WHERE
+            (p_search = '' OR p_search IS NULL OR (
+                o.customer ILIKE '%' || p_search || '%' OR
+                o.code     ILIKE '%' || p_search || '%' OR
+                o.product  ILIKE '%' || p_search || '%'
+            ))
+            AND (p_status IS NULL     OR array_length(p_status, 1) IS NULL     OR o.status  = ANY(p_status))
+            AND (p_channel IS NULL    OR array_length(p_channel, 1) IS NULL    OR o.channel = ANY(p_channel))
+            AND (p_date IS NULL       OR o.date = p_date::DATE)
+            AND (p_start_hour IS NULL OR array_length(p_start_hour, 1) IS NULL
+                OR EXTRACT(HOUR FROM o.start_time)::INT = ANY(
+                    ARRAY(SELECT unnest(p_start_hour)::INT)
+                ))
+            AND (array_length(p_excluded_ids, 1) IS NULL OR o.id != ALL(p_excluded_ids))
+        ORDER BY rn ASC
+    ) r;
+
+    RETURN v_data;
+END;
+$$;
+
+-- ──────────────────────────────────────────────────────────────
+
+-- bulk_delete_orders_by_filter
+CREATE OR REPLACE FUNCTION public.bulk_delete_orders_by_filter(
+    p_search       TEXT    DEFAULT '',
+    p_status       TEXT[]  DEFAULT NULL,
+    p_channel      TEXT[]  DEFAULT NULL,
+    p_date         TEXT    DEFAULT NULL,
+    p_start_hour   TEXT[]  DEFAULT NULL,
+    p_excluded_ids UUID[]  DEFAULT ARRAY[]::UUID[]
+)
+RETURNS INT
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_count INT;
+BEGIN
+    IF NOT public.has_permission('orders.manage') THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.manage';
+    END IF;
+
+    DELETE FROM public.orders o
+    WHERE
+        (p_search = '' OR p_search IS NULL OR (
+            o.customer ILIKE '%' || p_search || '%' OR
+            o.code     ILIKE '%' || p_search || '%' OR
+            o.product  ILIKE '%' || p_search || '%'
+        ))
+        AND (p_status IS NULL     OR array_length(p_status, 1) IS NULL     OR o.status  = ANY(p_status))
+        AND (p_channel IS NULL    OR array_length(p_channel, 1) IS NULL    OR o.channel = ANY(p_channel))
+        AND (p_date IS NULL       OR o.date = p_date::DATE)
+        AND (p_start_hour IS NULL OR array_length(p_start_hour, 1) IS NULL
+            OR EXTRACT(HOUR FROM o.start_time)::INT = ANY(
+                ARRAY(SELECT unnest(p_start_hour)::INT)
+            ))
+        AND (array_length(p_excluded_ids, 1) IS NULL OR o.id != ALL(p_excluded_ids));
+
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+    RETURN v_count;
+END;
+$$;
+
 -- ============================================================
 -- 6. GRANTS
 -- ============================================================
 
-GRANT EXECUTE ON FUNCTION public.get_orders(INT,INT,TEXT,TEXT,TEXT,TEXT)   TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_orders(INT,INT,TEXT,TEXT[],TEXT[],TEXT,TEXT[],TEXT,TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_queue_orders()                         TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_stats()                         TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_order_history(INT,INT)                 TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_orders_start_hours()                   TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_orders_by_filter(TEXT,TEXT[],TEXT[],TEXT,TEXT[],UUID[],TEXT,TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_filter(TEXT,TEXT[],TEXT[],TEXT,TEXT[],UUID[]) TO authenticated;
 -- record_order_history: solo callable desde otras funciones SECURITY DEFINER
 REVOKE ALL ON FUNCTION public.record_order_history(TEXT,TEXT,UUID,JSONB) FROM PUBLIC, anon, authenticated;
 
@@ -407,6 +702,7 @@ REVOKE ALL ON FUNCTION public.record_order_history(TEXT,TEXT,UUID,JSONB) FROM PU
 
 ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.queue_orders;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.order_history;
 
 -- ============================================================
 -- 8. SEED — 50 órdenes de ejemplo

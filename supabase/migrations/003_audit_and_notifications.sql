@@ -221,7 +221,8 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.get_my_notifications(
-    p_limit INT DEFAULT 50
+    p_limit  INT DEFAULT 20,
+    p_offset INT DEFAULT 0
 )
 RETURNS TABLE (
     id         BIGINT,
@@ -242,7 +243,8 @@ BEGIN
     FROM public.notifications n
     WHERE n.user_id = auth.uid()
     ORDER BY n.created_at DESC
-    LIMIT GREATEST(p_limit, 1);
+    LIMIT GREATEST(p_limit, 1)
+    OFFSET GREATEST(p_offset, 0);
 END;
 $$;
 
@@ -993,8 +995,8 @@ REVOKE ALL ON FUNCTION public.get_audit_log(int, int) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_audit_log(int, int) TO authenticated;
 
 -- Notifications
-REVOKE ALL ON FUNCTION public.get_my_notifications(int) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.get_my_notifications(int) TO authenticated;
+REVOKE ALL ON FUNCTION public.get_my_notifications(int, int) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_my_notifications(int, int) TO authenticated;
 REVOKE ALL ON FUNCTION public.mark_notification_read(bigint) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.mark_notification_read(bigint) TO authenticated;
 REVOKE ALL ON FUNCTION public.mark_all_notifications_read() FROM PUBLIC, anon;

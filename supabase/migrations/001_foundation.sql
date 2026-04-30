@@ -212,7 +212,7 @@ GRANT SELECT ON TABLE public.role_permissions TO supabase_auth_admin;
 -- 7. RPCs UTILITARIAS
 -- ============================================================
 
--- Verifica un permiso desde el JWT (útil en RLS u otras RPCs)
+-- Verifica un permiso desde el JWT y corrobora existencia en profiles
 CREATE OR REPLACE FUNCTION public.has_permission(required_permission text)
 RETURNS boolean
 LANGUAGE plpgsql
@@ -223,11 +223,23 @@ AS $$
 DECLARE
     user_permissions jsonb;
 BEGIN
+    -- 1. Verificación rápida en el JWT
     user_permissions := (auth.jwt() -> 'permissions')::jsonb;
-    RETURN COALESCE(user_permissions ? required_permission, false);
+    IF NOT COALESCE(user_permissions ? required_permission, false) THEN
+        RETURN false;
+    END IF;
+
+    -- 2. Verificación de identidad real en la DB.
+    --    Protege contra sesiones zombie (JWT válido pero usuario eliminado o DB reseteada).
+    IF NOT EXISTS (
+        SELECT 1 FROM public.profiles WHERE id = auth.uid()
+    ) THEN
+        RETURN false;
+    END IF;
+
+    RETURN true;
+
 EXCEPTION WHEN OTHERS THEN
-    -- Emite un WARNING visible en los logs de Supabase para facilitar el diagnóstico,
-    -- sin exponer información al cliente.
     RAISE WARNING 'has_permission(%) falló inesperadamente: %', required_permission, SQLERRM;
     RETURN false;
 END;
