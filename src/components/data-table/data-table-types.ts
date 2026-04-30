@@ -70,8 +70,12 @@ export interface DataTableMeta {
   excludedIds: Set<string>
   /** Alterna la exclusión de una fila (desmarca en modo select-all-by-filter) */
   toggleExclusion: (id: string) => void
+  /** Activa manualmente el modo "seleccionar todos los registros del filtro" */
+  selectAll: () => void
   /** Limpia toda la selección, incluyendo exclusiones y el flag de select-all */
   clearSelection: () => void
+  /** Indica si la tabla está funcionando en modo infinite scroll */
+  isInfiniteScroll?: boolean
 }
 
 export interface HistoryDetail {

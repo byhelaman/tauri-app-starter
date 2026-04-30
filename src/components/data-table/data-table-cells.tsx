@@ -363,7 +363,13 @@ export function createSelectColumn<TData>(): ColumnDef<TData> {
       return (
         <Checkbox
           checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          onCheckedChange={(value) => {
+            if (value && meta?.isInfiniteScroll) {
+              meta.selectAll()
+            } else {
+              table.toggleAllPageRowsSelected(!!value)
+            }
+          }}
           aria-label="Select all"
         />
       )

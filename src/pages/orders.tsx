@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react"
 import { format } from "date-fns"
 import { toast } from "sonner"
 import {
+  CheckCheck,
   CheckCircle2,
   Clock,
   Copy,
@@ -88,7 +89,7 @@ const QUEUE_STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
 
 export function OrdersPage() {
   const [isBulkDeleteAlertOpen, setIsBulkDeleteAlertOpen] = useState<{ selected: Order[], clearSelection: () => void } | null>(null)
-  const [isFilterDeleteAlertOpen, setIsFilterDeleteAlertOpen] = useState<{ excludedIds: string[] } | null>(null)
+  const [isFilterDeleteAlertOpen, setIsFilterDeleteAlertOpen] = useState<{ excludedIds: string[], clearSelection: () => void } | null>(null)
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [isQueueDialogOpen, setIsQueueDialogOpen] = useState(false)
@@ -274,8 +275,8 @@ export function OrdersPage() {
               aria-label="Delete"
               onClick={() => {
                 if (isSelectAllByFilter) {
-                  // Modo "select all by filter" — guarda los excluidos y abre el dialog
-                  setIsFilterDeleteAlertOpen({ excludedIds: Array.from(excludedIds) })
+                  // Modo "select all by filter" — guarda los excluidos + clearSelection y abre el dialog
+                  setIsFilterDeleteAlertOpen({ excludedIds: Array.from(excludedIds), clearSelection })
                 } else {
                   // Modo normal — elimina solo los IDs seleccionados
                   setIsBulkDeleteAlertOpen({ selected, clearSelection })
@@ -446,6 +447,7 @@ export function OrdersPage() {
               variant="destructive"
               onClick={() => {
                 actions.deleteBulkOrdersByFilter(isFilterDeleteAlertOpen?.excludedIds ?? [])
+                isFilterDeleteAlertOpen?.clearSelection()
                 setIsFilterDeleteAlertOpen(null)
               }}
             >

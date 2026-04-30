@@ -8,7 +8,7 @@ import type { QueueOrder, QueueStatus } from "../modal-columns"
 import { useOrdersRealtime } from "./useOrdersRealtime"
 
 /** Número de filas por chunk en modo infinite scroll */
-const ORDER_CHUNK = 1000
+const ORDER_CHUNK = 100
 
 export function useOrders({ dateFilter }: { dateFilter?: string } = {}) {
   const queryClient = useQueryClient()
@@ -54,7 +54,8 @@ export function useOrders({ dateFilter }: { dateFilter?: string } = {}) {
 
   // Aplana todas las páginas en un único array para la DataTable
   const pageData = infiniteData?.pages.flatMap(p => p.data) ?? []
-  const cachedRowCount = infiniteData?.pages[0]?.total ?? 0
+  // Usa el total de la última página cargada — es el más reciente del servidor
+  const cachedRowCount = infiniteData?.pages[infiniteData.pages.length - 1]?.total ?? 0
 
   // TODO: Activar suscripción realtime de órdenes cuando las tablas de Supabase estén listas
 
@@ -120,7 +121,13 @@ export function useOrders({ dateFilter }: { dateFilter?: string } = {}) {
         if (!old) return old
         return {
           ...old,
-          pages: old.pages.map(page => ({ ...page, data: page.data.filter(o => o.id !== id) }))
+          pages: old.pages.map(page => {
+            const hadOrder = page.data.some(o => o.id === id)
+            return {
+              data: page.data.filter(o => o.id !== id),
+              total: hadOrder ? page.total - 1 : page.total,
+            }
+          })
         }
       })
       return { previous }
@@ -146,7 +153,13 @@ export function useOrders({ dateFilter }: { dateFilter?: string } = {}) {
         if (!old) return old
         return {
           ...old,
-          pages: old.pages.map(page => ({ ...page, data: page.data.filter(o => !idSet.has(o.id)) }))
+          pages: old.pages.map(page => {
+            const removedCount = page.data.filter(o => idSet.has(o.id)).length
+            return {
+              data: page.data.filter(o => !idSet.has(o.id)),
+              total: page.total - removedCount,
+            }
+          })
         }
       })
       return { previous }
@@ -329,7 +342,7 @@ export function useOrders({ dateFilter }: { dateFilter?: string } = {}) {
     totalQueueOrders,
     isQueueLoading,
     actions: {
-      createOrder:              createOrderMutation.mutate,
+      createOrder: createOrderMutation.mutate,
       deleteOrder,
       deleteBulkOrders,
       deleteBulkOrdersByFilter,

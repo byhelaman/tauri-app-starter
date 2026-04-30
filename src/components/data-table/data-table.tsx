@@ -108,7 +108,7 @@ export function DataTable<TData, TValue>({
   globalFilter,
   onGlobalFilterChange,
   infiniteScroll,
-  estimatedRowHeight = 40,
+  estimatedRowHeight = 48,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [localColumnFilters, setLocalColumnFilters] = useState<ColumnFiltersState>([])
@@ -139,8 +139,16 @@ export function DataTable<TData, TValue>({
 
   const clearSelection = () => {
     setRowSelection({})
+    table?.resetRowSelection?.()
     setIsSelectAllByFilter(false)
     setExcludedIds(new Set())
+  }
+
+  const selectAll = () => {
+    setIsSelectAllByFilter(true)
+    setExcludedIds(new Set())
+    setRowSelection({}) // Evitar confusión con selección local
+    table?.resetRowSelection?.()
   }
 
   const toggleExclusion = (id: string) => {
@@ -226,7 +234,9 @@ export function DataTable<TData, TValue>({
       isSelectAllByFilter,
       excludedIds,
       toggleExclusion,
+      selectAll,
       clearSelection,
+      isInfiniteScroll: !!infiniteScroll,
     },
 
   })
@@ -240,20 +250,11 @@ export function DataTable<TData, TValue>({
     }
   }, [table, table.getState().pagination.pageIndex, table.getPageCount()])
 
-  // ── "Select All por filtro" — estado real para infinite scroll ─────────────────
-  // Cuando el usuario selecciona todas las filas cargadas y el servidor tiene más,
-  // activamos el flag. Los checkboxes de fila usan meta.toggleExclusion() en lugar
-  // de row.toggleSelected(), por lo que TanStack's rowSelection no cambia en
-  // modo exclusión — el effect solo reacciona al "Select All" inicial.
+  // En modo infinite scroll, no guardamos los miles de IDs en memoria.
+  // Por lo tanto, si el usuario cambia los filtros, la selección "Select All"
+  // ya no es válida para el nuevo contexto de datos. Limpiamos toda la selección.
   useEffect(() => {
-    if (!infiniteScroll) return
-    const allLoaded = table.getIsAllRowsSelected()
-    const hasMoreOnServer = (infiniteScroll.totalRowCount ?? 0) > table.getRowModel().rows.length
-    setIsSelectAllByFilter(allLoaded && hasMoreOnServer)
-  }, [table.getState().rowSelection]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Resetear cuando los filtros cambian: la selección "todos por filtro" ya no es válida
-  useEffect(() => {
+    table.resetRowSelection()
     setIsSelectAllByFilter(false)
     setExcludedIds(new Set())
   }, [table.getState().globalFilter, table.getState().columnFilters]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -363,7 +364,7 @@ export function DataTable<TData, TValue>({
                 const row = virtualRows ? rows[(item as { index: number }).index] : (item as typeof rows[0])
                 if (!row) return null
                 const rowEl = (
-                  <TableRow key={row.id} className={cn("group/row group", rowClassName?.(row.original))} data-state={row.getIsSelected() && "selected"}>
+                  <TableRow key={row.id} className={cn("group/row group", rowClassName?.(row.original))} data-state={(isSelectAllByFilter ? !excludedIds.has(row.id) : row.getIsSelected()) ? "selected" : undefined}>
                     {row.getVisibleCells().map((cell) => {
                       const pin = cell.column.getIsPinned()
                       const isFirst = pin === "left" && cell.column.getStart("left") === 0
@@ -452,8 +453,8 @@ export function DataTable<TData, TValue>({
       {/* Paginador clásico — oculto en modo infinite scroll */}
       {!infiniteScroll && <DataTablePagination table={table} pageSizeOptions={pageSizeOptions} />}
 
-      {bulkActions && (table.getFilteredSelectedRowModel().rows.length > 0 || isSelectAllByFilter) && (
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10">
+      {bulkActions && (table.getFilteredSelectedRowModel().rows.length > 0 || (isSelectAllByFilter && (infiniteScroll?.totalRowCount ?? 0) > 0)) && (
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">
           <div className="flex items-center gap-3 rounded-lg border bg-background p-2 shadow-lg">
             {(() => {
               const selectedRows = table.getFilteredSelectedRowModel().rows
