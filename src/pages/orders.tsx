@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState } from "react"
 import { format } from "date-fns"
 import { toast } from "sonner"
 import {
-  CheckCheck,
   CheckCircle2,
   Clock,
   Copy,
@@ -62,7 +61,7 @@ import {
 } from "@/features/orders/modal-columns"
 import { TableHistoryCard } from "@/components/data-table/table-history-card"
 import { OrderDialog } from "@/features/orders/order-dialog"
-import { fetchOrderHistory, fetchOrdersStartHours } from "@/features/orders/api"
+import { fetchOrderHistory, fetchOrdersStartHours, fetchOrdersByIds } from "@/features/orders/api"
 import { useQuery } from "@tanstack/react-query"
 
 const STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
@@ -89,7 +88,6 @@ const QUEUE_STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
 
 export function OrdersPage() {
   const [isBulkDeleteAlertOpen, setIsBulkDeleteAlertOpen] = useState<{ selected: Order[], clearSelection: () => void } | null>(null)
-  const [isFilterDeleteAlertOpen, setIsFilterDeleteAlertOpen] = useState<{ excludedIds: string[], clearSelection: () => void } | null>(null)
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [isQueueDialogOpen, setIsQueueDialogOpen] = useState(false)
@@ -101,7 +99,6 @@ export function OrdersPage() {
 
   const {
     pageData,
-    rowCount,
     isPageLoading,
     infiniteScroll,
     columnFilters,
@@ -229,39 +226,27 @@ export function OrdersPage() {
             </>
           )
         }}
-        bulkActions={(selected, clearSelection, isSelectAllByFilter, excludedIds) => (
+        bulkActions={(selectedLoadedRows, clearSelection, selectedIds) => (
           <>
             <Button
               variant="outline"
               size="sm"
               onClick={async () => {
-                if (isSelectAllByFilter && infiniteScroll.fetchAllByFilter) {
-                  // Modo "select all by filter" — fetch TODOS los registros del servidor
-                  const toastId = "copy-all-filter"
-                  toast.loading(`Fetching all rows...`, { id: toastId })
-                  try {
-                    const allRows = await infiniteScroll.fetchAllByFilter()
-                    // Excluir las filas deseleccionadas manualmente
-                    const filtered = excludedIds.size > 0
-                      ? allRows.filter((r) => !excludedIds.has(String((r as Record<string, unknown>).id)))
-                      : allRows
-                    const content = buildBulkCopyText(filtered, "orders")
-                    if (!content) { toast.error("Nothing to copy", { id: toastId }); return }
-                    await navigator.clipboard.writeText(content)
-                    toast.success(`Copied ${filtered.length.toLocaleString()} rows`, { id: toastId })
-                  } catch {
-                    toast.error("Could not copy to clipboard", { id: toastId })
-                  }
-                  return
-                }
-                // Modo normal — copia solo los IDs seleccionados en memoria
-                const content = buildBulkCopyText(selected as unknown as Record<string, unknown>[], "orders")
-                if (!content) { toast.error("Nothing to copy"); return }
+                const toastId = "copy-all-filter"
+                toast.loading(`Preparing copy...`, { id: toastId })
                 try {
+                  // Si todos los IDs seleccionados están ya en memoria, los usamos directo
+                  const rowsToCopy = selectedIds.length === selectedLoadedRows.length
+                    ? selectedLoadedRows
+                    : await fetchOrdersByIds(selectedIds)
+
+                  const content = buildBulkCopyText(rowsToCopy as unknown as Record<string, unknown>[], "orders")
+                  if (!content) { toast.error("Nothing to copy", { id: toastId }); return }
+                  
                   await navigator.clipboard.writeText(content)
-                  toast.success(`Copied ${selected.length} ${selected.length === 1 ? "row" : "rows"}`)
+                  toast.success(`Copied ${rowsToCopy.length.toLocaleString()} rows`, { id: toastId })
                 } catch {
-                  toast.error("Could not copy to clipboard")
+                  toast.error("Could not copy to clipboard", { id: toastId })
                 }
               }}
 
@@ -274,13 +259,8 @@ export function OrdersPage() {
               size="sm"
               aria-label="Delete"
               onClick={() => {
-                if (isSelectAllByFilter) {
-                  // Modo "select all by filter" — guarda los excluidos + clearSelection y abre el dialog
-                  setIsFilterDeleteAlertOpen({ excludedIds: Array.from(excludedIds), clearSelection })
-                } else {
-                  // Modo normal — elimina solo los IDs seleccionados
-                  setIsBulkDeleteAlertOpen({ selected, clearSelection })
-                }
+                // Delete always operates purely on IDs, bypassing the need to fetch objects
+                setIsBulkDeleteAlertOpen({ selected: selectedIds as unknown as Order[], clearSelection })
               }}
             >
               <Trash2 />
@@ -399,7 +379,7 @@ export function OrdersPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {isBulkDeleteAlertOpen?.selected.length} orders?</AlertDialogTitle>
+            <AlertDialogTitle>Delete {isBulkDeleteAlertOpen?.selected.length.toLocaleString()} orders?</AlertDialogTitle>
             <AlertDialogDescription>
               This will permanently delete the selected orders. This action cannot be undone.
             </AlertDialogDescription>
@@ -410,9 +390,10 @@ export function OrdersPage() {
               variant="destructive"
               onClick={() => {
                 if (!isBulkDeleteAlertOpen) return
-                const ids = isBulkDeleteAlertOpen.selected.map((order) => order.id)
+                // We passed the raw string IDs mapped to `selected` array for simplicity
+                const ids = isBulkDeleteAlertOpen.selected as unknown as string[]
                 actions.deleteBulkOrders(ids)
-                toast.success(`${isBulkDeleteAlertOpen.selected.length} orders deleted`)
+                toast.success(`${ids.length.toLocaleString()} orders deleted`)
                 isBulkDeleteAlertOpen.clearSelection()
                 setIsBulkDeleteAlertOpen(null)
               }}
@@ -423,39 +404,7 @@ export function OrdersPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* AlertDialog para bulk delete por filtro */}
-      <AlertDialog
-        open={!!isFilterDeleteAlertOpen}
-        onOpenChange={(open) => !open && setIsFilterDeleteAlertOpen(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Delete {(rowCount - (isFilterDeleteAlertOpen?.excludedIds.length ?? 0)).toLocaleString()} matching orders?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete{" "}
-              <span className="font-medium text-foreground">
-                {(rowCount - (isFilterDeleteAlertOpen?.excludedIds.length ?? 0)).toLocaleString()} orders
-              </span>{" "}
-              matching your current filters. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={() => {
-                actions.deleteBulkOrdersByFilter(isFilterDeleteAlertOpen?.excludedIds ?? [])
-                isFilterDeleteAlertOpen?.clearSelection()
-                setIsFilterDeleteAlertOpen(null)
-              }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+
     </main>
   )
 }

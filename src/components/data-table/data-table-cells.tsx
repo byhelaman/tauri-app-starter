@@ -349,23 +349,29 @@ export function createSelectColumn<TData>(): ColumnDef<TData> {
     maxSize: 36,
     header: ({ table }) => {
       const meta = table.options.meta as DataTableMeta | undefined
-      if (meta?.isSelectAllByFilter) {
-        // En modo "select all by filter": el header muestra indeterminate si hay exclusiones
-        const hasExclusions = meta.excludedIds.size > 0
-        return (
-          <Checkbox
-            checked={hasExclusions ? "indeterminate" : true}
-            onCheckedChange={() => meta.clearSelection()}
-            aria-label="Clear selection"
-          />
-        )
+      
+      // Si está cargando la selección masiva, mostramos el checkbox deshabilitado
+      if (meta?.isSelectingAll) {
+        return <Checkbox checked={false} disabled aria-label="Selecting all..." />
       }
+
+      // If we are in infinite scroll, we need to know the state of VISIBLE selection
+      const isAllVisibleSelected = meta?.isInfiniteScroll && meta?.totalRowCount !== undefined && meta.totalRowCount > 0
+        ? meta.visibleSelectedCount === meta.totalRowCount
+        : table.getIsAllPageRowsSelected()
+
+      const isSomeVisibleSelected = meta?.isInfiniteScroll
+        ? (meta.visibleSelectedCount ?? 0) > 0 && !isAllVisibleSelected
+        : table.getIsSomePageRowsSelected()
+
       return (
         <Checkbox
-          checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
+          checked={isAllVisibleSelected || (isSomeVisibleSelected && "indeterminate")}
           onCheckedChange={(value) => {
-            if (value && meta?.isInfiniteScroll) {
+            if (value && meta?.isInfiniteScroll && meta?.selectAll) {
               meta.selectAll()
+            } else if (!value && meta?.isInfiniteScroll && meta?.deselectAll) {
+              meta.deselectAll()
             } else {
               table.toggleAllPageRowsSelected(!!value)
             }
@@ -374,19 +380,7 @@ export function createSelectColumn<TData>(): ColumnDef<TData> {
         />
       )
     },
-    cell: ({ row, table }) => {
-      const meta = table.options.meta as DataTableMeta | undefined
-      if (meta?.isSelectAllByFilter) {
-        // En modo "select all by filter": la fila está seleccionada a menos que esté excluida
-        const isExcluded = meta.excludedIds.has(row.id)
-        return (
-          <Checkbox
-            checked={!isExcluded}
-            onCheckedChange={() => meta.toggleExclusion(row.id)}
-            aria-label="Select row"
-          />
-        )
-      }
+    cell: ({ row }) => {
       return (
         <Checkbox
           checked={row.getIsSelected()}

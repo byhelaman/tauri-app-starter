@@ -319,17 +319,25 @@ export function useOrders({ dateFilter }: { dateFilter?: string } = {}) {
       hasNextPage,
       isFetchingNextPage,
       totalRowCount: cachedRowCount,
-      // Obtiene TODAS las filas del servidor vía RPC dedicada (sin paginación ni límite artificial)
-      fetchAllByFilter: async (excludedIds?: string[]): Promise<Record<string, unknown>[]> => {
+      // Obtiene TODAS las filas del servidor vía RPC dedicada
+      fetchAllByFilter: async (): Promise<Record<string, unknown>[]> => {
         // Si el total aún no está disponible (primera carga no completada), no hay filas que retornar
         if (!cachedRowCount) return []
         const rows = await api.fetchAllOrdersByFilter({
           search:     globalFilter,
           filters:    columnFilters,
           date:       dateFilter,
-          excludedIds: excludedIds ?? [],
         })
         return rows as unknown as Record<string, unknown>[]
+      },
+      // Obtiene SOLO los IDs de TODAS las filas filtradas
+      fetchAllIdsByFilter: async (overrideSearch?: string, overrideFilters?: any[]): Promise<string[]> => {
+        const rows = await api.fetchAllOrdersByFilter({
+          search:     overrideSearch ?? globalFilter,
+          filters:    (overrideFilters as ColumnFiltersState) ?? columnFilters,
+          date:       dateFilter,
+        })
+        return rows.map(r => r.id)
       },
 
     },

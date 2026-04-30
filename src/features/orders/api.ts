@@ -194,6 +194,18 @@ export const fetchAllOrdersByFilter = async ({
   return (data as Order[]) ?? []
 }
 
+/** Obtiene órdenes completas dado un arreglo de IDs exactos. Usado para Export/Copy. */
+export const fetchOrdersByIds = async (ids: string[]): Promise<Order[]> => {
+  if (ids.length === 0) return []
+  const db = assertSupabase()
+  // Reutilizamos el query de "get_orders" pero lo envolvemos o directamente consultamos la vista subyacente.
+  // Dado que get_orders es un RPC paginado, para IDs arbitrarios hacemos la consulta sobre la vista/tabla
+  // o creamos un RPC helper. Asumiendo que `orders` tiene todos los campos de `Order`.
+  const { data, error } = await db.from("orders").select("*").in("id", ids)
+  if (error) throw new Error(error.message)
+  return data as Order[]
+}
+
 
 export const updateQueueOrder = async ({
   code,

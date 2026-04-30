@@ -33,10 +33,11 @@ import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/component
 import { DataTableToolbar } from "./data-table-toolbar"
 import { DataTablePagination } from "./data-table-pagination"
 import { DataTableSkeleton } from "./data-table-skeleton"
-import type {
+import {
   DataTableLayoutConfig,
   DataTableToolbarConfig,
   InfiniteScrollConfig,
+  DataTableMeta
 } from "./data-table-types"
 import { getColumnSizeStyle, getPinnedColumnStyle } from "./data-table-utils"
 
@@ -56,10 +57,9 @@ interface DataTableProps<TData, TValue> {
   layout?: DataTableLayoutConfig
   className?: string
   bulkActions?: (
-    selectedRows: TData[],
+    selectedLoadedRows: TData[],
     clearSelection: () => void,
-    isSelectAllByFilter: boolean,
-    excludedIds: Set<string>
+    selectedIds: string[]
   ) => ReactNode
   rowContextMenu?: (row: TData) => ReactNode
   defaultPageSize?: number
@@ -134,30 +134,41 @@ export function DataTable<TData, TValue>({
     }
   }, [isSidePanelOpen, tableId])
 
-  const [isSelectAllByFilter, setIsSelectAllByFilter] = useState(false)
-  const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set())
+  const [isSelectingAll, setIsSelectingAll] = useState(false)
 
   const clearSelection = () => {
     setRowSelection({})
     table?.resetRowSelection?.()
-    setIsSelectAllByFilter(false)
-    setExcludedIds(new Set())
   }
 
-  const selectAll = () => {
-    setIsSelectAllByFilter(true)
-    setExcludedIds(new Set())
-    setRowSelection({}) // Evitar confusión con selección local
-    table?.resetRowSelection?.()
+  const selectAll = async () => {
+    if (!infiniteScroll?.fetchAllIdsByFilter) return
+    setIsSelectingAll(true)
+    try {
+      const ids = await infiniteScroll.fetchAllIdsByFilter(table.getState().globalFilter, table.getState().columnFilters as any[])
+      setRowSelection(prev => {
+        const next: Record<string, boolean> = { ...prev }
+        ids.forEach(id => { next[id] = true })
+        return next
+      })
+    } finally {
+      setIsSelectingAll(false)
+    }
   }
 
-  const toggleExclusion = (id: string) => {
-    setExcludedIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+  const deselectAll = async () => {
+    if (!infiniteScroll?.fetchAllIdsByFilter) return
+    setIsSelectingAll(true)
+    try {
+      const ids = await infiniteScroll.fetchAllIdsByFilter(table.getState().globalFilter, table.getState().columnFilters as any[])
+      setRowSelection(prev => {
+        const next: Record<string, boolean> = { ...prev }
+        ids.forEach(id => { delete next[id] })
+        return next
+      })
+    } finally {
+      setIsSelectingAll(false)
+    }
   }
 
   const fitHeight = layout?.fitHeight ?? false
@@ -231,12 +242,12 @@ export function DataTable<TData, TValue>({
       )
     },
     meta: {
-      isSelectAllByFilter,
-      excludedIds,
-      toggleExclusion,
-      selectAll,
-      clearSelection,
       isInfiniteScroll: !!infiniteScroll,
+      selectAll,
+      deselectAll,
+      isSelectingAll,
+      visibleSelectedCount: 0, // This will be dynamically evaluated below, we can't put it here easily because of useMemo hooks below unless we pass it correctly. Wait, we can pass it via useEffect or just update meta!
+      // Actually, we can just use `visibleSelectedIds.length` below! Let's not put it in `useReactTable` config, we will patch it afterwards!
     },
 
   })
@@ -250,14 +261,34 @@ export function DataTable<TData, TValue>({
     }
   }, [table, table.getState().pagination.pageIndex, table.getPageCount()])
 
-  // En modo infinite scroll, no guardamos los miles de IDs en memoria.
-  // Por lo tanto, si el usuario cambia los filtros, la selección "Select All"
-  // ya no es válida para el nuevo contexto de datos. Limpiamos toda la selección.
+  // Cache de los IDs de la vista actual filtrada
+  const [currentFilterIds, setCurrentFilterIds] = useState<string[]>([])
+  
+  // 1. Obtener los IDs solo cuando cambien los filtros
   useEffect(() => {
-    table.resetRowSelection()
-    setIsSelectAllByFilter(false)
-    setExcludedIds(new Set())
+    if (!infiniteScroll?.fetchAllIdsByFilter) return
+    let isMounted = true
+    infiniteScroll.fetchAllIdsByFilter(table.getState().globalFilter, table.getState().columnFilters as any[])
+      .then(ids => {
+        if (isMounted) setCurrentFilterIds(ids)
+      })
+      .catch(console.error)
+    return () => { isMounted = false }
   }, [table.getState().globalFilter, table.getState().columnFilters]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 2. Calcular síncronamente cuáles de nuestras filas seleccionadas están en la vista actual
+  const visibleSelectedIds = useMemo(() => {
+    if (!infiniteScroll) return Object.keys(rowSelection)
+    const filterSet = new Set(currentFilterIds)
+    return Object.keys(rowSelection).filter(id => filterSet.has(id))
+  }, [rowSelection, currentFilterIds, infiniteScroll])
+
+  // Patch meta values after computation
+  if (table.options.meta) {
+    const meta = table.options.meta as DataTableMeta
+    meta.visibleSelectedCount = visibleSelectedIds.length
+    meta.totalRowCount = infiniteScroll?.totalRowCount
+  }
 
   const cellPadding = 8
   const { left: leftPinned = [], right: rightPinned = [] } = table.getState().columnPinning
@@ -311,8 +342,8 @@ export function DataTable<TData, TValue>({
         showViewOptions={toolbar?.showViewOptions}
         onSidePanelToggle={sidePanel ? () => setIsSidePanelOpen(!isSidePanelOpen) : undefined}
         infiniteScroll={infiniteScroll}
-        isSelectAllByFilter={isSelectAllByFilter}
-        excludedIds={excludedIds}
+        isSelectAllByFilter={false} // Ya no usado, pero toolbar lo recibe por compatibilidad si es necesario
+        excludedIds={new Set()}
       />
 
 
@@ -364,7 +395,7 @@ export function DataTable<TData, TValue>({
                 const row = virtualRows ? rows[(item as { index: number }).index] : (item as typeof rows[0])
                 if (!row) return null
                 const rowEl = (
-                  <TableRow key={row.id} className={cn("group/row group", rowClassName?.(row.original))} data-state={(isSelectAllByFilter ? !excludedIds.has(row.id) : row.getIsSelected()) ? "selected" : undefined}>
+                  <TableRow key={row.id} className={cn("group/row group", rowClassName?.(row.original))} data-state={row.getIsSelected() ? "selected" : undefined}>
                     {row.getVisibleCells().map((cell) => {
                       const pin = cell.column.getIsPinned()
                       const isFirst = pin === "left" && cell.column.getStart("left") === 0
@@ -453,20 +484,17 @@ export function DataTable<TData, TValue>({
       {/* Paginador clásico — oculto en modo infinite scroll */}
       {!infiniteScroll && <DataTablePagination table={table} pageSizeOptions={pageSizeOptions} />}
 
-      {bulkActions && (table.getFilteredSelectedRowModel().rows.length > 0 || (isSelectAllByFilter && (infiniteScroll?.totalRowCount ?? 0) > 0)) && (
+      {bulkActions && visibleSelectedIds.length > 0 && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">
           <div className="flex items-center gap-3 rounded-lg border bg-background p-2 shadow-lg">
             {(() => {
-              const selectedRows = table.getFilteredSelectedRowModel().rows
-              // En modo select-all-by-filter: total del servidor menos exclusiones
-              const displayCount = isSelectAllByFilter
-                ? ((infiniteScroll?.totalRowCount ?? 0) - excludedIds.size).toLocaleString()
-                : selectedRows.length.toLocaleString()
+              const selectedLoadedRows = table.getFilteredSelectedRowModel().rows
+              const displayCount = visibleSelectedIds.length.toLocaleString()
               return (
                 <>
                   <span className="pl-2 text-sm">{displayCount} selected</span>
                   <div className="h-4 w-px bg-border" />
-                  {bulkActions(selectedRows.map((r) => r.original), clearSelection, isSelectAllByFilter, excludedIds)}
+                  {bulkActions(selectedLoadedRows.map((r) => r.original), clearSelection, visibleSelectedIds)}
                   <div className="h-4 w-px bg-border" />
                   <Button variant="ghost" size="icon-sm" onClick={clearSelection}><X /></Button>
                 </>

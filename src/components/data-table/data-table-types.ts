@@ -52,30 +52,33 @@ export interface InfiniteScrollConfig {
   totalRowCount?: number
   /**
    * Obtiene TODAS las filas que coinciden con los filtros actuales desde el servidor.
-   * @param excludedIds IDs a excluir de los resultados (patrón "select all minus deselected")
-   * Usado por Export/Copy/Bulk Copy cuando el scope es 'filtered' o 'all'.
+   * Usado por Export/Copy/Bulk Copy.
    */
-  fetchAllByFilter?: (excludedIds?: string[]) => Promise<Record<string, unknown>[]>
+  fetchAllByFilter?: () => Promise<Record<string, unknown>[]>
+  /**
+   * Obtiene SOLO los IDs de TODAS las filas que coinciden con los filtros actuales.
+   * Usado para "Select All" y para calcular intersecciones en modo infinito.
+   */
+  fetchAllIdsByFilter?: (globalFilter?: string, columnFilters?: any[]) => Promise<string[]>
 }
 
 // ────────────────────────────────────────────────────────────────────────────
 // DataTable Meta — compartido entre DataTable y column definitions vía
-// table.options.meta. Permite que las columnas accedan al estado de selección
-// "por filtro" sin prop drilling.
+// table.options.meta. Permite que las columnas accedan al estado de selección.
 // ────────────────────────────────────────────────────────────────────────────
 export interface DataTableMeta {
-  /** Indica si el modo "seleccionar todos los registros del filtro" está activo */
-  isSelectAllByFilter: boolean
-  /** IDs de filas excluidas explícitamente mientras isSelectAllByFilter=true */
-  excludedIds: Set<string>
-  /** Alterna la exclusión de una fila (desmarca en modo select-all-by-filter) */
-  toggleExclusion: (id: string) => void
-  /** Activa manualmente el modo "seleccionar todos los registros del filtro" */
-  selectAll: () => void
-  /** Limpia toda la selección, incluyendo exclusiones y el flag de select-all */
-  clearSelection: () => void
   /** Indica si la tabla está funcionando en modo infinite scroll */
   isInfiniteScroll?: boolean
+  /** Ejecuta el fetch de IDs y selecciona todas las filas filtradas globalmente */
+  selectAll?: () => Promise<void>
+  /** Deselecciona todas las filas filtradas globalmente */
+  deselectAll?: () => Promise<void>
+  /** Indica si el fetch de IDs para "Select All" está en progreso */
+  isSelectingAll?: boolean
+  /** Cantidad de filas seleccionadas que coinciden con el filtro actual */
+  visibleSelectedCount?: number
+  /** Cantidad total de filas en el filtro actual */
+  totalRowCount?: number
 }
 
 export interface HistoryDetail {
