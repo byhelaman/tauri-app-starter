@@ -190,10 +190,10 @@ export function TableHistoryCard({
                   {getActionIcon(entry.action)}
                 </ItemMedia>
                 <ItemContent>
-                  <ItemTitle>
-                    {entry.description}
+                  <ItemTitle className="max-w-full min-w-0">
+                    <span className="truncate">{entry.description}</span>
                     {entry.recordCode && (
-                      <span className="font-mono">{entry.recordCode}</span>
+                      <span className="shrink-0 font-mono">{entry.recordCode}</span>
                     )}
                   </ItemTitle>
                   <ItemDescription>

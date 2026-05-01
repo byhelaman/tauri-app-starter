@@ -297,7 +297,7 @@ BEGIN
         INSERT INTO public.order_history (action, description, actor_email, order_id, details)
         VALUES (
             'create',
-            'Created order ' || v_code,
+            'Created order',
             COALESCE(auth.jwt() ->> 'email', 'system'),
             v_order_id,
             jsonb_build_array(jsonb_build_object(
