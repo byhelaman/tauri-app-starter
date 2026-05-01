@@ -92,6 +92,46 @@ export const fetchOrdersStartHours = async (): Promise<string[]> => {
 
 // ── Order History ─────────────────────────────────────────────────────────────
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null
+}
+
+function normalizeHistoryDetails(value: unknown): HistoryEntry["details"] {
+  if (!Array.isArray(value)) return undefined
+  return value.map((item) => {
+    const detail = isRecord(item) ? item : {}
+    return {
+      recordId:   typeof detail.recordId === "string" ? detail.recordId : undefined,
+      recordCode: typeof detail.recordCode === "string" ? detail.recordCode : undefined,
+      field:      typeof detail.field === "string" ? detail.field : "record",
+      oldValue:   detail.oldValue as string | number | boolean | null | undefined,
+      newValue:   detail.newValue as string | number | boolean | null | undefined,
+    }
+  })
+}
+
+function normalizeHistorySummary(value: unknown): HistoryEntry["summary"] {
+  if (!isRecord(value) || Array.isArray(value)) return undefined
+  const sampleRecords = Array.isArray(value.sampleRecords)
+    ? value.sampleRecords
+        .filter(isRecord)
+        .map((record) => ({
+          recordId:   String(record.recordId),
+          recordCode: typeof record.recordCode === "string" ? record.recordCode : undefined,
+        }))
+    : undefined
+
+  return {
+    rowCount:      typeof value.rowCount === "number" ? value.rowCount : undefined,
+    sampleRecords,
+    omittedCount:  typeof value.omittedCount === "number" ? value.omittedCount : undefined,
+    search:        typeof value.search === "string" ? value.search : null,
+    status:        Array.isArray(value.status) ? value.status.map(String) : null,
+    excludedIds:   Array.isArray(value.excludedIds) ? value.excludedIds.map(String) : null,
+    deletedIds:    Array.isArray(value.deletedIds) ? value.deletedIds.map(String) : null,
+  }
+}
+
 export const fetchOrderHistory = async ({
   limit = 20,
   offset = 0,
@@ -103,15 +143,21 @@ export const fetchOrderHistory = async ({
   })
   if (error) throw new Error(error.message)
   // Map snake_case → camelCase to match HistoryEntry interface
-  return ((data as Record<string, unknown>[]) ?? []).map((r) => ({
-    id:          String(r.id),
-    action:      r.action as HistoryEntry["action"],
-    user:        (r.actor_email as string).split("@")[0].split(".").join(" "),
-    description: r.description as string,
-    actorEmail:  r.actor_email as string,
-    createdAt:   r.created_at as string,
-    details:     r.details as HistoryEntry["details"],
-  }))
+  return ((data as Record<string, unknown>[]) ?? []).map((r) => {
+    const details = normalizeHistoryDetails(r.details)
+    return {
+      id:          String(r.id),
+      action:      r.action as HistoryEntry["action"],
+      user:        (r.actor_email as string).split("@")[0].split(".").join(" "),
+      description: r.description as string,
+      actorEmail:  r.actor_email as string,
+      createdAt:   r.created_at as string,
+      orderId:     typeof r.order_id === "string" ? r.order_id : undefined,
+      recordCode:  details?.[0]?.recordCode ?? (typeof r.record_code === "string" ? r.record_code : undefined),
+      details,
+      summary:     normalizeHistorySummary(r.details),
+    }
+  })
 }
 
 // ── Mutations ─────────────────────────────────────────────────────────────────

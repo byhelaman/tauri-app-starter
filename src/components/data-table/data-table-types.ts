@@ -94,9 +94,26 @@ export interface DataTableMeta {
 }
 
 export interface HistoryDetail {
+  recordId?: string
+  recordCode?: string
   field: string
-  oldValue?: string | number
-  newValue?: string | number
+  oldValue?: string | number | boolean | null
+  newValue?: string | number | boolean | null
+}
+
+export interface HistoryRecordRef {
+  recordId: string
+  recordCode?: string
+}
+
+export interface HistorySummary {
+  rowCount?: number
+  sampleRecords?: HistoryRecordRef[]
+  omittedCount?: number
+  search?: string | null
+  status?: string[] | null
+  excludedIds?: string[] | null
+  deletedIds?: string[] | null
 }
 
 export interface HistoryEntry {
@@ -105,5 +122,8 @@ export interface HistoryEntry {
   description: string
   actorEmail: string
   createdAt: string
+  orderId?: string
+  recordCode?: string
   details?: HistoryDetail[]
+  summary?: HistorySummary
 }

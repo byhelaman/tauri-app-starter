@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatRelativeTime } from "@/lib/date-utils"
 import { filterByMultiSearch } from "@/lib/utils"
-import type { HistoryEntry } from "./data-table-types"
+import type { HistoryEntry, HistorySummary } from "./data-table-types"
 
 interface TableHistoryCardProps {
   onClose: () => void
@@ -36,22 +36,46 @@ interface TableHistoryCardProps {
   pageSize?: number
 }
 
-export function TableHistoryCard({ 
-  onClose, 
-  tableId, 
-  queryKey, 
+function formatHistoryValue(value: unknown) {
+  if (value === null || value === undefined) return "-"
+  if (typeof value === "boolean") return value ? "true" : "false"
+  return String(value)
+}
+
+function getHistorySearchValues(entry: HistoryEntry) {
+  return [
+    entry.description,
+    entry.actorEmail,
+    entry.action,
+    entry.orderId,
+    entry.recordCode,
+    ...(entry.details?.flatMap((detail) => [
+      detail.recordId,
+      detail.recordCode,
+      detail.field,
+      formatHistoryValue(detail.oldValue),
+      formatHistoryValue(detail.newValue),
+    ]) ?? []),
+    ...(entry.summary?.sampleRecords?.flatMap((record) => [record.recordId, record.recordCode]) ?? []),
+  ]
+}
+
+export function TableHistoryCard({
+  onClose,
+  tableId,
+  queryKey,
   queryFn,
-  pageSize = 20 
+  pageSize = 20
 }: TableHistoryCardProps) {
   const [search, setSearch] = useState("")
   const deferredSearch = useDeferredValue(search)
 
-  const { 
-    data, 
-    isLoading, 
-    fetchNextPage, 
-    hasNextPage, 
-    isFetchingNextPage 
+  const {
+    data,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage
   } = useInfiniteQuery({
     queryKey,
     queryFn: ({ pageParam = 0 }) => queryFn({ limit: pageSize, offset: pageParam as number }),
@@ -65,7 +89,7 @@ export function TableHistoryCard({
   const allEntries = useMemo(() => data?.pages.flat() ?? [], [data])
 
   const filtered = useMemo(
-    () => filterByMultiSearch(allEntries, deferredSearch, (e) => [e.description, e.actorEmail, e.action]),
+    () => filterByMultiSearch(allEntries, deferredSearch, getHistorySearchValues),
     [allEntries, deferredSearch],
   )
 
@@ -75,6 +99,37 @@ export function TableHistoryCard({
       case "update": return <PencilIcon />
       case "delete": return <TrashIcon />
     }
+  }
+
+  function renderSummary(summary: HistorySummary) {
+    const records = summary.sampleRecords ?? []
+    return (
+      <div className="mt-2 space-y-1.5 border-l-2 border-muted pl-3">
+        {typeof summary.rowCount === "number" && (
+          <div className="text-sm text-muted-foreground">
+            {summary.rowCount.toLocaleString()} affected records
+          </div>
+        )}
+        {records.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {records.map((record) => (
+              <span
+                key={record.recordId}
+                className="rounded border bg-muted/40 px-1.5 py-0.5 font-mono text-xs"
+                title={record.recordId}
+              >
+                {record.recordCode ?? record.recordId.slice(0, 8)}
+              </span>
+            ))}
+            {!!summary.omittedCount && summary.omittedCount > 0 && (
+              <span className="text-xs text-muted-foreground">
+                +{summary.omittedCount.toLocaleString()} more
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (
@@ -90,7 +145,7 @@ export function TableHistoryCard({
           <XIcon />
         </Button>
       </CardHeader>
-      
+
       <div className="px-4">
         <InputGroup>
           <InputGroupAddon>
@@ -135,24 +190,34 @@ export function TableHistoryCard({
                   {getActionIcon(entry.action)}
                 </ItemMedia>
                 <ItemContent>
-                  <ItemTitle>{entry.description}</ItemTitle>
-                  <ItemDescription>{entry.actorEmail}</ItemDescription>
-                  
+                  <ItemTitle>
+                    {entry.description}
+                    {entry.recordCode && (
+                      <span className="font-mono">{entry.recordCode}</span>
+                    )}
+                  </ItemTitle>
+                  <ItemDescription>
+                    {entry.actorEmail}
+                  </ItemDescription>
+
                   {entry.details && entry.details.length > 0 && (
                     <div className="mt-2 space-y-1.5 border-l-2 border-muted pl-3">
                       {entry.details.map((detail, idx) => (
                         <div key={idx} className="text-sm">
-                          <span className="text-muted-foreground capitalize mr-2">{detail.field}: {detail.oldValue}</span>
+                          <span className="text-muted-foreground mr-2">
+                            <span className="capitalize">{detail.field}</span>: {formatHistoryValue(detail.oldValue)}
+                          </span>
                           <div className="flex items-center gap-1.5 mt-0.5">
                             <ArrowRight className="size-3.5" />
-                            <span className="font-medium">{detail.newValue}</span>
+                            <span className="font-medium">{formatHistoryValue(detail.newValue)}</span>
                           </div>
                         </div>
                       ))}
                     </div>
                   )}
+                  {entry.summary && renderSummary(entry.summary)}
                 </ItemContent>
-                
+
                 <ItemActions>
                   <span className="text-xs text-muted-foreground shrink-0">
                     {formatRelativeTime(entry.createdAt)}
@@ -162,10 +227,10 @@ export function TableHistoryCard({
             ))}
             {hasNextPage && (
               <div className="w-full flex justify-center mt-2 mb-4">
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   size="sm"
-                  className="w-fit text-muted-foreground gap-2" 
+                  className="w-fit text-muted-foreground gap-2"
                   onClick={() => fetchNextPage()}
                   disabled={isFetchingNextPage}
                 >

@@ -74,11 +74,8 @@ function InlineEditableCell({
   const [wasBlurred, setWasBlurred] = useState(false)
   const [showErrorDialog, setShowErrorDialog] = useState(false)
 
-  
-  // Estado Optimista de UI para evitar parpadeos mientras la tabla pesada se actualiza en segundo plano
   const propValue = String(value ?? "")
-  const [optimisticValue, setOptimisticValue] = useState<{ value: string; baseValue: string } | null>(null)
-  const nextValue = optimisticValue && optimisticValue.baseValue === propValue ? optimisticValue.value : propValue
+  const nextValue = propValue
 
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -116,8 +113,7 @@ function InlineEditableCell({
     setWasBlurred(true)
     setHasError(false)
 
-    if (currentValue !== nextValue) {
-      setOptimisticValue({ value: currentValue, baseValue: propValue })
+    if (currentValue !== propValue) {
       startTransition(() => {
         onCommit?.(currentValue, true)
       })
