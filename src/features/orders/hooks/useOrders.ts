@@ -69,6 +69,12 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
   const queueOrders = queueData?.data ?? []
   const totalQueueOrders = queueData?.total ?? 0
 
+  const { data: unfilteredCountData } = useQuery({
+    queryKey: ["orders", "unfiltered-count"],
+    queryFn: () => api.fetchOrders({ limit: 1, offset: 0 }),
+    staleTime: 60_000,
+  })
+
   // ── Order update mutation con rollback por entidad ────────────────────
   const updateOrderMutation = useMutation({
     mutationFn: api.updateOrder,
@@ -152,13 +158,13 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
       const previous = queryClient.getQueryData<InfiniteData<{ data: Order[]; total: number }>>(ordersQueryKey)
       queryClient.setQueryData<InfiniteData<{ data: Order[]; total: number }>>(ordersQueryKey, (old) => {
         if (!old) return old
+        const deletedCount = ids.length
         return {
           ...old,
           pages: old.pages.map(page => {
-            const removedCount = page.data.filter(o => idSet.has(o.id)).length
             return {
               data: page.data.filter(o => !idSet.has(o.id)),
-              total: page.total - removedCount,
+              total: Math.max(0, page.total - deletedCount),
             }
           })
         }
@@ -175,25 +181,6 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
     },
   })
 
-  // ── Bulk delete por filtro — elimina TODAS las filas que coinciden con los filtros
-  //    activos en el servidor, sin necesidad de cargar los IDs en el cliente.
-  //    Ideal para datasets grandes con infinite scroll.
-  const deleteBulkOrdersByFilterMutation = useMutation({
-    mutationFn: (excludedIds: string[] = []) => api.bulkDeleteOrdersByFilter({
-      search:  globalFilter,
-      filters: columnFilters,
-      date:    dateFilter,
-      excludedIds,
-    }),
-    onSuccess: (deletedCount) => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] })
-      queryClient.invalidateQueries({ queryKey: ["dashboard", "history"] })
-      toast.success(`${deletedCount} orders deleted`)
-    },
-    onError: () => {
-      toast.error("Failed to delete orders")
-    },
-  })
 
   // ── Queue order update mutation with entity-level rollback ────────────
   const updateQueueOrderMutation = useMutation({
@@ -239,7 +226,7 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
   const { mutate: doUpdateQueue } = updateQueueOrderMutation
   const { mutate: doDeleteQueue } = deleteQueueOrderMutation
   const { mutate: doDeleteOrder } = deleteOrderMutation
-  const { mutate: doBulkDelete } = deleteBulkOrdersMutation
+  const { mutateAsync: doBulkDeleteAsync } = deleteBulkOrdersMutation
 
   // Delta mutation helper — only sends the changed fields to the server
   const updateOrderField = useCallback((orderId: string, delta: Partial<Order>) => {
@@ -302,13 +289,11 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
     doDeleteOrder(id)
   }, [doDeleteOrder])
 
-  const deleteBulkOrders = useCallback((ids: string[]) => {
-    doBulkDelete(ids)
-  }, [doBulkDelete])
+  const deleteBulkOrders = useCallback(async (ids: string[]) => {
+    await doBulkDeleteAsync(ids)
+  }, [doBulkDeleteAsync])
 
-  const deleteBulkOrdersByFilter = useCallback((excludedIds: string[] = []) => {
-    deleteBulkOrdersByFilterMutation.mutate(excludedIds)
-  }, [deleteBulkOrdersByFilterMutation])
+
 
   return {
     pageData,
@@ -320,7 +305,9 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
       hasNextPage,
       isFetchingNextPage,
       totalRowCount: cachedRowCount,
-      // Obtiene TODAS las filas del servidor vía RPC dedicada
+      unfilteredTotalRowCount: unfilteredCountData?.total ?? cachedRowCount,
+      bulkActionRowLimit: api.MAX_BULK_ORDER_ROWS,
+      // Obtiene filas completas del servidor vía RPC dedicada, con límite backend.
       fetchAllByFilter: async (): Promise<Record<string, unknown>[]> => {
         // Si el total aún no está disponible (primera carga no completada), no hay filas que retornar
         if (!cachedRowCount) return []
@@ -331,15 +318,24 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
         })
         return rows as unknown as Record<string, unknown>[]
       },
-      // Obtiene SOLO los IDs de TODAS las filas filtradas
-      fetchAllIdsByFilter: async (overrideSearch?: string, overrideFilters?: any[]): Promise<string[]> => {
+      fetchAllUnfiltered: async (): Promise<Record<string, unknown>[]> => {
         const rows = await api.fetchAllOrdersByFilter({
-          search:     overrideSearch ?? globalFilter,
-          filters:    (overrideFilters as ColumnFiltersState) ?? columnFilters,
-          date:       dateFilter,
+          date:    undefined,
           sorting,
         })
-        return rows.map(r => r.id)
+        return rows as unknown as Record<string, unknown>[]
+      },
+      fetchByIds: async (ids: string[]): Promise<Record<string, unknown>[]> => {
+        const rows = await api.fetchOrdersByIds(ids)
+        return rows as unknown as Record<string, unknown>[]
+      },
+      // Obtiene SOLO los IDs de TODAS las filas filtradas usando el RPC ultra-rápido
+      fetchAllIdsByFilter: async (overrideSearch?: string, overrideFilters?: ColumnFiltersState): Promise<string[]> => {
+        return await api.fetchAllIdsByFilter({
+          search:     overrideSearch ?? globalFilter,
+          filters:    overrideFilters ?? columnFilters,
+          date:       dateFilter,
+        })
       },
 
     },
@@ -355,13 +351,12 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
       createOrder: createOrderMutation.mutate,
       deleteOrder,
       deleteBulkOrders,
-      deleteBulkOrdersByFilter,
       handleStatusChange,
       handleCellChange,
       handleQueueStatusChange,
       handleQueuePriorityToggle,
       handleQueueRemove,
     },
-    isPending: updateOrderMutation.isPending || createOrderMutation.isPending || deleteOrderMutation.isPending || deleteBulkOrdersMutation.isPending || deleteBulkOrdersByFilterMutation.isPending
+    isPending: updateOrderMutation.isPending || createOrderMutation.isPending || deleteOrderMutation.isPending || deleteBulkOrdersMutation.isPending
   }
 }

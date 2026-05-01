@@ -350,9 +350,16 @@ export function createSelectColumn<TData>(): ColumnDef<TData> {
     header: ({ table }) => {
       const meta = table.options.meta as DataTableMeta | undefined
       
-      // Si está cargando la selección masiva, mostramos el checkbox deshabilitado
+      // Si está cargando la selección masiva, mostramos el checkbox en su estado optimista
       if (meta?.isSelectingAll) {
-        return <Checkbox checked={false} disabled aria-label="Selecting all..." />
+        return (
+          <Checkbox 
+            checked={meta.isSelectingAll === "selectAll"} 
+            disabled 
+            className="opacity-50 cursor-wait" 
+            aria-label="Processing selection..." 
+          />
+        )
       }
 
       // If we are in infinite scroll, we need to know the state of VISIBLE selection

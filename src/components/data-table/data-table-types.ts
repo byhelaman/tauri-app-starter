@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import type { Table } from "@tanstack/react-table"
+import type { ColumnFiltersState, Table } from "@tanstack/react-table"
 
 export interface FacetedFilterOption {
   label: string
@@ -50,16 +50,24 @@ export interface InfiniteScrollConfig {
   threshold?: number
   /** Total de filas en la BD para los filtros actuales (para el banner select-all) */
   totalRowCount?: number
+  /** Total de filas sin filtros de tabla activos */
+  unfilteredTotalRowCount?: number
+  /** Máximo de filas permitido para acciones masivas que cargan datos completos en el cliente */
+  bulkActionRowLimit?: number
   /**
-   * Obtiene TODAS las filas que coinciden con los filtros actuales desde el servidor.
-   * Usado por Export/Copy/Bulk Copy.
+   * Obtiene filas completas que coinciden con los filtros actuales desde el servidor.
+   * El backend puede aplicar bulkActionRowLimit; no debe usarse para scopes mayores a ese límite.
    */
   fetchAllByFilter?: () => Promise<Record<string, unknown>[]>
+  /** Obtiene filas completas sin filtros de tabla activos. Usado por scope "All" en infinite scroll. */
+  fetchAllUnfiltered?: () => Promise<Record<string, unknown>[]>
+  /** Obtiene filas completas por IDs exactos. Usado cuando la selección incluye filas no cargadas. */
+  fetchByIds?: (ids: string[]) => Promise<Record<string, unknown>[]>
   /**
    * Obtiene SOLO los IDs de TODAS las filas que coinciden con los filtros actuales.
    * Usado para "Select All" y para calcular intersecciones en modo infinito.
    */
-  fetchAllIdsByFilter?: (globalFilter?: string, columnFilters?: any[]) => Promise<string[]>
+  fetchAllIdsByFilter?: (globalFilter?: string, columnFilters?: ColumnFiltersState) => Promise<string[]>
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -74,9 +82,11 @@ export interface DataTableMeta {
   /** Deselecciona todas las filas filtradas globalmente */
   deselectAll?: () => Promise<void>
   /** Indica si el fetch de IDs para "Select All" está en progreso */
-  isSelectingAll?: boolean
+  isSelectingAll?: "selectAll" | "deselectAll" | false
   /** Cantidad de filas seleccionadas que coinciden con el filtro actual */
   visibleSelectedCount?: number
+  /** IDs seleccionados que coinciden con el filtro actual */
+  visibleSelectedIds?: string[]
   /** Cantidad total de filas en el filtro actual */
   totalRowCount?: number
 }

@@ -62,8 +62,9 @@ import {
 } from "@/features/orders/modal-columns"
 import { TableHistoryCard } from "@/components/data-table/table-history-card"
 import { OrderDialog } from "@/features/orders/order-dialog"
-import { fetchOrderHistory, fetchOrdersStartHours, fetchOrdersByIds } from "@/features/orders/api"
+import { MAX_BULK_ORDER_ROWS, fetchOrderHistory, fetchOrdersStartHours, fetchOrdersByIds } from "@/features/orders/api"
 import { useQuery } from "@tanstack/react-query"
+import { useAuth } from "@/contexts/auth-context"
 
 const STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
   { label: "Pending", value: "pending", icon: Clock },
@@ -88,7 +89,13 @@ const QUEUE_STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
 ]
 
 export function OrdersPage() {
-  const [isBulkDeleteAlertOpen, setIsBulkDeleteAlertOpen] = useState<{ selected: Order[], clearSelection: () => void } | null>(null)
+  const { hasPermission } = useAuth()
+  const canExportOrders = hasPermission("orders.export")
+  const [bulkDeleteOp, setBulkDeleteOp] = useState<{
+    count: number
+    ids: string[]
+    clearSelection: () => void
+  } | null>(null)
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [isQueueDialogOpen, setIsQueueDialogOpen] = useState(false)
@@ -177,6 +184,7 @@ export function OrdersPage() {
         data={pageData}
         isLoading={isPageLoading}
         infiniteScroll={infiniteScroll}
+        allowDataExport={canExportOrders}
         columnFilters={columnFilters}
         onColumnFiltersChange={setColumnFilters}
         globalFilter={globalFilter}
@@ -233,39 +241,43 @@ export function OrdersPage() {
         }}
         bulkActions={(selectedLoadedRows, clearSelection, selectedIds) => (
           <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                const toastId = "copy-all-filter"
-                toast.loading(`Preparing copy...`, { id: toastId })
-                try {
-                  // Si todos los IDs seleccionados están ya en memoria, los usamos directo
-                  const rowsToCopy = selectedIds.length === selectedLoadedRows.length
-                    ? selectedLoadedRows
-                    : await fetchOrdersByIds(selectedIds)
+            {canExportOrders && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  const toastId = "copy-all"
+                  toast.loading(`Preparing copy...`, { id: toastId })
+                  try {
+                    // Si todos los IDs seleccionados están ya en memoria, los usamos directo
+                    const rowsToCopy = selectedIds.length === selectedLoadedRows.length
+                      ? selectedLoadedRows
+                      : await fetchOrdersByIds(selectedIds)
 
-                  const content = buildBulkCopyText(rowsToCopy as unknown as Record<string, unknown>[], "orders")
-                  if (!content) { toast.error("Nothing to copy", { id: toastId }); return }
-                  
-                  await navigator.clipboard.writeText(content)
-                  toast.success(`Copied ${rowsToCopy.length.toLocaleString()} rows`, { id: toastId })
-                } catch {
-                  toast.error("Could not copy to clipboard", { id: toastId })
-                }
-              }}
-
-            >
-              <Copy />
-              Copy
-            </Button>
+                    const content = buildBulkCopyText(rowsToCopy as unknown as Record<string, unknown>[], "orders")
+                    if (!content) { toast.error("Nothing to copy", { id: toastId }); return }
+                    
+                    await navigator.clipboard.writeText(content)
+                    toast.success(`Copied ${rowsToCopy.length.toLocaleString()} rows`, { id: toastId })
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "Could not copy to clipboard", { id: toastId })
+                  }
+                }}
+              >
+                <Copy />
+                Copy
+              </Button>
+            )}
             <Button
               variant="destructive"
               size="sm"
               aria-label="Delete"
               onClick={() => {
-                // Delete always operates purely on IDs, bypassing the need to fetch objects
-                setIsBulkDeleteAlertOpen({ selected: selectedIds as unknown as Order[], clearSelection })
+                setBulkDeleteOp({
+                  count: selectedIds.length,
+                  ids: selectedIds,
+                  clearSelection
+                })
               }}
             >
               <Trash2 />
@@ -293,6 +305,7 @@ export function OrdersPage() {
               columns={queueColumns}
               data={queueOrders}
               isLoading={isQueueLoading}
+              allowDataExport={canExportOrders}
               tableId="orders-queue"
               toolbar={{
                 searchable: true,
@@ -379,28 +392,40 @@ export function OrdersPage() {
       </AlertDialog>
 
       <AlertDialog
-        open={!!isBulkDeleteAlertOpen}
-        onOpenChange={(open) => { if (!open) setIsBulkDeleteAlertOpen(null) }}
+        open={!!bulkDeleteOp}
+        onOpenChange={(open) => { if (!open) setBulkDeleteOp(null) }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {isBulkDeleteAlertOpen?.selected.length.toLocaleString()} orders?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Delete {bulkDeleteOp?.count.toLocaleString()} orders?
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the selected orders. This action cannot be undone.
+              This will delete the selected orders. This action cannot be undone.
+              {bulkDeleteOp && bulkDeleteOp.count > MAX_BULK_ORDER_ROWS && (
+                <span className="mt-2 block font-medium text-destructive">
+                  Bulk delete is limited to {MAX_BULK_ORDER_ROWS.toLocaleString()} orders at a time.
+                </span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              onClick={() => {
-                if (!isBulkDeleteAlertOpen) return
-                // We passed the raw string IDs mapped to `selected` array for simplicity
-                const ids = isBulkDeleteAlertOpen.selected as unknown as string[]
-                actions.deleteBulkOrders(ids)
-                toast.success(`${ids.length.toLocaleString()} orders deleted`)
-                isBulkDeleteAlertOpen.clearSelection()
-                setIsBulkDeleteAlertOpen(null)
+              disabled={!bulkDeleteOp || bulkDeleteOp.count > MAX_BULK_ORDER_ROWS}
+              onClick={async () => {
+                if (!bulkDeleteOp) return
+                const toastId = "bulk-delete-orders"
+                toast.loading(`Deleting ${bulkDeleteOp.count.toLocaleString()} orders...`, { id: toastId })
+                try {
+                  await actions.deleteBulkOrders(bulkDeleteOp.ids)
+                  toast.success(`${bulkDeleteOp.count.toLocaleString()} orders deleted`, { id: toastId })
+                  bulkDeleteOp.clearSelection()
+                  setBulkDeleteOp(null)
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Could not delete orders", { id: toastId })
+                }
               }}
             >
               Delete
@@ -408,7 +433,6 @@ export function OrdersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
 
     </main>
   )

@@ -35,8 +35,7 @@ interface DataTableToolbarProps<TData> {
   showViewOptions?: boolean
   onSidePanelToggle?: () => void
   infiniteScroll?: InfiniteScrollConfig
-  isSelectAllByFilter?: boolean
-  excludedIds?: Set<string>
+  allowDataExport?: boolean
 }
 
 export function DataTableToolbar<TData>({
@@ -51,8 +50,7 @@ export function DataTableToolbar<TData>({
   showViewOptions = true,
   onSidePanelToggle,
   infiniteScroll,
-  isSelectAllByFilter,
-  excludedIds,
+  allowDataExport,
 }: DataTableToolbarProps<TData>) {
   const currentFilterValue = (table.getState().globalFilter as string) ?? ""
 
@@ -243,7 +241,15 @@ export function DataTableToolbar<TData>({
 
       {renderedActions}
 
-      {showViewOptions && <DataTableViewOptions table={table} tableId={tableId} onSidePanelToggle={onSidePanelToggle} infiniteScroll={infiniteScroll} isSelectAllByFilter={isSelectAllByFilter} excludedIds={excludedIds} />}
+      {showViewOptions && (
+        <DataTableViewOptions
+          table={table}
+          tableId={tableId}
+          onSidePanelToggle={onSidePanelToggle}
+          infiniteScroll={infiniteScroll}
+          allowDataExport={allowDataExport}
+        />
+      )}
     </div>
   )
 }

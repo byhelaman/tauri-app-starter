@@ -219,10 +219,12 @@ Deno.serve(async (req: Request) => {
 
     const validRoles = new Set(["user", "assistant"])
     for (const msg of messages) {
+        const content = (msg as Record<string, unknown>)?.content
         if (
             typeof msg !== "object" || msg === null ||
             !validRoles.has((msg as Record<string, unknown>).role as string) ||
-            typeof (msg as Record<string, unknown>).content !== "string"
+            typeof content !== "string" ||
+            content.length > 8000
         ) {
             return json(400, { success: false, message: "Invalid message format" }, origin)
         }
@@ -233,7 +235,7 @@ Deno.serve(async (req: Request) => {
         global: { headers: { Authorization: `Bearer ${userToken}` } },
     })
 
-    const { data: hasPerm, error: permError } = await supabaseUser.rpc("has_permission", {
+    const { data: hasPerm, error: permError } = await supabaseUser.rpc("has_permission_live", {
         required_permission: "ai.chat",
     })
     if (permError || !hasPerm) {
@@ -283,8 +285,7 @@ Deno.serve(async (req: Request) => {
                     })
 
                     if (!aiRes.ok) {
-                        const errText = await aiRes.text()
-                        console.error("AI Gateway error:", errText)
+                        console.error("AI Gateway error:", aiRes.status, aiRes.statusText)
                         send({ type: "error", text: "AI service error" })
                         return
                     }

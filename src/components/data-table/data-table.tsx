@@ -40,6 +40,7 @@ import {
   DataTableMeta
 } from "./data-table-types"
 import { getColumnSizeStyle, getPinnedColumnStyle } from "./data-table-utils"
+import { useInfiniteSelection } from "./use-infinite-selection"
 
 /**
  * Tamaño de "página" virtual en modo infinite scroll.
@@ -83,6 +84,8 @@ interface DataTableProps<TData, TValue> {
   infiniteScroll?: InfiniteScrollConfig
   /** Alto estimado de cada fila en px para el virtualizer (default 40) */
   estimatedRowHeight?: number
+  /** Permite acciones de copia/exportación masiva */
+  allowDataExport?: boolean
 }
 
 export function DataTable<TData, TValue>({
@@ -113,21 +116,21 @@ export function DataTable<TData, TValue>({
   onSortingChange: setExternalSorting,
   infiniteScroll,
   estimatedRowHeight = 48,
+  allowDataExport = true,
 }: DataTableProps<TData, TValue>) {
   const [internalSorting, setInternalSorting] = useState<SortingState>([])
   const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>([])
   const [internalGlobalFilter, setInternalGlobalFilter] = useState("")
-  
+
   const columnFilters = externalColumnFilters ?? internalColumnFilters
   const setColumnFilters = setExternalColumnFilters ?? setInternalColumnFilters
   const globalFilter = externalGlobalFilter ?? internalGlobalFilter
   const setGlobalFilter = setExternalGlobalFilter ?? setInternalGlobalFilter
   const sorting = externalSorting ?? internalSorting
   const setSorting = setExternalSorting ?? setInternalSorting
-  
+
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({ left: ["select"], right: [] })
-  const [rowSelection, setRowSelection] = useState({})
   const scrollRef = useRef<HTMLDivElement>(null)
   const [isSidePanelOpen, setIsSidePanelOpen] = useState(() => {
     try {
@@ -146,42 +149,22 @@ export function DataTable<TData, TValue>({
     }
   }, [isSidePanelOpen, tableId])
 
-  const [isSelectingAll, setIsSelectingAll] = useState(false)
-
-  const clearSelection = () => {
-    setRowSelection({})
-    table?.resetRowSelection?.()
-  }
-
-  const selectAll = async () => {
-    if (!infiniteScroll?.fetchAllIdsByFilter) return
-    setIsSelectingAll(true)
-    try {
-      const ids = await infiniteScroll.fetchAllIdsByFilter(table.getState().globalFilter, table.getState().columnFilters as any[])
-      setRowSelection(prev => {
-        const next: Record<string, boolean> = { ...prev }
-        ids.forEach(id => { next[id] = true })
-        return next
-      })
-    } finally {
-      setIsSelectingAll(false)
-    }
-  }
-
-  const deselectAll = async () => {
-    if (!infiniteScroll?.fetchAllIdsByFilter) return
-    setIsSelectingAll(true)
-    try {
-      const ids = await infiniteScroll.fetchAllIdsByFilter(table.getState().globalFilter, table.getState().columnFilters as any[])
-      setRowSelection(prev => {
-        const next: Record<string, boolean> = { ...prev }
-        ids.forEach(id => { delete next[id] })
-        return next
-      })
-    } finally {
-      setIsSelectingAll(false)
-    }
-  }
+  const loadedRowIds = useMemo(() => data.map((row, index) => getRowId?.(row) ?? String(index)), [data, getRowId])
+  const {
+    rowSelection,
+    setRowSelection,
+    clearSelection,
+    visibleSelectedIds,
+    selectAll,
+    deselectAll,
+    isSelectingAll,
+  } = useInfiniteSelection({
+    enabled: !!infiniteScroll,
+    fetchIdsByFilter: infiniteScroll?.fetchAllIdsByFilter,
+    globalFilter,
+    columnFilters,
+    loadedRowIds,
+  })
 
   const fitHeight = layout?.fitHeight ?? false
   const scrollAreaClassName = layout?.scrollAreaClassName
@@ -232,6 +215,7 @@ export function DataTable<TData, TValue>({
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
     autoResetPageIndex: false,
+    autoResetAll: false,
     manualPagination,
     manualFiltering: !!manualPagination,
     manualSorting: !!infiniteScroll,
@@ -239,12 +223,12 @@ export function DataTable<TData, TValue>({
     rowCount,
     onPaginationChange,
     initialState: { pagination: { pageSize: defaultPageSize, pageIndex: 0 } },
-    state: { 
-      sorting, 
-      columnFilters, 
-      globalFilter, 
-      columnPinning, 
-      columnVisibility, 
+    state: {
+      sorting,
+      columnFilters,
+      globalFilter,
+      columnPinning,
+      columnVisibility,
       rowSelection,
       // En modo infinite scroll, el virtualizer maneja qué filas renderizar —
       // por eso sobreescribimos pageSize a MAX para que getPaginationRowModel()
@@ -254,15 +238,7 @@ export function DataTable<TData, TValue>({
         : manualPagination ? { pagination } : {}
       )
     },
-    meta: {
-      isInfiniteScroll: !!infiniteScroll,
-      selectAll,
-      deselectAll,
-      isSelectingAll,
-      visibleSelectedCount: 0, // This will be dynamically evaluated below, we can't put it here easily because of useMemo hooks below unless we pass it correctly. Wait, we can pass it via useEffect or just update meta!
-      // Actually, we can just use `visibleSelectedIds.length` below! Let's not put it in `useReactTable` config, we will patch it afterwards!
-    },
-
+    meta: {} satisfies DataTableMeta,
   })
 
   // Ensure page index doesn't go out of bounds when data shrinks (e.g. bulk deleting items on the last page)
@@ -274,33 +250,19 @@ export function DataTable<TData, TValue>({
     }
   }, [table, table.getState().pagination.pageIndex, table.getPageCount()])
 
-  // Cache de los IDs de la vista actual filtrada
-  const [currentFilterIds, setCurrentFilterIds] = useState<string[]>([])
-  
-  // 1. Obtener los IDs solo cuando cambien los filtros
-  useEffect(() => {
-    if (!infiniteScroll?.fetchAllIdsByFilter) return
-    let isMounted = true
-    infiniteScroll.fetchAllIdsByFilter(table.getState().globalFilter, table.getState().columnFilters as any[])
-      .then(ids => {
-        if (isMounted) setCurrentFilterIds(ids)
-      })
-      .catch(console.error)
-    return () => { isMounted = false }
-  }, [table.getState().globalFilter, table.getState().columnFilters]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // 2. Calcular síncronamente cuáles de nuestras filas seleccionadas están en la vista actual
-  const visibleSelectedIds = useMemo(() => {
-    if (!infiniteScroll) return Object.keys(rowSelection)
-    const filterSet = new Set(currentFilterIds)
-    return Object.keys(rowSelection).filter(id => filterSet.has(id))
-  }, [rowSelection, currentFilterIds, infiniteScroll])
+  const totalRows = infiniteScroll?.totalRowCount ?? rowCount ?? 0
+  const displayedSelectedCount = visibleSelectedIds.length
 
   // Patch meta values after computation
   if (table.options.meta) {
     const meta = table.options.meta as DataTableMeta
     meta.visibleSelectedCount = visibleSelectedIds.length
-    meta.totalRowCount = infiniteScroll?.totalRowCount
+    meta.visibleSelectedIds = visibleSelectedIds
+    meta.totalRowCount = totalRows
+    meta.selectAll = selectAll
+    meta.deselectAll = deselectAll
+    meta.isSelectingAll = isSelectingAll
+    meta.isInfiniteScroll = !!infiniteScroll
   }
 
   const cellPadding = 8
@@ -323,9 +285,9 @@ export function DataTable<TData, TValue>({
 
   // Calcula los spacers para el enfoque spacer-row (compatible con <table> HTML)
   const virtualRows = infiniteScroll ? rowVirtualizer.getVirtualItems() : null
-  const totalSize   = rowVirtualizer.getTotalSize()
+  const totalSize = rowVirtualizer.getTotalSize()
   const lastVirtual = virtualRows ? virtualRows[virtualRows.length - 1] : undefined
-  const paddingTop    = virtualRows && virtualRows.length > 0 ? virtualRows[0].start : 0
+  const paddingTop = virtualRows && virtualRows.length > 0 ? virtualRows[0].start : 0
   const paddingBottom = lastVirtual ? totalSize - lastVirtual.end : 0
 
   // Dispara fetchNextPage cuando el usuario se acerca al final del dataset
@@ -355,8 +317,7 @@ export function DataTable<TData, TValue>({
         showViewOptions={toolbar?.showViewOptions}
         onSidePanelToggle={sidePanel ? () => setIsSidePanelOpen(!isSidePanelOpen) : undefined}
         infiniteScroll={infiniteScroll}
-        isSelectAllByFilter={false} // Ya no usado, pero toolbar lo recibe por compatibilidad si es necesario
-        excludedIds={new Set()}
+        allowDataExport={allowDataExport}
       />
 
 
@@ -442,11 +403,11 @@ export function DataTable<TData, TValue>({
 
               {/* Skeleton de carga inicial (paginación clásica) */}
               {isLoading && !infiniteScroll && rows.length < table.getState().pagination.pageSize && (
-                <DataTableSkeleton 
-                  table={table} 
-                  rowCount={table.getState().pagination.pageSize - rows.length} 
-                  leftEdgeId={leftEdgeId} 
-                  rightEdgeId={rightEdgeId} 
+                <DataTableSkeleton
+                  table={table}
+                  rowCount={table.getState().pagination.pageSize - rows.length}
+                  leftEdgeId={leftEdgeId}
+                  rightEdgeId={rightEdgeId}
                 />
               )}
 
@@ -502,7 +463,7 @@ export function DataTable<TData, TValue>({
           <div className="flex items-center gap-3 rounded-lg border bg-background p-2 shadow-lg">
             {(() => {
               const selectedLoadedRows = table.getFilteredSelectedRowModel().rows
-              const displayCount = visibleSelectedIds.length.toLocaleString()
+              const displayCount = displayedSelectedCount.toLocaleString()
               return (
                 <>
                   <span className="pl-2 text-sm">{displayCount} selected</span>

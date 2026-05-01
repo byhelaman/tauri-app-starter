@@ -7,9 +7,8 @@
 --   1. Permiso ai.chat
 --   2. RPC get_ai_schema — devuelve esquema de tablas de usuario con FKs
 --
--- Nota: las queries de datos se realizan directamente vía PostgREST
--- (cliente Supabase), no mediante SQL arbitrario. No se crea ningún
--- RPC de ejecución de consultas.
+-- Nota: query_table usa PostgREST; execute_ai_query permite SQL analítico
+-- solo lectura con RLS, timeout y límite de filas.
 
 -- ============================================================
 -- 1. PERMISO
@@ -44,7 +43,7 @@ DECLARE
         'permissions', 'roles', 'role_permissions', 'audit_log', 'rate_limits'
     ];
 BEGIN
-    IF NOT public.has_permission('ai.chat') THEN
+    IF NOT public.has_permission_live('ai.chat') THEN
         RAISE EXCEPTION 'Permission denied: requires ai.chat';
     END IF;
 
@@ -114,7 +113,7 @@ AS $$
 DECLARE
     result JSONB;
 BEGIN
-    IF NOT has_permission('ai.chat') THEN
+    IF NOT has_permission_live('ai.chat') THEN
         RAISE EXCEPTION 'Permission denied: requires ai.chat';
     END IF;
 

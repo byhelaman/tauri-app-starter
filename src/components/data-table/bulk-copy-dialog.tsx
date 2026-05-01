@@ -57,6 +57,11 @@ interface BulkCopyDialogProps<TData> {
     onOpenChange: (open: boolean) => void
     /** Cuando se provee, 'Copy now' hace fetch server-side para scope filtered/all */
     fetchAllByFilter?: () => Promise<Record<string, unknown>[]>
+    fetchAllUnfiltered?: () => Promise<Record<string, unknown>[]>
+    fetchByIds?: (ids: string[]) => Promise<Record<string, unknown>[]>
+    selectedIds?: string[]
+    rowLimit?: number
+    rowCount?: number
 }
 
 function renderRow<TData>(tokens: Token[], row: Row<TData>): string {
@@ -189,7 +194,19 @@ function parseFormat(value: string | undefined): BulkCopyFormat {
         : "lines"
 }
 
-export function BulkCopyDialog<TData>({ table, tableId, scope, open, onOpenChange, fetchAllByFilter }: BulkCopyDialogProps<TData>) {
+export function BulkCopyDialog<TData>({
+    table,
+    tableId,
+    scope,
+    open,
+    onOpenChange,
+    fetchAllByFilter,
+    fetchAllUnfiltered,
+    fetchByIds,
+    selectedIds = [],
+    rowLimit,
+    rowCount,
+}: BulkCopyDialogProps<TData>) {
     // Solo se lee una vez por tableId — los inicializadores lazy de useState lo consumen una sola vez
     const savedSettings = useMemo(() => readBulkCopySettings(tableId), [tableId])
     const [format, setFormat] = useState<BulkCopyFormat>(() => parseFormat(savedSettings?.format))
@@ -412,13 +429,34 @@ export function BulkCopyDialog<TData>({ table, tableId, scope, open, onOpenChang
                     <Button
                         variant="outline"
                         onClick={async () => {
-                            const needsServer = !!fetchAllByFilter && scope !== "selected"
+                            const serverFetcher = scope === "all" ? (fetchAllUnfiltered ?? fetchAllByFilter) : fetchAllByFilter
+                            const needsServer = !!serverFetcher && scope !== "selected"
+                            const needsSelectedFetch = scope === "selected" && !!fetchByIds && selectedIds.length > 0
+                            if (needsServer && rowLimit != null && (rowCount ?? 0) > rowLimit) {
+                                toast.error(`Bulk copy is limited to ${rowLimit.toLocaleString()} rows. Narrow the filters first.`)
+                                return
+                            }
+                            if (needsSelectedFetch && rowLimit != null && selectedIds.length > rowLimit) {
+                                toast.error(`Bulk copy is limited to ${rowLimit.toLocaleString()} rows. Narrow the selection first.`)
+                                return
+                            }
                             let text: string
-                            if (needsServer) {
+                            if (needsSelectedFetch) {
+                                const toastId = "bulk-copy-selected-fetch"
+                                toast.loading(`Fetching ${selectedIds.length.toLocaleString()} selected rows...`, { id: toastId })
+                                try {
+                                    const records = await fetchByIds!(selectedIds)
+                                    text = buildTextFromRaw(records, format, selectedFields, headers, parsed)
+                                    await navigator.clipboard.writeText(text)
+                                    toast.success(`Copied ${records.length.toLocaleString()} rows`, { id: toastId })
+                                } catch {
+                                    toast.error("Could not copy selected rows", { id: toastId })
+                                }
+                            } else if (needsServer) {
                                 const toastId = "bulk-copy-fetch"
                                 toast.loading("Fetching all rows...", { id: toastId })
                                 try {
-                                    const records = await fetchAllByFilter!()
+                                    const records = await serverFetcher!()
                                     text = buildTextFromRaw(records, format, selectedFields, headers, parsed)
                                     await navigator.clipboard.writeText(text)
                                     toast.success(`Copied ${records.length.toLocaleString()} rows`, { id: toastId })

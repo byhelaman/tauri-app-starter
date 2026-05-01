@@ -28,7 +28,7 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-    IF NOT public.has_permission('users.view') THEN
+    IF NOT public.has_permission_live('users.view') THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.view';
     END IF;
 
@@ -50,8 +50,8 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-    IF NOT public.has_permission('system.view')
-       AND NOT public.has_permission('users.view')
+    IF NOT public.has_permission_live('system.view')
+       AND NOT public.has_permission_live('users.view')
        AND COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0) < 80 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere system.view o users.view';
     END IF;
@@ -71,8 +71,8 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-    IF NOT public.has_permission('system.view')
-       AND NOT public.has_permission('users.view')
+    IF NOT public.has_permission_live('system.view')
+       AND NOT public.has_permission_live('users.view')
        AND COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0) < 80 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere system.view o users.view';
     END IF;
@@ -120,7 +120,7 @@ BEGIN
     caller_id := auth.uid();
     caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
 
-    IF NOT public.has_permission('users.manage') THEN
+    IF NOT public.has_permission_live('users.manage') THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
     IF target_user_id = caller_id THEN
@@ -168,7 +168,7 @@ BEGIN
     caller_id := auth.uid();
     caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
 
-    IF NOT public.has_permission('users.manage') THEN
+    IF NOT public.has_permission_live('users.manage') THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
     IF target_user_id = caller_id THEN
@@ -209,7 +209,7 @@ BEGIN
     caller_id := auth.uid();
     caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
 
-    IF NOT public.has_permission('users.manage') THEN
+    IF NOT public.has_permission_live('users.manage') THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
     IF target_user_id = caller_id THEN
@@ -257,7 +257,7 @@ DECLARE
 BEGIN
     caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
 
-    IF NOT public.has_permission('users.manage') THEN
+    IF NOT public.has_permission_live('users.manage') THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
 
@@ -524,8 +524,8 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-    IF NOT public.has_permission('system.view')
-       AND NOT public.has_permission('users.view')
+    IF NOT public.has_permission_live('system.view')
+       AND NOT public.has_permission_live('users.view')
        AND COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0) < 80 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere system.view o users.view';
     END IF;

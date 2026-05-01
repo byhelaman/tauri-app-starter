@@ -34,7 +34,7 @@ import {
   type Scope,
 } from "./table-formats"
 import { BulkCopyDialog } from "./bulk-copy-dialog"
-import type { InfiniteScrollConfig } from "./data-table-types"
+import type { DataTableMeta, InfiniteScrollConfig } from "./data-table-types"
 
 interface DataTableViewOptionsProps<TData> {
   table: Table<TData>
@@ -46,6 +46,8 @@ interface DataTableViewOptionsProps<TData> {
   isSelectAllByFilter?: boolean
   /** IDs excluidos manualmente en modo select-all-by-filter */
   excludedIds?: Set<string>
+  /** Permite acciones que extraen datos fuera de la tabla visible */
+  allowDataExport?: boolean
 }
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
@@ -93,17 +95,25 @@ const SCOPE_LABEL: Record<Scope, string> = {
   all: "All",
 }
 
-export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle, infiniteScroll, isSelectAllByFilter, excludedIds }: DataTableViewOptionsProps<TData>) {
+function formatLimit(limit?: number): string {
+  return limit == null ? "the configured limit" : limit.toLocaleString()
+}
+
+export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle, infiniteScroll, isSelectAllByFilter, excludedIds, allowDataExport = true }: DataTableViewOptionsProps<TData>) {
+  const tableMeta = table.options.meta as DataTableMeta | undefined
   const selectedCount = isSelectAllByFilter
     ? (infiniteScroll?.totalRowCount ?? 0) - (excludedIds?.size ?? 0)
-    : table.getSelectedRowModel().rows.length
+    : tableMeta?.visibleSelectedCount ?? table.getSelectedRowModel().rows.length
+  const selectedIds = tableMeta?.visibleSelectedIds
+    ?? Object.keys(table.getState().rowSelection).filter((id) => table.getState().rowSelection[id])
   const filteredCount = table.getFilteredRowModel().rows.length
   const totalCount = table.getCoreRowModel().rows.length
 
   // En infinite scroll, 'filtered' y 'all' muestran el total real del servidor
   const serverTotal = infiniteScroll?.totalRowCount
+  const serverUnfilteredTotal = infiniteScroll?.unfilteredTotalRowCount
   const effectiveFilteredCount = serverTotal ?? filteredCount
-  const effectiveTotalCount    = serverTotal ?? totalCount
+  const effectiveTotalCount    = serverUnfilteredTotal ?? totalCount
 
   const [scope, setScope] = useState<Scope>("all")
   const [bulkCopyOpen, setBulkCopyOpen] = useState(false)
@@ -114,20 +124,64 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
     filtered: effectiveFilteredCount,
     all: effectiveTotalCount,
   }
+  const bulkActionLimit = infiniteScroll?.bulkActionRowLimit
+  const selectedScopeCount = scopeCounts[effectiveScope]
+  const serverScopeExceedsLimit =
+    needsServerFetch(effectiveScope) && bulkActionLimit != null && selectedScopeCount > bulkActionLimit
+  const selectedScopeExceedsLimit =
+    effectiveScope === "selected" && bulkActionLimit != null && selectedIds.length > bulkActionLimit
+  const scopeExceedsLimit = serverScopeExceedsLimit || selectedScopeExceedsLimit
 
   /** Devuelve true si el scope necesita datos del servidor (infinite scroll + scope != selected) */
+  function getServerFetcher(s: Scope): (() => Promise<Record<string, unknown>[]>) | undefined {
+    if (s === "all") return infiniteScroll?.fetchAllUnfiltered ?? infiniteScroll?.fetchAllByFilter
+    if (s === "filtered") return infiniteScroll?.fetchAllByFilter
+    return undefined
+  }
+
   function needsServerFetch(s: Scope): boolean {
-    return !!infiniteScroll?.fetchAllByFilter && s !== "selected"
+    return !!getServerFetcher(s)
+  }
+
+  function needsSelectedIdsFetch(s: Scope): boolean {
+    return s === "selected" && !!infiniteScroll?.fetchByIds && selectedIds.length > 0
+  }
+
+  function serverRowsExceedLimit(count: number): boolean {
+    return bulkActionLimit != null && count > bulkActionLimit
   }
 
   async function exportAs(format: ExportFormat) {
+    if (serverScopeExceedsLimit) {
+      toast.error(`Export is limited to ${formatLimit(bulkActionLimit)} rows. Narrow the filters first.`)
+      return
+    }
     const meta = FORMAT_META[format]
+    if (needsSelectedIdsFetch(effectiveScope)) {
+      if (serverRowsExceedLimit(selectedIds.length)) {
+        toast.error(`Export is limited to ${formatLimit(bulkActionLimit)} rows. Narrow the selection first.`)
+        return
+      }
+      const toastId = "export-selected-fetch"
+      toast.loading(`Fetching ${selectedIds.length.toLocaleString()} selected rows...`, { id: toastId })
+      try {
+        const records = await infiniteScroll!.fetchByIds!(selectedIds)
+        const content = formatRawRows(table, records, format, true)
+        const ok = await saveFile(content, `${tableId}-selected.${meta.ext}`, meta.mime, meta.ext)
+        if (ok) toast.success(`Exported ${records.length.toLocaleString()} rows as ${meta.label}`, { id: toastId })
+        else toast.dismiss(toastId)
+      } catch {
+        toast.error("Failed to fetch selected rows from server", { id: toastId })
+      }
+      return
+    }
     if (needsServerFetch(effectiveScope)) {
-      // Fetch todos los datos del servidor y formatea con formatRawRows
+      const fetchRows = getServerFetcher(effectiveScope)
+      if (!fetchRows) return
       const toastId = "export-fetch"
       toast.loading(`Fetching all ${scopeCounts[effectiveScope].toLocaleString()} rows...`, { id: toastId })
       try {
-        const records = await infiniteScroll!.fetchAllByFilter!()
+        const records = await fetchRows()
         const content = formatRawRows(table, records, format, true)
         const ok = await saveFile(content, `${tableId}-${effectiveScope}.${meta.ext}`, meta.mime, meta.ext)
         if (ok) toast.success(`Exported ${records.length.toLocaleString()} rows as ${meta.label}`, { id: toastId })
@@ -144,11 +198,34 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
   }
 
   async function copyAs(format: CopyFormat) {
+    if (serverScopeExceedsLimit) {
+      toast.error(`Copy is limited to ${formatLimit(bulkActionLimit)} rows. Narrow the filters first.`)
+      return
+    }
+    if (needsSelectedIdsFetch(effectiveScope)) {
+      if (serverRowsExceedLimit(selectedIds.length)) {
+        toast.error(`Copy is limited to ${formatLimit(bulkActionLimit)} rows. Narrow the selection first.`)
+        return
+      }
+      const toastId = "copy-selected-fetch"
+      toast.loading(`Fetching ${selectedIds.length.toLocaleString()} selected rows...`, { id: toastId })
+      try {
+        const records = await infiniteScroll!.fetchByIds!(selectedIds)
+        const content = formatRawRows(table, records, format, false)
+        await navigator.clipboard.writeText(content)
+        toast.success(`Copied ${records.length.toLocaleString()} rows as ${FORMAT_META[format].label}`, { id: toastId })
+      } catch {
+        toast.error("Failed to fetch selected rows from server", { id: toastId })
+      }
+      return
+    }
     if (needsServerFetch(effectiveScope)) {
+      const fetchRows = getServerFetcher(effectiveScope)
+      if (!fetchRows) return
       const toastId = "copy-fetch"
       toast.loading(`Fetching all ${scopeCounts[effectiveScope].toLocaleString()} rows...`, { id: toastId })
       try {
-        const records = await infiniteScroll!.fetchAllByFilter!()
+        const records = await fetchRows()
         const content = formatRawRows(table, records, format, false)
         await navigator.clipboard.writeText(content)
         toast.success(`Copied ${records.length.toLocaleString()} rows as ${FORMAT_META[format].label}`, { id: toastId })
@@ -211,13 +288,15 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
 
           <DropdownMenuSeparator />
 
-          <DropdownMenuItem
-            disabled={scopeCounts[effectiveScope] === 0}
-            onClick={() => setBulkCopyOpen(true)}
-          >
-            <Layers />
-            Bulk Copy
-          </DropdownMenuItem>
+          {allowDataExport && (
+            <DropdownMenuItem
+              disabled={selectedScopeCount === 0 || scopeExceedsLimit}
+              onClick={() => setBulkCopyOpen(true)}
+            >
+              <Layers />
+              Bulk Copy
+            </DropdownMenuItem>
+          )}
 
           {onSidePanelToggle && (
             <DropdownMenuItem onClick={onSidePanelToggle}>
@@ -226,35 +305,39 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
             </DropdownMenuItem>
           )}
 
-          <DropdownMenuSeparator />
+          {allowDataExport && (
+            <>
+              <DropdownMenuSeparator />
 
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <DownloadIcon />
-              Export as
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              {(["csv", "tsv", "json", "md"] as ExportFormat[]).map((f) => (
-                <DropdownMenuItem key={f} onClick={() => exportAs(f)}>
-                  {FORMAT_META[f].label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <DownloadIcon />
+                  Export as
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {(["csv", "tsv", "json", "md"] as ExportFormat[]).map((f) => (
+                    <DropdownMenuItem key={f} disabled={selectedScopeCount === 0 || scopeExceedsLimit} onClick={() => exportAs(f)}>
+                      {FORMAT_META[f].label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
 
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <ClipboardCopyIcon />
-              Copy as
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              {(["tsv", "csv", "json", "md"] as CopyFormat[]).map((f) => (
-                <DropdownMenuItem key={f} onClick={() => copyAs(f)}>
-                  {FORMAT_META[f].label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <ClipboardCopyIcon />
+                  Copy as
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {(["tsv", "csv", "json", "md"] as CopyFormat[]).map((f) => (
+                    <DropdownMenuItem key={f} disabled={selectedScopeCount === 0 || scopeExceedsLimit} onClick={() => copyAs(f)}>
+                      {FORMAT_META[f].label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            </>
+          )}
 
           <DropdownMenuItem onClick={() => window.print()}>
             <PrinterIcon />
@@ -277,14 +360,21 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <BulkCopyDialog
-        table={table}
-        tableId={tableId}
-        scope={effectiveScope}
-        open={bulkCopyOpen}
-        onOpenChange={setBulkCopyOpen}
-        fetchAllByFilter={infiniteScroll?.fetchAllByFilter}
-      />
+      {allowDataExport && (
+        <BulkCopyDialog
+          table={table}
+          tableId={tableId}
+          scope={effectiveScope}
+          open={bulkCopyOpen}
+          onOpenChange={setBulkCopyOpen}
+          fetchAllByFilter={infiniteScroll?.fetchAllByFilter}
+          fetchAllUnfiltered={infiniteScroll?.fetchAllUnfiltered}
+          fetchByIds={infiniteScroll?.fetchByIds}
+          selectedIds={selectedIds}
+          rowLimit={bulkActionLimit}
+          rowCount={selectedScopeCount}
+        />
+      )}
 
     </div>
   )
