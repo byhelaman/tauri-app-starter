@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import type { ColumnFiltersState, Table } from "@tanstack/react-table"
+import type { ColumnFiltersState, SortingState, Table } from "@tanstack/react-table"
 
 export interface FacetedFilterOption {
   label: string
@@ -38,6 +38,36 @@ export interface DataTableLayoutConfig {
   tableHeaderClassName?: string
 }
 
+export interface DataTableSelectionScope {
+  search: string
+  filters: ColumnFiltersState
+  date?: string
+  sorting?: SortingState
+}
+
+export type DataTableSelectionState =
+  | { mode: "ids"; ids: string[] }
+  | {
+      mode: "filter"
+      scope: DataTableSelectionScope
+      total: number
+      excludedIds: string[]
+    }
+
+export type ServerExportFormat = "csv" | "tsv" | "json" | "md"
+
+export interface ServerScopeExportRequest {
+  scope: DataTableSelectionScope
+  excludedIds?: string[]
+  format: ServerExportFormat
+  fields: string[]
+}
+
+export interface ServerScopeExportResult {
+  content: string
+  rowCount: number
+}
+
 /** Configuración para modo infinite scroll (sin paginación visible) */
 export interface InfiniteScrollConfig {
   /** Obtiene la siguiente página de datos */
@@ -63,11 +93,10 @@ export interface InfiniteScrollConfig {
   fetchAllUnfiltered?: () => Promise<Record<string, unknown>[]>
   /** Obtiene filas completas por IDs exactos. Usado cuando la selección incluye filas no cargadas. */
   fetchByIds?: (ids: string[]) => Promise<Record<string, unknown>[]>
-  /**
-   * Obtiene SOLO los IDs de TODAS las filas que coinciden con los filtros actuales.
-   * Usado para "Select All" y para calcular intersecciones en modo infinito.
-   */
-  fetchAllIdsByFilter?: (globalFilter?: string, columnFilters?: ColumnFiltersState) => Promise<string[]>
+  /** Scope actual de servidor usado cuando el usuario hace select-all. */
+  currentScope?: DataTableSelectionScope
+  /** Genera contenido server-side para scopes grandes sin cargar registros en memoria del cliente. */
+  exportByScope?: (request: ServerScopeExportRequest) => Promise<ServerScopeExportResult>
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -87,6 +116,10 @@ export interface DataTableMeta {
   visibleSelectedCount?: number
   /** IDs seleccionados que coinciden con el filtro actual */
   visibleSelectedIds?: string[]
+  /** Selección completa: IDs exactos o scope/filtro + exclusiones. */
+  selectionState?: DataTableSelectionState
+  /** Total seleccionado real: ids.length o scope.total - excludedIds.length. */
+  selectedCount?: number
   /** Cantidad total de filas en el filtro actual */
   totalRowCount?: number
   /** Refresca datos cuando el usuario re-aplica el mismo ordenamiento remoto */

@@ -7,8 +7,7 @@
 --   1. Permiso ai.chat
 --   2. RPC get_ai_schema — devuelve esquema de tablas de usuario con FKs
 --
--- Nota: query_table usa PostgREST; execute_ai_query permite SQL analítico
--- solo lectura con RLS, timeout y límite de filas.
+-- Nota: el chat debe usar herramientas/RPCs allowlist. No se habilita SQL libre.
 
 -- ============================================================
 -- 1. PERMISO
@@ -95,42 +94,21 @@ $$;
 GRANT EXECUTE ON FUNCTION public.get_ai_schema(TEXT[]) TO authenticated;
 
 -- ============================================================
--- 3. EXECUTE QUERY (solo lectura garantizada por BD)
+-- 3. EXECUTE QUERY DESHABILITADO
 -- ============================================================
 
--- Ejecuta SQL analítico arbitrario con garantía de solo lectura a nivel de motor.
--- SET LOCAL transaction_read_only = on hace que PostgreSQL rechace cualquier
--- sentencia DML (INSERT/UPDATE/DELETE/CREATE/DROP) antes de ejecutarla,
--- independientemente del contenido del query — sin depender de regex.
--- RLS aplica vía SECURITY INVOKER con el JWT del usuario.
+-- Mantener esta firma bloqueada evita que clientes antiguos o maliciosos
+-- puedan usar SQL arbitrario desde el chat.
 CREATE OR REPLACE FUNCTION public.execute_ai_query(query TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
-VOLATILE
-SECURITY INVOKER
-SET search_path = 'public'
+STABLE
+SECURITY DEFINER
+SET search_path = ''
 AS $$
-DECLARE
-    result JSONB;
 BEGIN
-    IF NOT has_permission_live('ai.chat') THEN
-        RAISE EXCEPTION 'Permission denied: requires ai.chat';
-    END IF;
-
-    -- Garantía de BD: bloquea escrituras a nivel de executor de PostgreSQL.
-    -- Cualquier intento de INSERT/UPDATE/DELETE falla con "cannot execute X
-    -- in a read-only transaction" antes de que se ejecute.
-    PERFORM set_config('transaction_read_only', 'on', true);
-    -- Corta queries largas para evitar saturar el pool.
-    PERFORM set_config('statement_timeout', '5000', true);
-
-    EXECUTE format(
-        'SELECT jsonb_agg(row_to_json(q)) FROM (SELECT * FROM (%s) inner_q LIMIT 500) q',
-        trim(trailing ';' from trim(query))
-    ) INTO result;
-
-    RETURN COALESCE(result, '[]'::JSONB);
+    RAISE EXCEPTION 'execute_ai_query is disabled. Use allowlisted AI tools/RPCs.';
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.execute_ai_query(text) TO authenticated;
+REVOKE ALL ON FUNCTION public.execute_ai_query(text) FROM PUBLIC, anon, authenticated;

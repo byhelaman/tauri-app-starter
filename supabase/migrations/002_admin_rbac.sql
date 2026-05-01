@@ -52,7 +52,7 @@ AS $$
 BEGIN
     IF NOT public.has_permission_live('system.view')
        AND NOT public.has_permission_live('users.view')
-       AND COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0) < 80 THEN
+       AND public.get_current_user_level() < 80 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere system.view o users.view';
     END IF;
 
@@ -73,7 +73,7 @@ AS $$
 BEGIN
     IF NOT public.has_permission_live('system.view')
        AND NOT public.has_permission_live('users.view')
-       AND COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0) < 80 THEN
+       AND public.get_current_user_level() < 80 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere system.view o users.view';
     END IF;
 
@@ -95,7 +95,7 @@ DECLARE
     caller_level int;
     user_count   int;
 BEGIN
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := public.get_current_user_level();
     IF caller_level < 80 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere privilegios de admin';
     END IF;
@@ -118,7 +118,7 @@ DECLARE
     new_role_level int;
 BEGIN
     caller_id := auth.uid();
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := public.get_current_user_level();
 
     IF NOT public.has_permission_live('users.manage') THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
@@ -166,7 +166,7 @@ DECLARE
     target_level int;
 BEGIN
     caller_id := auth.uid();
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := public.get_current_user_level();
 
     IF NOT public.has_permission_live('users.manage') THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
@@ -207,7 +207,7 @@ DECLARE
     target_current_level int;
 BEGIN
     caller_id := auth.uid();
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := public.get_current_user_level();
 
     IF NOT public.has_permission_live('users.manage') THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
@@ -255,7 +255,7 @@ DECLARE
     target_current_role  text;
     target_current_level int;
 BEGIN
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := public.get_current_user_level();
 
     IF NOT public.has_permission_live('users.manage') THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
@@ -348,7 +348,7 @@ AS $$
 DECLARE
     caller_level int;
 BEGIN
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := public.get_current_user_level();
 
     IF caller_level < 100 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
@@ -387,7 +387,7 @@ DECLARE
     effective_desc    text;
     effective_level   int;
 BEGIN
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := public.get_current_user_level();
 
     IF caller_level < 100 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
@@ -456,7 +456,7 @@ DECLARE
     fallback_role     text;
     downgraded_users  int := 0;
 BEGIN
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := public.get_current_user_level();
 
     IF caller_level < 100 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
@@ -505,15 +505,34 @@ $$;
 
 CREATE OR REPLACE FUNCTION public.get_role_permissions(target_role TEXT)
 RETURNS TABLE (permission TEXT)
-LANGUAGE sql
+LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = ''
 AS $$
+DECLARE
+    caller_role TEXT;
+BEGIN
+    SELECT p.role INTO caller_role
+    FROM public.profiles p
+    WHERE p.id = (SELECT auth.uid());
+
+    IF caller_role IS NULL THEN
+        RAISE EXCEPTION 'No autenticado';
+    END IF;
+
+    IF target_role <> caller_role
+       AND NOT public.has_permission_live('system.view')
+       AND NOT public.has_permission_live('users.view') THEN
+        RAISE EXCEPTION 'Permiso denegado: no puedes consultar permisos de otro rol';
+    END IF;
+
+    RETURN QUERY
     SELECT rp.permission
     FROM public.role_permissions rp
     WHERE rp.role = target_role
     ORDER BY rp.permission;
+END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.get_role_permission_matrix()
@@ -526,7 +545,7 @@ AS $$
 BEGIN
     IF NOT public.has_permission_live('system.view')
        AND NOT public.has_permission_live('users.view')
-       AND COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0) < 80 THEN
+       AND public.get_current_user_level() < 80 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere system.view o users.view';
     END IF;
 
@@ -551,7 +570,7 @@ DECLARE
     target_role_level int;
     perm_min_level    int;
 BEGIN
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := public.get_current_user_level();
 
     IF caller_level < 100 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
@@ -603,7 +622,7 @@ DECLARE
     caller_level      int;
     target_role_level int;
 BEGIN
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := public.get_current_user_level();
 
     IF caller_level < 100 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
@@ -655,3 +674,4 @@ REVOKE ALL ON FUNCTION public.assign_role_permission(text, text) FROM PUBLIC, an
 REVOKE ALL ON FUNCTION public.remove_role_permission(text, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.assign_role_permission(text, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.remove_role_permission(text, text) TO authenticated;
+

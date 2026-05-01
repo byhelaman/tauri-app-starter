@@ -6,9 +6,10 @@ import * as api from "../api"
 import type { Order, EditableOrderField, Status } from "../columns"
 import type { QueueOrder, QueueStatus } from "../modal-columns"
 import { useOrdersRealtime } from "./useOrdersRealtime"
+import type { DataTableSelectionState } from "@/components/data-table/data-table-types"
 
 /** Número de filas por chunk en modo infinite scroll */
-const ORDER_CHUNK = 100
+const ORDER_CHUNK = 1000
 
 export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, sorting?: SortingState } = {}) {
   const queryClient = useQueryClient()
@@ -154,19 +155,22 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
 
   // ── Bulk delete mutation con rollback ─────────────────────────────────
   const deleteBulkOrdersMutation = useMutation({
-    mutationFn: api.bulkDeleteOrders,
-    onMutate: async (ids) => {
-      const idSet = new Set(ids)
+    mutationFn: api.bulkDeleteOrdersBySelection,
+    onMutate: async (selection) => {
+      const selectedIds = selection.mode === "ids" ? selection.ids : []
+      const idSet = new Set(selectedIds)
       await queryClient.cancelQueries({ queryKey: ordersQueryKey })
       const previous = queryClient.getQueryData<InfiniteData<{ data: Order[]; total: number }>>(ordersQueryKey)
       queryClient.setQueryData<InfiniteData<{ data: Order[]; total: number }>>(ordersQueryKey, (old) => {
         if (!old) return old
-        const deletedCount = ids.length
+        const deletedCount = selection.mode === "ids"
+          ? selection.ids.length
+          : Math.max(0, selection.total - selection.excludedIds.length)
         return {
           ...old,
           pages: old.pages.map(page => {
             return {
-              data: page.data.filter(o => !idSet.has(o.id)),
+              data: selection.mode === "ids" ? page.data.filter(o => !idSet.has(o.id)) : page.data,
               total: Math.max(0, page.total - deletedCount),
             }
           })
@@ -292,8 +296,8 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
     doDeleteOrder(id)
   }, [doDeleteOrder])
 
-  const deleteBulkOrders = useCallback(async (ids: string[]) => {
-    await doBulkDeleteAsync(ids)
+  const deleteBulkOrders = useCallback(async (selection: DataTableSelectionState) => {
+    await doBulkDeleteAsync(selection)
   }, [doBulkDeleteAsync])
 
   const refreshCurrentOrderSort = useCallback(() => {
@@ -314,6 +318,13 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
       totalRowCount: cachedRowCount,
       unfilteredTotalRowCount: unfilteredCountData?.total ?? cachedRowCount,
       bulkActionRowLimit: api.MAX_BULK_ORDER_ROWS,
+      currentScope: {
+        search: globalFilter,
+        filters: columnFilters,
+        date: dateFilter,
+        sorting,
+      },
+      exportByScope: api.exportOrdersByScope,
       // Obtiene filas completas del servidor vía RPC dedicada, con límite backend.
       fetchAllByFilter: async (): Promise<Record<string, unknown>[]> => {
         // Si el total aún no está disponible (primera carga no completada), no hay filas que retornar
@@ -336,15 +347,6 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
         const rows = await api.fetchOrdersByIds(ids)
         return rows as unknown as Record<string, unknown>[]
       },
-      // Obtiene SOLO los IDs de TODAS las filas filtradas usando el RPC ultra-rápido
-      fetchAllIdsByFilter: async (overrideSearch?: string, overrideFilters?: ColumnFiltersState): Promise<string[]> => {
-        return await api.fetchAllIdsByFilter({
-          search:     overrideSearch ?? globalFilter,
-          filters:    overrideFilters ?? columnFilters,
-          date:       dateFilter,
-        })
-      },
-
     },
 
     columnFilters,

@@ -37,7 +37,8 @@ import {
   DataTableLayoutConfig,
   DataTableToolbarConfig,
   InfiniteScrollConfig,
-  DataTableMeta
+  DataTableMeta,
+  type DataTableSelectionState,
 } from "./data-table-types"
 import { getColumnSizeStyle, getPinnedColumnStyle } from "./data-table-utils"
 import { useInfiniteSelection } from "./use-infinite-selection"
@@ -60,7 +61,8 @@ interface DataTableProps<TData, TValue> {
   bulkActions?: (
     selectedLoadedRows: TData[],
     clearSelection: () => void,
-    selectedIds: string[]
+    selectedIds: string[],
+    selection: DataTableSelectionState
   ) => ReactNode
   rowContextMenu?: (row: TData) => ReactNode
   defaultPageSize?: number
@@ -157,14 +159,18 @@ export function DataTable<TData, TValue>({
     setRowSelection,
     clearSelection,
     visibleSelectedIds,
+    selectionState,
+    selectedCount,
     selectAll,
     deselectAll,
     isSelectingAll,
   } = useInfiniteSelection({
     enabled: !!infiniteScroll,
-    fetchIdsByFilter: infiniteScroll?.fetchAllIdsByFilter,
     globalFilter,
     columnFilters,
+    sorting,
+    totalRowCount: infiniteScroll?.totalRowCount ?? rowCount ?? data.length,
+    date: infiniteScroll?.currentScope?.date,
     loadedRowIds,
   })
 
@@ -253,13 +259,15 @@ export function DataTable<TData, TValue>({
   }, [table, table.getState().pagination.pageIndex, table.getPageCount()])
 
   const totalRows = infiniteScroll?.totalRowCount ?? rowCount ?? 0
-  const displayedSelectedCount = visibleSelectedIds.length
+  const displayedSelectedCount = selectedCount
 
   // Patch meta values after computation
   if (table.options.meta) {
     const meta = table.options.meta as DataTableMeta
     meta.visibleSelectedCount = visibleSelectedIds.length
     meta.visibleSelectedIds = visibleSelectedIds
+    meta.selectionState = selectionState
+    meta.selectedCount = selectedCount
     meta.totalRowCount = totalRows
     meta.refreshSorting = onSortingRefresh
     meta.selectAll = selectAll
@@ -461,7 +469,7 @@ export function DataTable<TData, TValue>({
       {/* Paginador clásico — oculto en modo infinite scroll */}
       {!infiniteScroll && <DataTablePagination table={table} pageSizeOptions={pageSizeOptions} />}
 
-      {bulkActions && visibleSelectedIds.length > 0 && (
+      {bulkActions && selectedCount > 0 && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">
           <div className="flex items-center gap-3 rounded-lg border bg-background p-2 shadow-lg">
             {(() => {
@@ -471,7 +479,7 @@ export function DataTable<TData, TValue>({
                 <>
                   <span className="pl-2 text-sm">{displayCount} selected</span>
                   <div className="h-4 w-px bg-border" />
-                  {bulkActions(selectedLoadedRows.map((r) => r.original), clearSelection, visibleSelectedIds)}
+                  {bulkActions(selectedLoadedRows.map((r) => r.original), clearSelection, visibleSelectedIds, selectionState)}
                   <div className="h-4 w-px bg-border" />
                   <Button variant="ghost" size="icon-sm" onClick={clearSelection}><X /></Button>
                 </>

@@ -351,12 +351,13 @@ export function createSelectColumn<TData>(): ColumnDef<TData> {
       }
 
       // If we are in infinite scroll, we need to know the state of VISIBLE selection
+      const selectedCount = meta?.selectedCount ?? meta?.visibleSelectedCount ?? 0
       const isAllVisibleSelected = meta?.isInfiniteScroll && meta?.totalRowCount !== undefined && meta.totalRowCount > 0
-        ? meta.visibleSelectedCount === meta.totalRowCount
+        ? selectedCount === meta.totalRowCount
         : table.getIsAllPageRowsSelected()
 
       const isSomeVisibleSelected = meta?.isInfiniteScroll
-        ? (meta.visibleSelectedCount ?? 0) > 0 && !isAllVisibleSelected
+        ? selectedCount > 0 && !isAllVisibleSelected
         : table.getIsSomePageRowsSelected()
 
       return (

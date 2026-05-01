@@ -28,6 +28,7 @@ import {
   FORMAT_META,
   formatRows,
   formatRawRows,
+  getExportColumns,
   getScopeRows,
   type CopyFormat,
   type ExportFormat,
@@ -101,7 +102,9 @@ function formatLimit(limit?: number): string {
 
 export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle, infiniteScroll, isSelectAllByFilter, excludedIds, allowDataExport = true }: DataTableViewOptionsProps<TData>) {
   const tableMeta = table.options.meta as DataTableMeta | undefined
-  const selectedCount = isSelectAllByFilter
+  const selectedCount = tableMeta?.selectionState?.mode === "filter"
+    ? tableMeta.selectedCount ?? 0
+    : isSelectAllByFilter
     ? (infiniteScroll?.totalRowCount ?? 0) - (excludedIds?.size ?? 0)
     : tableMeta?.visibleSelectedCount ?? table.getSelectedRowModel().rows.length
   const selectedIds = tableMeta?.visibleSelectedIds
@@ -126,11 +129,9 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
   }
   const bulkActionLimit = infiniteScroll?.bulkActionRowLimit
   const selectedScopeCount = scopeCounts[effectiveScope]
-  const serverScopeExceedsLimit =
-    needsServerFetch(effectiveScope) && bulkActionLimit != null && selectedScopeCount > bulkActionLimit
   const selectedScopeExceedsLimit =
     effectiveScope === "selected" && bulkActionLimit != null && selectedIds.length > bulkActionLimit
-  const scopeExceedsLimit = serverScopeExceedsLimit || selectedScopeExceedsLimit
+  const scopeExceedsLimit = selectedScopeExceedsLimit
 
   /** Devuelve true si el scope necesita datos del servidor (infinite scroll + scope != selected) */
   function getServerFetcher(s: Scope): (() => Promise<Record<string, unknown>[]>) | undefined {
@@ -151,12 +152,44 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
     return bulkActionLimit != null && count > bulkActionLimit
   }
 
+  function selectedFilterExportRequest(format: ExportFormat) {
+    const selection = tableMeta?.selectionState
+    if (effectiveScope !== "selected" || selection?.mode !== "filter") return null
+    return {
+      scope: selection.scope,
+      excludedIds: selection.excludedIds,
+      format,
+      fields: getExportColumns(table).map((column) => column.id),
+    }
+  }
+
+  function scopeExportRequest(format: ExportFormat) {
+    const scope = effectiveScope === "filtered" ? infiniteScroll?.currentScope : undefined
+    if (!scope) return null
+    return {
+      scope,
+      excludedIds: [],
+      format,
+      fields: getExportColumns(table).map((column) => column.id),
+    }
+  }
+
   async function exportAs(format: ExportFormat) {
-    if (serverScopeExceedsLimit) {
-      toast.error(`Export is limited to ${formatLimit(bulkActionLimit)} rows. Narrow the filters first.`)
+    const meta = FORMAT_META[format]
+    const serverExportRequest = selectedFilterExportRequest(format) ?? scopeExportRequest(format)
+    if (serverExportRequest && infiniteScroll?.exportByScope) {
+      const toastId = "export-scope"
+      toast.loading(`Generating ${scopeCounts[effectiveScope].toLocaleString()} rows...`, { id: toastId })
+      try {
+        const result = await infiniteScroll.exportByScope(serverExportRequest)
+        const ok = await saveFile(result.content, `${tableId}-${effectiveScope}.${meta.ext}`, meta.mime, meta.ext)
+        if (ok) toast.success(`Exported ${result.rowCount.toLocaleString()} rows as ${meta.label}`, { id: toastId })
+        else toast.dismiss(toastId)
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to export rows", { id: toastId })
+      }
       return
     }
-    const meta = FORMAT_META[format]
     if (needsSelectedIdsFetch(effectiveScope)) {
       if (serverRowsExceedLimit(selectedIds.length)) {
         toast.error(`Export is limited to ${formatLimit(bulkActionLimit)} rows. Narrow the selection first.`)
@@ -198,8 +231,17 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
   }
 
   async function copyAs(format: CopyFormat) {
-    if (serverScopeExceedsLimit) {
-      toast.error(`Copy is limited to ${formatLimit(bulkActionLimit)} rows. Narrow the filters first.`)
+    const serverExportRequest = selectedFilterExportRequest(format) ?? scopeExportRequest(format)
+    if (serverExportRequest && infiniteScroll?.exportByScope) {
+      const toastId = "copy-scope"
+      toast.loading(`Generating ${scopeCounts[effectiveScope].toLocaleString()} rows...`, { id: toastId })
+      try {
+        const result = await infiniteScroll.exportByScope(serverExportRequest)
+        await navigator.clipboard.writeText(result.content)
+        toast.success(`Copied ${result.rowCount.toLocaleString()} rows as ${FORMAT_META[format].label}`, { id: toastId })
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to copy rows", { id: toastId })
+      }
       return
     }
     if (needsSelectedIdsFetch(effectiveScope)) {

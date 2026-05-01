@@ -4,7 +4,7 @@
 -- Ejecutar después de 009_rate_limiting.sql.
 --
 -- Qué configura:
---   1. Permisos RBAC para orders (orders.view / orders.manage / orders.export)
+--   1. Permisos RBAC para orders (granulares: view/create/update/delete/bulk_delete/export/copy)
 --   2. Tablas: orders, queue_orders, order_history
 --   3. Triggers: updated_at, set_updated_by (para realtime skip-own)
 --   4. RLS granular basada en has_permission_live()
@@ -17,18 +17,27 @@
 -- ============================================================
 
 INSERT INTO public.permissions (name, description, min_role_level) VALUES
-    ('orders.view',   'Ver listado y detalle de órdenes',             10),
-    ('orders.manage', 'Crear, editar y eliminar órdenes',             10),
-    ('orders.export', 'Exportar datos de órdenes',                    10)
+    ('orders.view',        'Ver listado y detalle de órdenes',          10),
+    ('orders.create',      'Crear órdenes',                             10),
+    ('orders.update',      'Editar órdenes',                            10),
+    ('orders.delete',      'Eliminar una orden',                        80),
+    ('orders.bulk_delete', 'Eliminar órdenes masivamente',              80),
+    ('orders.export',      'Exportar datos de órdenes',                 80),
+    ('orders.copy',        'Copiar datos de órdenes',                   80)
 ON CONFLICT (name) DO NOTHING;
 
--- member puede ver y gestionar órdenes
+-- member puede ver/crear/editar; admin puede ejecutar acciones destructivas/export.
 INSERT INTO public.role_permissions (role, permission) VALUES
     ('member', 'orders.view'),
-    ('member', 'orders.manage'),
+    ('member', 'orders.create'),
+    ('member', 'orders.update'),
     ('admin',  'orders.view'),
-    ('admin',  'orders.manage'),
-    ('admin',  'orders.export')
+    ('admin',  'orders.create'),
+    ('admin',  'orders.update'),
+    ('admin',  'orders.delete'),
+    ('admin',  'orders.bulk_delete'),
+    ('admin',  'orders.export'),
+    ('admin',  'orders.copy')
 ON CONFLICT DO NOTHING;
 
 -- ============================================================
@@ -65,9 +74,10 @@ CREATE INDEX idx_orders_channel    ON public.orders(channel);
 CREATE INDEX idx_orders_date       ON public.orders(date DESC);
 CREATE INDEX idx_orders_created_at ON public.orders(created_at DESC);
 CREATE UNIQUE INDEX orders_code_active_key ON public.orders(code) WHERE deleted_at IS NULL;
-CREATE INDEX idx_orders_search     ON public.orders USING gin(
-    to_tsvector('simple', coalesce(customer,'') || ' ' || coalesce(code,'') || ' ' || coalesce(product,''))
-);
+CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions;
+CREATE INDEX idx_orders_search_trgm ON public.orders USING gin (
+    ((coalesce(customer,'') || ' ' || coalesce(code,'') || ' ' || coalesce(product,'')) extensions.gin_trgm_ops)
+) WHERE deleted_at IS NULL;
 
 -- ──────────────────────────────────────────────────────────────
 
@@ -139,6 +149,9 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
 AS $$
+DECLARE
+    v_limit INT := LEAST(GREATEST(COALESCE(p_limit, 20), 1), 100);
+    v_offset INT := GREATEST(COALESCE(p_offset, 0), 0);
 BEGIN
     NEW.updated_by = auth.uid();
     RETURN NEW;
@@ -404,46 +417,46 @@ ALTER TABLE public.order_change_events ENABLE ROW LEVEL SECURITY;
 -- orders: ver
 CREATE POLICY "orders_select" ON public.orders
     FOR SELECT TO authenticated
-    USING (public.has_permission_live('orders.view') AND deleted_at IS NULL);
+    USING ((SELECT public.has_permission_live('orders.view')) AND deleted_at IS NULL);
 
 -- orders: crear
 CREATE POLICY "orders_insert" ON public.orders
     FOR INSERT TO authenticated
-    WITH CHECK (public.has_permission_live('orders.manage'));
+    WITH CHECK ((SELECT public.has_permission_live('orders.create')));
 
 -- orders: editar
 CREATE POLICY "orders_update" ON public.orders
     FOR UPDATE TO authenticated
-    USING  (public.has_permission_live('orders.manage'))
-    WITH CHECK (public.has_permission_live('orders.manage'));
+    USING  ((SELECT public.has_permission_live('orders.update')))
+    WITH CHECK ((SELECT public.has_permission_live('orders.update')));
 
--- orders: eliminar — requiere manage; solo owners pueden bulk-delete
+-- orders: eliminar
 CREATE POLICY "orders_delete" ON public.orders
     FOR DELETE TO authenticated
-    USING (public.has_permission_live('orders.manage'));
+    USING ((SELECT public.has_permission_live('orders.delete')));
 
 -- queue_orders
 CREATE POLICY "queue_select" ON public.queue_orders
     FOR SELECT TO authenticated
-    USING (public.has_permission_live('orders.view'));
+    USING ((SELECT public.has_permission_live('orders.view')));
 
 CREATE POLICY "queue_insert" ON public.queue_orders
     FOR INSERT TO authenticated
-    WITH CHECK (public.has_permission_live('orders.manage'));
+    WITH CHECK ((SELECT public.has_permission_live('orders.create')));
 
 CREATE POLICY "queue_update" ON public.queue_orders
     FOR UPDATE TO authenticated
-    USING  (public.has_permission_live('orders.manage'))
-    WITH CHECK (public.has_permission_live('orders.manage'));
+    USING  ((SELECT public.has_permission_live('orders.update')))
+    WITH CHECK ((SELECT public.has_permission_live('orders.update')));
 
 CREATE POLICY "queue_delete" ON public.queue_orders
     FOR DELETE TO authenticated
-    USING (public.has_permission_live('orders.manage'));
+    USING ((SELECT public.has_permission_live('orders.delete')));
 
 -- order_history: solo lectura para manage; escribir vía SECURITY DEFINER RPCs
 CREATE POLICY "order_history_select" ON public.order_history
     FOR SELECT TO authenticated
-    USING (public.has_permission_live('orders.view'));
+    USING ((SELECT public.has_permission_live('orders.view')));
 
 -- Bloquear INSERT directo — solo las RPCs SECURITY DEFINER pueden escribir
 CREATE POLICY "order_history_insert_deny" ON public.order_history
@@ -454,7 +467,7 @@ CREATE POLICY "order_history_insert_deny" ON public.order_history
 -- desde triggers SECURITY DEFINER.
 CREATE POLICY "order_change_events_select" ON public.order_change_events
     FOR SELECT TO authenticated
-    USING (public.has_permission_live('orders.view'));
+    USING ((SELECT public.has_permission_live('orders.view')));
 
 CREATE POLICY "order_change_events_insert_deny" ON public.order_change_events
     FOR INSERT TO authenticated
@@ -489,9 +502,11 @@ DECLARE
     v_sort_c     TEXT := 'created_at';
     v_sort_d     TEXT := 'DESC';
     v_hours      INT[];
+    v_limit      INT;
+    v_offset     INT;
 BEGIN
     
-    IF NOT public.has_permission_live('orders.view') THEN
+    IF NOT (SELECT public.has_permission_live('orders.view')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.view';
     END IF;
 
@@ -529,15 +544,17 @@ BEGIN
         WHERE x ~ '^\d+$';
     END IF;
 
+    v_limit := LEAST(GREATEST(COALESCE(p_limit, 25), 1), 1000);
+    v_offset := GREATEST(COALESCE(p_offset, 0), 0);
+
     v_sql := format($query$
         WITH filtered AS (
             SELECT o.*
             FROM public.orders o
             WHERE o.deleted_at IS NULL
                 AND ($1 = '' OR $1 IS NULL OR (
-                    o.customer ILIKE '%%' || $1 || '%%' OR
-                    o.code     ILIKE '%%' || $1 || '%%' OR
-                    o.product  ILIKE '%%' || $1 || '%%'
+                    (coalesce(o.customer,'') || ' ' || coalesce(o.code,'') || ' ' || coalesce(o.product,''))
+                        ILIKE '%%' || $1 || '%%'
                 ))
                 AND ($2 IS NULL OR array_length($2, 1) IS NULL OR o.status  = ANY($2))
                 AND ($3 IS NULL OR array_length($3, 1) IS NULL OR o.channel = ANY($3))
@@ -576,7 +593,7 @@ BEGIN
     $query$, v_sort_c, v_sort_d, v_sort_c, v_sort_d);
 
     EXECUTE v_sql
-    USING p_search, p_status, p_channel, p_date, v_hours, p_limit, p_offset
+    USING p_search, p_status, p_channel, p_date, v_hours, v_limit, v_offset
     INTO v_total, v_data;
 
     RETURN json_build_object(
@@ -597,7 +614,7 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-    IF NOT public.has_permission_live('orders.view') THEN
+    IF NOT (SELECT public.has_permission_live('orders.view')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.view';
     END IF;
 
@@ -630,7 +647,7 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-    IF NOT public.has_permission_live('orders.view') THEN
+    IF NOT (SELECT public.has_permission_live('orders.view')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.view';
     END IF;
 
@@ -659,7 +676,7 @@ DECLARE
     v_by_channel JSON;
     v_revenue    NUMERIC;
 BEGIN
-    IF NOT public.has_permission_live('orders.view') THEN
+    IF NOT (SELECT public.has_permission_live('orders.view')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.view';
     END IF;
 
@@ -697,7 +714,7 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-    IF NOT public.has_permission_live('orders.view') THEN
+    IF NOT (SELECT public.has_permission_live('orders.view')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.view';
     END IF;
 
@@ -716,7 +733,7 @@ BEGIN
             FROM public.order_history h
             LEFT JOIN public.orders o ON o.id = h.order_id
             ORDER BY h.created_at DESC
-            LIMIT p_limit OFFSET p_offset
+            LIMIT v_limit OFFSET v_offset
         ) r
     ), '[]'::JSON);
 END;
@@ -776,7 +793,7 @@ DECLARE
     v_offset     INT;
 BEGIN
     
-    IF NOT public.has_permission_live('orders.export') THEN
+    IF NOT (SELECT public.has_permission_live('orders.export')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.export';
     END IF;
 
@@ -870,68 +887,6 @@ $$;
 
 -- ──────────────────────────────────────────────────────────────
 
--- get_order_ids_by_filter
--- Retorna SOLO un arreglo de UUIDs para selecciones masivas ultra-rápidas
-CREATE OR REPLACE FUNCTION public.get_order_ids_by_filter(
-    p_search       TEXT    DEFAULT '',
-    p_status       TEXT[]  DEFAULT NULL,
-    p_channel      TEXT[]  DEFAULT NULL,
-    p_date         DATE    DEFAULT NULL,
-    p_start_hour   TEXT[]  DEFAULT NULL,
-    p_limit        INT     DEFAULT 10000,
-    p_offset       INT     DEFAULT 0
-)
-RETURNS UUID[]
-LANGUAGE plpgsql
-STABLE
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-DECLARE
-    v_hours INT[] := NULL;
-    v_ids UUID[];
-    v_limit INT;
-    v_offset INT;
-BEGIN
-    IF NOT public.has_permission_live('orders.view') THEN
-        RAISE EXCEPTION 'Permission denied: requires orders.view';
-    END IF;
-
-    v_limit := LEAST(GREATEST(COALESCE(p_limit, 10000), 1), 10000);
-    v_offset := GREATEST(COALESCE(p_offset, 0), 0);
-
-    IF p_start_hour IS NOT NULL AND array_length(p_start_hour, 1) > 0 THEN
-        SELECT array_agg(x::INT) INTO v_hours
-        FROM unnest(p_start_hour) AS x
-        WHERE x ~ '^\d+$';
-    END IF;
-
-    SELECT array_agg(id) INTO v_ids
-    FROM (
-        SELECT o.id
-        FROM public.orders o
-        WHERE o.deleted_at IS NULL
-            AND (p_search = '' OR p_search IS NULL OR (
-                o.customer ILIKE '%' || p_search || '%' OR
-                o.code     ILIKE '%' || p_search || '%' OR
-                o.product  ILIKE '%' || p_search || '%'
-            ))
-            AND (p_status IS NULL OR array_length(p_status, 1) IS NULL OR o.status  = ANY(p_status))
-            AND (p_channel IS NULL OR array_length(p_channel, 1) IS NULL OR o.channel = ANY(p_channel))
-            AND (p_date IS NULL OR o.date = p_date)
-            AND (v_hours IS NULL OR array_length(v_hours, 1) IS NULL
-                OR EXTRACT(HOUR FROM o.start_time)::INT = ANY(v_hours))
-        ORDER BY o.created_at DESC
-        LIMIT v_limit
-        OFFSET v_offset
-    ) limited;
-
-    RETURN COALESCE(v_ids, ARRAY[]::UUID[]);
-END;
-$$;
-
--- ──────────────────────────────────────────────────────────────
-
 -- bulk_delete_orders_by_filter
 CREATE OR REPLACE FUNCTION public.bulk_delete_orders_by_filter(
     p_search       TEXT    DEFAULT '',
@@ -952,8 +907,8 @@ DECLARE
     v_hours INT[];
     v_records JSONB;
 BEGIN
-    IF NOT public.has_permission_live('orders.manage') THEN
-        RAISE EXCEPTION 'Permission denied: requires orders.manage';
+    IF NOT (SELECT public.has_permission_live('orders.bulk_delete')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.bulk_delete';
     END IF;
 
     IF p_start_hour IS NOT NULL THEN
@@ -1050,6 +1005,198 @@ $$;
 
 -- ──────────────────────────────────────────────────────────────
 
+CREATE OR REPLACE FUNCTION public.order_export_value(
+    p_field TEXT,
+    p_id UUID,
+    p_date DATE,
+    p_customer TEXT,
+    p_product TEXT,
+    p_category TEXT,
+    p_start_time TIME,
+    p_end_time TIME,
+    p_code TEXT,
+    p_status TEXT,
+    p_channel TEXT,
+    p_quantity INT,
+    p_amount NUMERIC,
+    p_region TEXT,
+    p_payment TEXT,
+    p_priority TEXT,
+    p_created_at TIMESTAMPTZ
+)
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+SET search_path = ''
+AS $$
+    SELECT CASE p_field
+        WHEN 'id' THEN p_id::text
+        WHEN 'date' THEN p_date::text
+        WHEN 'customer' THEN p_customer
+        WHEN 'product' THEN p_product
+        WHEN 'category' THEN p_category
+        WHEN 'time' THEN to_char(p_start_time, 'HH24:MI') || ' - ' || to_char(p_end_time, 'HH24:MI')
+        WHEN 'start_time' THEN to_char(p_start_time, 'HH24:MI')
+        WHEN 'end_time' THEN to_char(p_end_time, 'HH24:MI')
+        WHEN 'code' THEN p_code
+        WHEN 'status' THEN p_status
+        WHEN 'channel' THEN p_channel
+        WHEN 'quantity' THEN p_quantity::text
+        WHEN 'amount' THEN p_amount::text
+        WHEN 'region' THEN p_region
+        WHEN 'payment' THEN p_payment
+        WHEN 'priority' THEN p_priority
+        WHEN 'created_at' THEN p_created_at::text
+        ELSE NULL
+    END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.text_csv_escape(p_value TEXT)
+RETURNS TEXT
+LANGUAGE sql
+IMMUTABLE
+SET search_path = ''
+AS $$
+    SELECT CASE
+        WHEN p_value IS NULL THEN ''
+        WHEN p_value ~ '[,"\r\n]' THEN '"' || replace(p_value, '"', '""') || '"'
+        ELSE p_value
+    END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.export_orders_by_filter(
+    p_search       TEXT    DEFAULT '',
+    p_status       TEXT[]  DEFAULT NULL,
+    p_channel      TEXT[]  DEFAULT NULL,
+    p_date         DATE    DEFAULT NULL,
+    p_start_hour   TEXT[]  DEFAULT NULL,
+    p_excluded_ids UUID[]  DEFAULT ARRAY[]::UUID[],
+    p_sort_col     TEXT    DEFAULT NULL,
+    p_sort_dir     TEXT    DEFAULT NULL,
+    p_format       TEXT    DEFAULT 'csv',
+    p_fields       TEXT[]  DEFAULT NULL
+)
+RETURNS JSON
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_sql        TEXT;
+    v_sort_c     TEXT := 'created_at';
+    v_sort_d     TEXT := 'DESC';
+    v_hours      INT[];
+    v_fields     TEXT[];
+    v_content    TEXT;
+    v_count      INT;
+    v_delim      TEXT;
+    v_format     TEXT := lower(COALESCE(p_format, 'csv'));
+BEGIN
+    IF NOT (SELECT public.has_permission_live('orders.export')) AND NOT (SELECT public.has_permission_live('orders.copy')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.export or orders.copy';
+    END IF;
+
+    v_fields := COALESCE(p_fields, ARRAY['date','customer','product','category','time','code','status','channel','quantity','amount','region','payment','priority']);
+    SELECT array_agg(field)
+    INTO v_fields
+    FROM unnest(v_fields) field
+    WHERE field = ANY(ARRAY['id','date','customer','product','category','time','start_time','end_time','code','status','channel','quantity','amount','region','payment','priority','created_at']);
+
+    IF array_length(v_fields, 1) IS NULL THEN
+        RAISE EXCEPTION 'No exportable fields selected';
+    END IF;
+
+    v_sort_c := CASE p_sort_col
+        WHEN 'id' THEN 'id' WHEN 'date' THEN 'date' WHEN 'customer' THEN 'customer'
+        WHEN 'product' THEN 'product' WHEN 'category' THEN 'category' WHEN 'time' THEN 'start_time'
+        WHEN 'start_time' THEN 'start_time' WHEN 'end_time' THEN 'end_time' WHEN 'code' THEN 'code'
+        WHEN 'status' THEN 'status' WHEN 'channel' THEN 'channel' WHEN 'quantity' THEN 'quantity'
+        WHEN 'amount' THEN 'amount' WHEN 'region' THEN 'region' WHEN 'payment' THEN 'payment'
+        WHEN 'priority' THEN 'priority' WHEN 'created_at' THEN 'created_at' ELSE 'created_at'
+    END;
+
+    IF lower(p_sort_dir) = 'asc' THEN v_sort_d := 'ASC';
+    ELSIF lower(p_sort_dir) = 'desc' THEN v_sort_d := 'DESC';
+    END IF;
+
+    IF p_start_hour IS NOT NULL THEN
+        SELECT array_agg(x::INT) INTO v_hours FROM unnest(p_start_hour) x WHERE x ~ '^\d+$';
+    END IF;
+
+    v_delim := CASE WHEN v_format = 'tsv' THEN E'\t' ELSE ',' END;
+
+    v_sql := format($query$
+        WITH filtered AS (
+            SELECT o.*
+            FROM public.orders o
+            WHERE o.deleted_at IS NULL
+                AND ($1 = '' OR $1 IS NULL OR ((coalesce(o.customer,'') || ' ' || coalesce(o.code,'') || ' ' || coalesce(o.product,'')) ILIKE '%%' || $1 || '%%'))
+                AND ($2 IS NULL OR array_length($2, 1) IS NULL OR o.status = ANY($2))
+                AND ($3 IS NULL OR array_length($3, 1) IS NULL OR o.channel = ANY($3))
+                AND ($4 IS NULL OR o.date = $4)
+                AND ($5 IS NULL OR array_length($5, 1) IS NULL OR EXTRACT(HOUR FROM o.start_time)::INT = ANY($5))
+                AND (array_length($6, 1) IS NULL OR o.id != ALL($6))
+        ),
+        ordered AS (
+            SELECT row_number() OVER () AS rn, ordered_rows.*
+            FROM (
+                SELECT *
+                FROM filtered
+                ORDER BY %I %s NULLS LAST, created_at DESC, id DESC
+            ) ordered_rows
+        ),
+        row_lines AS (
+            SELECT o.rn,
+                   o.id,
+                   string_agg(
+                       CASE
+                           WHEN $9 = 'csv' THEN public.text_csv_escape(public.order_export_value(f.field, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority, o.created_at))
+                           ELSE COALESCE(replace(public.order_export_value(f.field, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority, o.created_at), E'\t', ' '), '')
+                       END,
+                       $8 ORDER BY f.ordinality
+                   ) AS line
+            FROM ordered o
+            CROSS JOIN unnest($7::text[]) WITH ORDINALITY AS f(field, ordinality)
+            GROUP BY o.rn, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time,
+                     o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment,
+                     o.priority, o.created_at
+        )
+        SELECT
+            (SELECT COUNT(*) FROM ordered),
+            CASE
+                WHEN $9 = 'json' THEN (
+                    SELECT COALESCE(jsonb_agg(obj ORDER BY rn)::text, '[]')
+                    FROM (
+                        SELECT o.rn,
+                               jsonb_object_agg(f.field, public.order_export_value(f.field, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority, o.created_at) ORDER BY f.ordinality) AS obj
+                        FROM ordered o
+                        CROSS JOIN unnest($7::text[]) WITH ORDINALITY AS f(field, ordinality)
+                        GROUP BY o.rn, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time,
+                                 o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment,
+                                 o.priority, o.created_at
+                    ) j
+                )
+                WHEN $9 = 'md' THEN (
+                    '| ' || array_to_string($7, ' | ') || ' |' || E'\n' ||
+                    '| ' || array_to_string(ARRAY(SELECT '---' FROM unnest($7)), ' | ') || ' |' || E'\n' ||
+                    COALESCE((SELECT string_agg('| ' || replace(line, $8, ' | ') || ' |', E'\n' ORDER BY rn) FROM row_lines), '')
+                )
+                ELSE (
+                    CASE WHEN $9 IN ('csv','tsv') THEN array_to_string($7, $8) || E'\n' ELSE '' END ||
+                    COALESCE((SELECT string_agg(line, E'\n' ORDER BY rn) FROM row_lines), '')
+                )
+            END
+    $query$, v_sort_c, v_sort_d);
+
+    EXECUTE v_sql
+    USING p_search, p_status, p_channel, p_date, v_hours, p_excluded_ids, v_fields, v_delim, v_format
+    INTO v_count, v_content;
+
+    RETURN json_build_object('content', COALESCE(v_content, ''), 'row_count', COALESCE(v_count, 0));
+END;
+$$;
+
 -- get_orders_by_ids
 -- Obtiene un array de órdenes completo a partir de sus IDs, sorteando los límites de longitud de URL del frontend
 CREATE OR REPLACE FUNCTION public.get_orders_by_ids(p_ids UUID[])
@@ -1062,7 +1209,7 @@ AS $$
 DECLARE
     v_data JSON;
 BEGIN
-    IF NOT public.has_permission_live('orders.export') THEN
+    IF NOT (SELECT public.has_permission_live('orders.export')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.export';
     END IF;
 
@@ -1113,8 +1260,8 @@ DECLARE
     v_count INT;
     v_records JSONB;
 BEGIN
-    IF NOT public.has_permission_live('orders.manage') THEN
-        RAISE EXCEPTION 'Permission denied: requires orders.manage';
+    IF NOT (SELECT public.has_permission_live('orders.bulk_delete')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.bulk_delete';
     END IF;
 
     IF COALESCE(array_length(p_ids, 1), 0) > 10000 THEN
@@ -1167,7 +1314,6 @@ GRANT EXECUTE ON FUNCTION public.get_orders_stats()                         TO a
 GRANT EXECUTE ON FUNCTION public.get_order_history(INT,INT)                 TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_start_hours()                   TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_by_filter(TEXT,TEXT[],TEXT[],DATE,TEXT[],UUID[],TEXT,TEXT,INT,INT) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.get_order_ids_by_filter(TEXT,TEXT[],TEXT[],DATE,TEXT[],INT,INT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_filter(TEXT,TEXT[],TEXT[],DATE,TEXT[],UUID[]) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_by_ids(UUID[])                  TO authenticated;
 GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_ids(UUID[])          TO authenticated;
@@ -1241,3 +1387,7 @@ BEGIN
     END LOOP;
 END;
 $$;
+
+
+
+

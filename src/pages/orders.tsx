@@ -26,7 +26,7 @@ import {
 import { DataTable } from "@/components/data-table/data-table"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Separator } from "@/components/ui/separator"
-import type { FacetedFilterOption } from "@/components/data-table/data-table-types"
+import type { DataTableSelectionState, FacetedFilterOption } from "@/components/data-table/data-table-types"
 import { ImportDialog } from "@/components/data-table/import-dialog"
 import { buildBulkCopyText } from "@/components/data-table/bulk-copy"
 import {
@@ -91,9 +91,11 @@ const QUEUE_STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
 export function OrdersPage() {
   const { hasPermission } = useAuth()
   const canExportOrders = hasPermission("orders.export")
+  const canDeleteOrders = hasPermission("orders.delete")
+  const canBulkDeleteOrders = hasPermission("orders.bulk_delete")
   const [bulkDeleteOp, setBulkDeleteOp] = useState<{
     count: number
-    ids: string[]
+    selection: DataTableSelectionState
     clearSelection: () => void
   } | null>(null)
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null)
@@ -232,16 +234,20 @@ export function OrdersPage() {
               <ContextMenuItem onSelect={() => toast.info(`Drafting email for ${order.customer}`)}>
                 Send email
               </ContextMenuItem>
-              <ContextMenuSeparator />
-              <ContextMenuItem 
-                onSelect={() => handleDeleteRequest(order)}
-              >
-                Cancel order
-              </ContextMenuItem>
+              {canDeleteOrders && (
+                <>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem 
+                    onSelect={() => handleDeleteRequest(order)}
+                  >
+                    Cancel order
+                  </ContextMenuItem>
+                </>
+              )}
             </>
           )
         }}
-        bulkActions={(selectedLoadedRows, clearSelection, selectedIds) => (
+        bulkActions={(selectedLoadedRows, clearSelection, selectedIds, selection) => (
           <>
             {canExportOrders && (
               <Button
@@ -251,16 +257,27 @@ export function OrdersPage() {
                   const toastId = "copy-all"
                   toast.loading(`Preparing copy...`, { id: toastId })
                   try {
-                    // Si todos los IDs seleccionados están ya en memoria, los usamos directo
-                    const rowsToCopy = selectedIds.length === selectedLoadedRows.length
-                      ? selectedLoadedRows
-                      : await fetchOrdersByIds(selectedIds)
+                    const rowsToCopy = selection.mode === "filter"
+                      ? null
+                      : selectedIds.length === selectedLoadedRows.length
+                        ? selectedLoadedRows
+                        : await fetchOrdersByIds(selectedIds)
 
-                    const content = buildBulkCopyText(rowsToCopy as unknown as Record<string, unknown>[], "orders")
+                    const content = selection.mode === "filter"
+                      ? (await infiniteScroll.exportByScope!({
+                          scope: selection.scope,
+                          excludedIds: selection.excludedIds,
+                          format: "tsv",
+                          fields: ["date", "customer", "product", "category", "time", "code", "status", "channel", "quantity", "amount", "region", "payment", "priority"],
+                        })).content
+                      : buildBulkCopyText(rowsToCopy as unknown as Record<string, unknown>[], "orders")
                     if (!content) { toast.error("Nothing to copy", { id: toastId }); return }
                     
                     await navigator.clipboard.writeText(content)
-                    toast.success(`Copied ${rowsToCopy.length.toLocaleString()} rows`, { id: toastId })
+                    const copiedCount = selection.mode === "filter"
+                      ? Math.max(0, selection.total - selection.excludedIds.length)
+                      : (rowsToCopy?.length ?? 0)
+                    toast.success(`Copied ${copiedCount.toLocaleString()} rows`, { id: toastId })
                   } catch (error) {
                     toast.error(error instanceof Error ? error.message : "Could not copy to clipboard", { id: toastId })
                   }
@@ -270,21 +287,23 @@ export function OrdersPage() {
                 Copy
               </Button>
             )}
-            <Button
-              variant="destructive"
-              size="sm"
-              aria-label="Delete"
-              onClick={() => {
-                setBulkDeleteOp({
-                  count: selectedIds.length,
-                  ids: selectedIds,
-                  clearSelection
-                })
-              }}
-            >
-              <Trash2 />
-              Delete
-            </Button>
+            {canBulkDeleteOrders && (
+              <Button
+                variant="destructive"
+                size="sm"
+                aria-label="Delete"
+                onClick={() => {
+                  setBulkDeleteOp({
+                    count: selection.mode === "filter" ? Math.max(0, selection.total - selection.excludedIds.length) : selectedIds.length,
+                    selection,
+                    clearSelection
+                  })
+                }}
+              >
+                <Trash2 />
+                Delete
+              </Button>
+            )}
           </>
         )}
 
@@ -404,7 +423,7 @@ export function OrdersPage() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               This will delete the selected orders. This action cannot be undone.
-              {bulkDeleteOp && bulkDeleteOp.count > MAX_BULK_ORDER_ROWS && (
+              {bulkDeleteOp && bulkDeleteOp.selection.mode === "ids" && bulkDeleteOp.count > MAX_BULK_ORDER_ROWS && (
                 <span className="mt-2 block font-medium text-destructive">
                   Bulk delete is limited to {MAX_BULK_ORDER_ROWS.toLocaleString()} orders at a time.
                 </span>
@@ -415,13 +434,13 @@ export function OrdersPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              disabled={!bulkDeleteOp || bulkDeleteOp.count > MAX_BULK_ORDER_ROWS}
+              disabled={!bulkDeleteOp || (bulkDeleteOp.selection.mode === "ids" && bulkDeleteOp.count > MAX_BULK_ORDER_ROWS)}
               onClick={async () => {
                 if (!bulkDeleteOp) return
                 const toastId = "bulk-delete-orders"
                 toast.loading(`Deleting ${bulkDeleteOp.count.toLocaleString()} orders...`, { id: toastId })
                 try {
-                  await actions.deleteBulkOrders(bulkDeleteOp.ids)
+                  await actions.deleteBulkOrders(bulkDeleteOp.selection)
                   toast.success(`${bulkDeleteOp.count.toLocaleString()} orders deleted`, { id: toastId })
                   bulkDeleteOp.clearSelection()
                   setBulkDeleteOp(null)

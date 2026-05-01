@@ -2,13 +2,21 @@ import { supabase } from "@/lib/supabase"
 import type { Order, Status } from "@/features/orders/columns"
 import type { QueueOrder } from "@/features/orders/modal-columns"
 import type { HistoryEntry } from "@/components/data-table/data-table-types"
-import type { ColumnFiltersState, SortingState } from "@tanstack/react-table"
+import type {
+  ColumnFiltersState,
+  SortingState,
+} from "@tanstack/react-table"
+import type {
+  DataTableSelectionScope,
+  DataTableSelectionState,
+  ServerExportFormat,
+  ServerScopeExportResult,
+} from "@/components/data-table/data-table-types"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 export const MAX_BULK_ORDER_ROWS = 10_000
 export const DEFAULT_EXPORT_ORDER_ROWS = MAX_BULK_ORDER_ROWS
-const SELECT_IDS_PAGE_SIZE = 10_000
 
 function assertSupabase(): NonNullable<typeof supabase> {
   if (!supabase) throw new Error("Supabase client not configured")
@@ -201,6 +209,62 @@ export const bulkDeleteOrders = async (ids: string[]) => {
   if (error) throw new Error(error.message)
 }
 
+function scopeRpcParams(scope: DataTableSelectionScope, excludedIds: string[] = []) {
+  return {
+    p_search:       scope.search || "",
+    p_status:       pickFilter(scope.filters, "status"),
+    p_channel:      pickFilter(scope.filters, "channel"),
+    p_date:         scope.date ?? null,
+    p_start_hour:   pickHourFilter(scope.filters),
+    p_excluded_ids: excludedIds.length > 0 ? excludedIds : [],
+  }
+}
+
+function scopeExportRpcParams(scope: DataTableSelectionScope, excludedIds: string[] = []) {
+  return {
+    ...scopeRpcParams(scope, excludedIds),
+    p_sort_col:     scope.sorting?.[0]?.id ?? null,
+    p_sort_dir:     scope.sorting?.[0]?.desc ? "desc" : (scope.sorting?.[0] ? "asc" : null),
+  }
+}
+
+export const bulkDeleteOrdersBySelection = async (selection: DataTableSelectionState) => {
+  if (selection.mode === "ids") {
+    return bulkDeleteOrders(selection.ids)
+  }
+  const db = assertSupabase()
+  const { data, error } = await db.rpc("bulk_delete_orders_by_filter", {
+    ...scopeRpcParams(selection.scope, selection.excludedIds),
+  })
+  if (error) throw new Error(error.message)
+  return (data as number) ?? 0
+}
+
+export const exportOrdersByScope = async ({
+  scope,
+  excludedIds = [],
+  format,
+  fields,
+}: {
+  scope: DataTableSelectionScope
+  excludedIds?: string[]
+  format: ServerExportFormat
+  fields: string[]
+}): Promise<ServerScopeExportResult> => {
+  const db = assertSupabase()
+  const { data, error } = await db.rpc("export_orders_by_filter", {
+    ...scopeExportRpcParams(scope, excludedIds),
+    p_format: format,
+    p_fields: fields,
+  })
+  if (error) throw new Error(error.message)
+  const result = data as { content?: string; row_count?: number } | null
+  return {
+    content: result?.content ?? "",
+    rowCount: result?.row_count ?? 0,
+  }
+}
+
 
 
 /** Obtiene las órdenes que coinciden con los filtros activos, hasta el límite máximo permitido.
@@ -240,41 +304,6 @@ export const fetchAllOrdersByFilter = async ({
   })
   if (error) throw new Error(error.message)
   return (data as Order[]) ?? []
-}
-
-/** Obtiene SOLO los IDs de las órdenes que coinciden con los filtros. Usado para selecciones masivas sticky. */
-export const fetchAllIdsByFilter = async ({
-  search = "",
-  filters = [] as ColumnFiltersState,
-  date,
-}: {
-  search?: string
-  filters?: ColumnFiltersState
-  date?: string
-} = {}): Promise<string[]> => {
-  const db = assertSupabase()
-  const ids: string[] = []
-  let offset = 0
-
-  while (true) {
-    const { data, error } = await db.rpc("get_order_ids_by_filter", {
-      p_search:       search || "",
-      p_status:       pickFilter(filters, "status"),
-      p_channel:      pickFilter(filters, "channel"),
-      p_date:         date ?? null,
-      p_start_hour:   pickHourFilter(filters),
-      p_limit:        SELECT_IDS_PAGE_SIZE,
-      p_offset:       offset,
-    })
-    if (error) throw new Error(error.message)
-
-    const page = (data as string[]) ?? []
-    ids.push(...page)
-    if (page.length < SELECT_IDS_PAGE_SIZE) break
-    offset += SELECT_IDS_PAGE_SIZE
-  }
-
-  return ids
 }
 
 /** Obtiene órdenes completas dado un arreglo de IDs exactos. Usado para Export/Copy. */

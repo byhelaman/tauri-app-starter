@@ -15,33 +15,12 @@ const GET_SCHEMA_TOOL = {
     },
 }
 
-const EXECUTE_QUERY_TOOL = {
-    type: "function",
-    function: {
-        name: "execute_query",
-        description: `Executes a read-only SQL SELECT query for complex analytics that query_table cannot express:
-aggregations (GROUP BY, SUM, COUNT, AVG, MIN, MAX), gap analysis, window functions, CTEs, multi-table JOINs.
-Writes are blocked at the database level — not by regex. Always include LIMIT.`,
-        parameters: {
-            type: "object",
-            properties: {
-                query: {
-                    type: "string",
-                    description: "A SELECT SQL query. Must include LIMIT.",
-                },
-            },
-            required: ["query"],
-        },
-    },
-}
-
 const QUERY_TABLE_TOOL = {
     type: "function",
     function: {
         name: "query_table",
         description: `Queries a table via the Supabase REST API. Supports column selection, filters, ordering, and pagination.
 For related data use dot notation in select, e.g. "id,name,orders(id,total)".
-Use execute_query instead when you need aggregations or complex logic.
 Always include a limit. Maximum allowed is 200.`,
         parameters: {
             type: "object",
@@ -80,27 +59,24 @@ Always include a limit. Maximum allowed is 200.`,
     },
 }
 
-// Allowlist opcional de tablas para query_table.
-// Si AI_ALLOWED_TABLES está vacío/no definido, se permite cualquier tabla visible bajo RLS
-// y se ofrece execute_query (SQL libre con read-only enforcement en BD).
-// Si está definido, se restringe query_table al subconjunto y execute_query queda fuera.
-const ALLOWED_TABLES: Set<string> | null = (() => {
+const DEFAULT_ALLOWED_TABLES = new Set(["orders", "queue_orders"])
+
+// Allowlist defensiva de tablas para query_table. Si AI_ALLOWED_TABLES no está definido,
+// se usa una allowlist mínima de tablas de negocio. Nunca se ofrece SQL libre.
+const ALLOWED_TABLES: Set<string> = (() => {
     const raw = Deno.env.get("AI_ALLOWED_TABLES")?.trim()
-    if (!raw) return null
+    if (!raw) return DEFAULT_ALLOWED_TABLES
     const list = raw.split(",").map(s => s.trim()).filter(Boolean)
-    return list.length > 0 ? new Set(list) : null
+    return list.length > 0 ? new Set(list) : DEFAULT_ALLOWED_TABLES
 })()
 
-const TOOLS = ALLOWED_TABLES
-    ? [GET_SCHEMA_TOOL, QUERY_TABLE_TOOL]
-    : [GET_SCHEMA_TOOL, EXECUTE_QUERY_TOOL, QUERY_TABLE_TOOL]
+const TOOLS = [GET_SCHEMA_TOOL, QUERY_TABLE_TOOL]
 
 const SYSTEM_PROMPT = `You are a data assistant connected to a PostgreSQL database.
-You have ${ALLOWED_TABLES ? "two tools: get_schema and query_table" : "three tools: get_schema, query_table, and execute_query"}. Never fabricate data.
+You have two tools: get_schema and query_table. Never fabricate data.
 
 Tool selection:
-- query_table: simple operations — list, filter, sort, paginate, nested relations.${ALLOWED_TABLES ? "" : `
-- execute_query: complex analytics — GROUP BY, aggregations, gap analysis, window functions, CTEs, multi-table JOINs with conditions.`}
+- query_table: simple allowlisted table operations — list, filter, sort, paginate, nested relations.
 
 Always call get_schema first if unsure of table structure.
 Always include LIMIT in every query. Format tabular results as markdown tables.
@@ -149,7 +125,6 @@ type QueryTableArgs = { table: string; select?: string; filters?: FilterArg[]; o
 const TOOL_STATUS_TEXT: Record<string, string> = {
     get_schema: "Analyzing schema...",
     query_table: "Querying data...",
-    execute_query: "Running query...",
 }
 
 Deno.serve(async (req: Request) => {
@@ -375,7 +350,7 @@ Deno.serve(async (req: Request) => {
                             const fnName = tc.function.name
 
                             if (fnName === "get_schema") {
-                                const allowedArray = ALLOWED_TABLES ? Array.from(ALLOWED_TABLES) : null
+                                const allowedArray = Array.from(ALLOWED_TABLES)
                                 const { data, error } = await supabaseUser.rpc("get_ai_schema", { p_allowed_tables: allowedArray })
                                 toolResult = error ? { error: sanitizeToolError(error.message) } : data
 
@@ -384,7 +359,7 @@ Deno.serve(async (req: Request) => {
 
                                 // Allowlist defensiva. RLS sigue siendo la barrera principal,
                                 // pero esto bloquea sondeos a tablas no destinadas al asistente.
-                                if (ALLOWED_TABLES && !ALLOWED_TABLES.has(table)) {
+                                if (!ALLOWED_TABLES.has(table)) {
                                     toolResult = { error: "Table not allowed for this assistant." }
                                 } else {
                                     const safeLimit = Math.min(Math.max(1, limit ?? 50), 200)
@@ -411,10 +386,6 @@ Deno.serve(async (req: Request) => {
                                     const { data, error } = await q
                                     toolResult = error ? { error: sanitizeToolError(error.message) } : data
                                 }
-
-                            } else if (fnName === "execute_query") {
-                                const { data, error } = await supabaseUser.rpc("execute_ai_query", { query: args.query })
-                                toolResult = error ? { error: sanitizeToolError(error.message) } : data
 
                             } else {
                                 toolResult = { error: "Unknown tool" }

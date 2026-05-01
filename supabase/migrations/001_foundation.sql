@@ -289,6 +289,23 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
+-- Devuelve la jerarquía actual leyendo profiles + roles en vivo.
+-- Usar en decisiones sensibles; los claims JWT pueden quedar obsoletos hasta refresh.
+CREATE OR REPLACE FUNCTION public.get_current_user_level()
+RETURNS INT
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+    SELECT COALESCE((
+        SELECT r.hierarchy_level
+        FROM public.profiles p
+        JOIN public.roles r ON r.name = p.role
+        WHERE p.id = (SELECT auth.uid())
+    ), 0);
+$$;
+
 -- Devuelve el perfil propio (lee de DB, no del JWT).
 -- La lógica de permisos espeja exactamente custom_access_token_hook:
 --   owner (hierarchy >= 100) → todos los permisos dinámicamente
@@ -366,7 +383,7 @@ AS $$
 DECLARE
     caller_level int;
 BEGIN
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level')::int), 0);
+    caller_level := (SELECT public.get_current_user_level());
     IF caller_level < 80 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere privilegios de admin';
     END IF;
@@ -419,7 +436,7 @@ CREATE POLICY "roles_select" ON public.roles
     FOR SELECT TO authenticated
     USING (
         name = (SELECT auth.jwt() ->> 'user_role')
-        OR COALESCE(((SELECT auth.jwt()) ->> 'hierarchy_level')::int, 0) >= 80
+        OR (SELECT public.get_current_user_level()) >= 80
     );
 
 CREATE POLICY "permissions_select" ON public.permissions
@@ -430,21 +447,21 @@ CREATE POLICY "permissions_select" ON public.permissions
             WHERE rp.permission = permissions.name
               AND rp.role = (SELECT auth.jwt() ->> 'user_role')
         )
-        OR COALESCE(((SELECT auth.jwt()) ->> 'hierarchy_level')::int, 0) >= 80
+        OR (SELECT public.get_current_user_level()) >= 80
     );
 
 CREATE POLICY "role_permissions_select" ON public.role_permissions
     FOR SELECT TO authenticated
     USING (
         role = (SELECT auth.jwt() ->> 'user_role')
-        OR COALESCE(((SELECT auth.jwt()) ->> 'hierarchy_level')::int, 0) >= 80
+        OR (SELECT public.get_current_user_level()) >= 80
     );
 
 -- Perfiles: fila propia O admin (nivel >= 80)
 CREATE POLICY "profiles_select" ON public.profiles
     FOR SELECT USING (
         id = (SELECT auth.uid())
-        OR COALESCE(((SELECT auth.jwt()) ->> 'hierarchy_level')::int, 0) >= 80
+        OR (SELECT public.get_current_user_level()) >= 80
     );
 
 -- El rol debe ser 'guest' en inserts propios; service_role bypasea RLS para el trigger
@@ -457,13 +474,13 @@ CREATE POLICY "profiles_insert" ON public.profiles
 CREATE POLICY "profiles_update" ON public.profiles
     FOR UPDATE USING (
         id = (SELECT auth.uid())
-        OR COALESCE(((SELECT auth.jwt()) ->> 'hierarchy_level')::int, 0) >= 80
+        OR (SELECT public.get_current_user_level()) >= 80
     );
 
 -- Solo owner puede eliminar perfiles (se propaga desde auth.users delete)
 CREATE POLICY "profiles_delete" ON public.profiles
     FOR DELETE USING (
-        COALESCE(((SELECT auth.jwt()) ->> 'hierarchy_level')::int, 0) >= 100
+        (SELECT public.get_current_user_level()) >= 100
     );
 
 -- ============================================================
@@ -507,7 +524,7 @@ BEGIN
     caller_id := auth.uid();
     IF caller_id IS NULL THEN RETURN NEW; END IF;
 
-    caller_level := COALESCE(((SELECT auth.jwt()) ->> 'hierarchy_level')::int, 0);
+    caller_level := (SELECT public.get_current_user_level());
 
     IF OLD.role IS DISTINCT FROM NEW.role THEN
         IF OLD.id = caller_id THEN
@@ -547,6 +564,7 @@ CREATE TRIGGER check_role_update
 -- ============================================================
 GRANT EXECUTE ON FUNCTION public.has_permission(text)          TO authenticated;
 GRANT EXECUTE ON FUNCTION public.has_permission_live(text)     TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_current_user_level()      TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_my_profile()              TO authenticated;
 GRANT EXECUTE ON FUNCTION public.check_email_exists(text)      TO authenticated;
 GRANT EXECUTE ON FUNCTION public.update_my_display_name(text)  TO authenticated;

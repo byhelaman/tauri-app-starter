@@ -39,9 +39,9 @@ ON public.audit_log
 FOR SELECT
 TO authenticated
 USING (
-    public.has_permission_live('system.view')
-    OR public.has_permission_live('users.view')
-    OR COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0) >= 80
+    (SELECT public.has_permission_live('system.view'))
+    OR (SELECT public.has_permission_live('users.view'))
+    OR (SELECT public.get_current_user_level()) >= 80
 );
 
 -- Nadie puede insertar/editar/eliminar directamente — solo via funciones SECURITY DEFINER
@@ -204,10 +204,12 @@ STABLE
 SECURITY DEFINER
 SET search_path = ''
 AS $$
+DECLARE
+    v_limit INT := LEAST(GREATEST(COALESCE(p_limit, 50), 1), 100);
+    v_offset INT := GREATEST(COALESCE(p_offset, 0), 0);
 BEGIN
-    IF NOT public.has_permission_live('system.view')
-       AND NOT public.has_permission_live('users.view')
-       AND COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0) < 80 THEN
+    IF NOT (SELECT public.has_permission_live('system.view'))
+       AND NOT (SELECT public.has_permission_live('users.view')) THEN
         RAISE EXCEPTION 'Permiso denegado: requiere system.view o users.view';
     END IF;
 
@@ -215,8 +217,8 @@ BEGIN
     SELECT a.id, a.action, a.description, a.actor_email, a.target_id, a.metadata, a.created_at
     FROM public.audit_log a
     ORDER BY a.created_at DESC
-    LIMIT GREATEST(p_limit, 1)
-    OFFSET GREATEST(p_offset, 0);
+    LIMIT v_limit
+    OFFSET v_offset;
 END;
 $$;
 
@@ -237,14 +239,17 @@ STABLE
 SECURITY DEFINER
 SET search_path = ''
 AS $$
+DECLARE
+    v_limit INT := LEAST(GREATEST(COALESCE(p_limit, 20), 1), 100);
+    v_offset INT := GREATEST(COALESCE(p_offset, 0), 0);
 BEGIN
     RETURN QUERY
     SELECT n.id, n.title, n.body, n.type, n.read, n.created_at
     FROM public.notifications n
     WHERE n.user_id = auth.uid()
     ORDER BY n.created_at DESC
-    LIMIT GREATEST(p_limit, 1)
-    OFFSET GREATEST(p_offset, 0);
+    LIMIT v_limit
+    OFFSET v_offset;
 END;
 $$;
 
@@ -308,9 +313,9 @@ DECLARE
     old_role       text;
 BEGIN
     caller_id := auth.uid();
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := (SELECT public.get_current_user_level());
 
-    IF NOT public.has_permission_live('users.manage') THEN
+    IF NOT (SELECT public.has_permission_live('users.manage')) THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
     IF target_user_id = caller_id THEN
@@ -377,9 +382,9 @@ DECLARE
     target_email text;
 BEGIN
     caller_id := auth.uid();
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := (SELECT public.get_current_user_level());
 
-    IF NOT public.has_permission_live('users.manage') THEN
+    IF NOT (SELECT public.has_permission_live('users.manage')) THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
     IF target_user_id = caller_id THEN
@@ -432,9 +437,9 @@ DECLARE
     target_email         text;
 BEGIN
     caller_id := auth.uid();
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := (SELECT public.get_current_user_level());
 
-    IF NOT public.has_permission_live('users.manage') THEN
+    IF NOT (SELECT public.has_permission_live('users.manage')) THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
     IF target_user_id = caller_id THEN
@@ -488,9 +493,9 @@ DECLARE
     target_current_level int;
     target_email         text;
 BEGIN
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := (SELECT public.get_current_user_level());
 
-    IF NOT public.has_permission_live('users.manage') THEN
+    IF NOT (SELECT public.has_permission_live('users.manage')) THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
 
@@ -602,7 +607,7 @@ AS $$
 DECLARE
     caller_level int;
 BEGIN
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := (SELECT public.get_current_user_level());
 
     IF caller_level < 100 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
@@ -655,7 +660,7 @@ DECLARE
     effective_desc    text;
     effective_level   int;
 BEGIN
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := (SELECT public.get_current_user_level());
 
     IF caller_level < 100 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
@@ -739,7 +744,7 @@ DECLARE
     fallback_role     text;
     downgraded_users  int := 0;
 BEGIN
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := (SELECT public.get_current_user_level());
 
     IF caller_level < 100 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
@@ -813,7 +818,7 @@ DECLARE
     source_role_level int;
     perms_copied      int := 0;
 BEGIN
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := (SELECT public.get_current_user_level());
 
     IF caller_level < 100 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
@@ -883,7 +888,7 @@ DECLARE
     target_role_level int;
     perm_min_level    int;
 BEGIN
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := (SELECT public.get_current_user_level());
 
     IF caller_level < 100 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
@@ -948,7 +953,7 @@ DECLARE
     caller_level      int;
     target_role_level int;
 BEGIN
-    caller_level := COALESCE((SELECT (auth.jwt() ->> 'hierarchy_level'))::int, 0);
+    caller_level := (SELECT public.get_current_user_level());
 
     IF caller_level < 100 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
@@ -1014,3 +1019,4 @@ REVOKE ALL ON FUNCTION public.notify_admins(text, text, text) FROM PUBLIC, anon,
 -- Tables (RLS handles row-level access, but we also restrict table-level)
 GRANT SELECT ON TABLE public.audit_log TO authenticated;
 GRANT SELECT, UPDATE, DELETE ON TABLE public.notifications TO authenticated;
+
