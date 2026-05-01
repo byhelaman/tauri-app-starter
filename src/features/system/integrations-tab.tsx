@@ -31,7 +31,6 @@ import {
 import { Button } from "@/components/ui/button"
 import { InputGroup, InputGroupInput } from "@/components/ui/input-group"
 
-// Este es solo un mock para la UI, luego se conectará a Supabase para leer el estado real de conexión
 const AVAILABLE_INTEGRATIONS = [
   {
     id: "microsoft",
@@ -160,7 +159,7 @@ export function IntegrationsTab() {
           <form
             className="contents"
             onSubmit={form.handleSubmit((data) => {
-              toast.success("Settings saved (mock) " + data.apiKey)
+              toast.success("Settings saved " + data.apiKey)
               setConfigIntegrationId(null)
             })}
           >

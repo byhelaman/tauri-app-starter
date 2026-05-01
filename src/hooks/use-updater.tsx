@@ -141,7 +141,7 @@ export function useUpdater(): UseUpdaterReturn {
     // Solo disponible en dev — evita bundlear/expoonr este flujo en producción
     if (!import.meta.env.DEV) return
     setIsSimulated(true)
-    const mock: SimulatedUpdate = {
+    const simulated: SimulatedUpdate = {
       version: "9.9.9",
       body: "Bug fixes and performance improvements.",
       available: true,
@@ -150,7 +150,7 @@ export function useUpdater(): UseUpdaterReturn {
       rid: 0,
       downloadAndInstall: async () => { /* no-op in simulation */ },
     }
-    setUpdate(mock as unknown as Update)
+    setUpdate(simulated as unknown as Update)
   }, [])
 
   return {

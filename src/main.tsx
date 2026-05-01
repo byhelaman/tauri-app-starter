@@ -32,25 +32,10 @@ if (import.meta.env.PROD) {
   })
 }
 
-async function enableMocking() {
-  // Activo si VITE_USE_MOCKS=true (explícito) o en DEV sin Supabase configurado
-  const useMocks =
-    import.meta.env.VITE_USE_MOCKS === "true" ||
-    (import.meta.env.DEV && import.meta.env.VITE_USE_MOCKS !== "false" && !import.meta.env.VITE_SUPABASE_URL)
-  if (useMocks) {
-    const { worker } = await import("./mocks/browser");
-    return worker.start({
-      onUnhandledRequest: "bypass" // Don't warn on unhandled requests like Vite HMR
-    });
-  }
-}
-
-enableMocking().then(() => {
-  createRoot(document.getElementById("root") as HTMLElement).render(
-    <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
-    </StrictMode>,
-  );
-});
+createRoot(document.getElementById("root") as HTMLElement).render(
+  <StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>
+  </StrictMode>,
+);

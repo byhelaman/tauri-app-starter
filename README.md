@@ -295,24 +295,11 @@ El starter incluye páginas y componentes de demostración que **deben eliminars
 | `IntegrationsTab` | La conectividad OAuth (Microsoft, Zoom, Slack) es simulada — el estado no persiste. Requiere implementar los flujos reales de OAuth o eliminar las integraciones no necesarias. |
 | `[Demo] Simulate update` (Settings) | Botón solo visible en `DEV` para simular el diálogo de actualización. Se excluye automáticamente del build de producción. |
 
-### Datos de ejemplo (MSW)
-
-En modo desarrollo sin Supabase configurado, la app usa **MSW (Mock Service Worker)** para simular el backend:
-
-- Los datos de órdenes, queue e historial son generados aleatoriamente en memoria.
-- Para desarrollar contra el backend real, define `VITE_SUPABASE_URL` en `.env` (MSW se desactiva automáticamente).
-- Para forzar el uso de mocks aunque tengas Supabase, agrega `VITE_USE_MOCKS=true` al `.env`.
-
----
-
 ## Variables de entorno
 
 ```env
 VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJ...
-
-# Opcional: forzar mocks en dev aunque VITE_SUPABASE_URL esté definida
-# VITE_USE_MOCKS=true
 ```
 
 Si no se definen las variables de Supabase, la app muestra la pantalla de setup para ingresarlas

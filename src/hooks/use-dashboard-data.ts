@@ -5,7 +5,31 @@ import { useOrdersStats } from "@/features/orders/hooks/useOrdersStats"
 import { fetchOrderHistory } from "@/features/orders/api"
 import { formatRelativeTime } from "@/lib/date-utils"
 import type { HistoryEntry } from "@/components/data-table/data-table-types"
-import type { DashboardStat, ActivityEntry, UpcomingEntry } from "@/mocks/dashboard"
+import type { LucideIcon } from "lucide-react"
+
+interface DashboardStat {
+  label: string
+  value: string
+  detail: string
+  change: string
+  tone: "positive" | "neutral" | "warning"
+  icon: LucideIcon
+}
+
+interface ActivityEntry {
+  user: string
+  action: string
+  target: string
+  time: string
+  icon: LucideIcon
+}
+
+interface UpcomingEntry {
+  title: string
+  description: string
+  when: string
+  tag: string
+}
 
 const PERIOD_LABELS: Record<string, string> = {
   "7d":  "last 7 days",
