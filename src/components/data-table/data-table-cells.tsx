@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, startTransition } from "react"
+import { useState, useRef, startTransition } from "react"
 import type { ColumnDef, FilterFn } from "@tanstack/react-table"
 import type { DataTableMeta } from "./data-table-types"
 import { cn } from "@/lib/utils"
@@ -76,13 +76,9 @@ function InlineEditableCell({
 
   
   // Estado Optimista de UI para evitar parpadeos mientras la tabla pesada se actualiza en segundo plano
-  const [optimisticValue, setOptimisticValue] = useState<string | null>(null)
-  const nextValue = optimisticValue !== null ? optimisticValue : String(value ?? "")
-
-  useEffect(() => {
-    // Limpia el valor optimista una vez que la tabla padre ha actualizado nuestra prop real
-    setOptimisticValue(null)
-  }, [value])
+  const propValue = String(value ?? "")
+  const [optimisticValue, setOptimisticValue] = useState<{ value: string; baseValue: string } | null>(null)
+  const nextValue = optimisticValue && optimisticValue.baseValue === propValue ? optimisticValue.value : propValue
 
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -90,24 +86,21 @@ function InlineEditableCell({
   
   const [initialEditValue, setInitialEditValue] = useState<string | null>(null)
   
-  // Estado para gestionar el movimiento del foco de forma declarativa y evitar setTimeout(0)
-  const [pendingFocusAction, setPendingFocusAction] = useState<"current" | "up" | "down" | "left" | "right" | null>(null)
-
-  // useEffect que se encarga de mover el foco una vez que el componente ha vuelto al modo vista (DOM actualizado)
-  useEffect(() => {
-    if (!isEditing && pendingFocusAction && containerRef.current) {
-      if (pendingFocusAction === "current") {
+  function scheduleFocus(action: "current" | "up" | "down" | "left" | "right") {
+    requestAnimationFrame(() => {
+      if (!containerRef.current) return
+      if (action === "current") {
         containerRef.current.focus()
       } else {
-        moveFocus(containerRef.current, pendingFocusAction)
+        moveFocus(containerRef.current, action)
       }
-      setPendingFocusAction(null)
-    }
-  }, [isEditing, pendingFocusAction])
+    })
+  }
   
-  function handleCommit(currentValue: string) {
+  function handleCommit(currentValue: string, focusAction?: "current" | "up" | "down" | "left" | "right") {
     if (!enableEditing) {
       setIsEditing(false)
+      if (focusAction) scheduleFocus(focusAction)
       return
     }
 
@@ -124,12 +117,13 @@ function InlineEditableCell({
     setHasError(false)
 
     if (currentValue !== nextValue) {
-      setOptimisticValue(currentValue)
+      setOptimisticValue({ value: currentValue, baseValue: propValue })
       startTransition(() => {
         onCommit?.(currentValue, true)
       })
     }
     setIsEditing(false)
+    if (focusAction) scheduleFocus(focusAction)
   }
 
   const handleRetry = () => {
@@ -142,7 +136,7 @@ function InlineEditableCell({
     setShowErrorDialog(false)
     setIsEditing(false)
     setInitialEditValue(null)
-    setPendingFocusAction("current")
+    scheduleFocus("current")
   }
 
   function handleGridKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
@@ -208,12 +202,11 @@ function InlineEditableCell({
 
     if (direction) {
       e.preventDefault()
-      handleCommit(e.currentTarget.value)
-      setPendingFocusAction(direction)
+      handleCommit(e.currentTarget.value, direction)
     } else if (e.key === "Escape") {
       e.preventDefault()
       setIsEditing(false)
-      setPendingFocusAction("current")
+      scheduleFocus("current")
     }
   }
 
@@ -258,8 +251,7 @@ function InlineEditableCell({
           value={initialEditValue !== null ? initialEditValue : nextValue}
           restrictive={restrictive}
           onChange={(val) => {
-            handleCommit(val)
-            setPendingFocusAction("current")
+            handleCommit(val, "current")
           }}
           onBlur={(committedValue) => {
             if (committedValue !== undefined) {

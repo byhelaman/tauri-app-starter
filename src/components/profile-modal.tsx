@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useTheme } from "next-themes"
 import { toast } from "sonner"
 import { getInitials } from "@/lib/utils"
@@ -81,21 +81,17 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
   const { theme, setTheme } = useTheme()
   const { profile, isLoading, actions } = useProfile()
 
-  const [displayName, setDisplayName] = useState("")
+  const [displayNameDraft, setDisplayNameDraft] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState("general")
   const [language, setLanguage] = useState(() => localStorage.getItem("app-language") || "en")
 
-  useEffect(() => {
-    if (profile?.display_name) {
-      setDisplayName(profile.display_name)
-    }
-  }, [profile])
-
+  const displayName = displayNameDraft ?? profile?.display_name ?? ""
   const userRole = claims.userRole
   const isDirty = profile?.display_name !== displayName && displayName.trim() !== ""
 
   function handleSave() {
     actions.updateDisplayName(displayName)
+    setDisplayNameDraft(null)
   }
 
   function handleRestoreDefaults() {
@@ -147,7 +143,7 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
                       <Input
                         id="display-name"
                         value={displayName}
-                        onChange={(e) => setDisplayName(e.target.value)}
+                        onChange={(e) => setDisplayNameDraft(e.target.value)}
                         placeholder="Your display name"
                       />
                       <FieldDescription>This is how others will see you in the app.</FieldDescription>
