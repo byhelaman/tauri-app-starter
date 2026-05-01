@@ -37,6 +37,12 @@ import {
 } from "@/components/ui/input-group"
 import { Textarea } from "@/components/ui/textarea"
 import { csvEscape, getScopeRows, type Scope } from "./table-formats"
+import type {
+    DataTableSelectionScope,
+    DataTableSelectionState,
+    ServerScopeExportRequest,
+    ServerScopeExportResult,
+} from "./data-table-types"
 import {
     BULK_COPY_DEFAULT_TEMPLATE,
     bulkCopySettingsKey,
@@ -59,6 +65,9 @@ interface BulkCopyDialogProps<TData> {
     fetchAllByFilter?: () => Promise<Record<string, unknown>[]>
     fetchAllUnfiltered?: () => Promise<Record<string, unknown>[]>
     fetchByIds?: (ids: string[]) => Promise<Record<string, unknown>[]>
+    exportByScope?: (request: ServerScopeExportRequest) => Promise<ServerScopeExportResult>
+    currentScope?: DataTableSelectionScope
+    selectionState?: DataTableSelectionState
     selectedIds?: string[]
     rowLimit?: number
     rowCount?: number
@@ -203,6 +212,9 @@ export function BulkCopyDialog<TData>({
     fetchAllByFilter,
     fetchAllUnfiltered,
     fetchByIds,
+    exportByScope,
+    currentScope,
+    selectionState,
     selectedIds = [],
     rowLimit,
     rowCount,
@@ -430,6 +442,44 @@ export function BulkCopyDialog<TData>({
                         variant="outline"
                         onClick={async () => {
                             const serverFetcher = scope === "all" ? (fetchAllUnfiltered ?? fetchAllByFilter) : fetchAllByFilter
+                            const scopeRequest = (() => {
+                                if (!exportByScope) return null
+                                if (scope === "selected" && selectionState?.mode === "filter") {
+                                    return {
+                                        scope: selectionState.scope,
+                                        excludedIds: selectionState.excludedIds,
+                                    }
+                                }
+                                if (scope === "filtered" && currentScope) {
+                                    return { scope: currentScope, excludedIds: [] }
+                                }
+                                if (scope === "all" && currentScope) {
+                                    return {
+                                        scope: { ...currentScope, search: "", filters: [], date: undefined },
+                                        excludedIds: [],
+                                    }
+                                }
+                                return null
+                            })()
+                            if (scopeRequest) {
+                                const toastId = "bulk-copy-scope"
+                                toast.loading(`Generating ${(rowCount ?? 0).toLocaleString()} rows...`, { id: toastId })
+                                try {
+                                    const result = await exportByScope!({
+                                        ...scopeRequest,
+                                        format,
+                                        fields: selectedFields,
+                                        headers,
+                                        template,
+                                    })
+                                    if (!result.content) { toast.error("Nothing to copy", { id: toastId }); return }
+                                    await navigator.clipboard.writeText(result.content)
+                                    toast.success(`Copied ${result.rowCount.toLocaleString()} rows`, { id: toastId })
+                                } catch (error) {
+                                    toast.error(error instanceof Error ? error.message : "Could not copy rows", { id: toastId })
+                                }
+                                return
+                            }
                             const needsServer = !!serverFetcher && scope !== "selected"
                             const needsSelectedFetch = scope === "selected" && !!fetchByIds && selectedIds.length > 0
                             if (needsServer && rowLimit != null && (rowCount ?? 0) > rowLimit) {

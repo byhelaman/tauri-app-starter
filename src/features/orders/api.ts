@@ -245,17 +245,23 @@ export const exportOrdersByScope = async ({
   excludedIds = [],
   format,
   fields,
+  headers,
+  template,
 }: {
   scope: DataTableSelectionScope
   excludedIds?: string[]
   format: ServerExportFormat
   fields: string[]
+  headers?: boolean
+  template?: string
 }): Promise<ServerScopeExportResult> => {
   const db = assertSupabase()
   const { data, error } = await db.rpc("export_orders_by_filter", {
     ...scopeExportRpcParams(scope, excludedIds),
     p_format: format,
     p_fields: fields,
+    p_headers: headers ?? true,
+    p_template: template ?? null,
   })
   if (error) throw new Error(error.message)
   const result = data as { content?: string; row_count?: number } | null

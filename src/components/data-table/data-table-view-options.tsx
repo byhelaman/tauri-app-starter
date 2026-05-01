@@ -164,7 +164,16 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
   }
 
   function scopeExportRequest(format: ExportFormat) {
-    const scope = effectiveScope === "filtered" ? infiniteScroll?.currentScope : undefined
+    const scope = effectiveScope === "filtered"
+      ? infiniteScroll?.currentScope
+      : effectiveScope === "all" && infiniteScroll?.currentScope
+        ? {
+            ...infiniteScroll.currentScope,
+            search: "",
+            filters: [],
+            date: undefined,
+          }
+        : undefined
     if (!scope) return null
     return {
       scope,
@@ -412,6 +421,9 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
           fetchAllByFilter={infiniteScroll?.fetchAllByFilter}
           fetchAllUnfiltered={infiniteScroll?.fetchAllUnfiltered}
           fetchByIds={infiniteScroll?.fetchByIds}
+          exportByScope={infiniteScroll?.exportByScope}
+          currentScope={infiniteScroll?.currentScope}
+          selectionState={tableMeta?.selectionState}
           selectedIds={selectedIds}
           rowLimit={bulkActionLimit}
           rowCount={selectedScopeCount}

@@ -75,9 +75,9 @@ CREATE INDEX idx_orders_date       ON public.orders(date DESC);
 CREATE INDEX idx_orders_created_at ON public.orders(created_at DESC);
 CREATE UNIQUE INDEX orders_code_active_key ON public.orders(code) WHERE deleted_at IS NULL;
 CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions;
-CREATE INDEX idx_orders_search_trgm ON public.orders USING gin (
-    ((coalesce(customer,'') || ' ' || coalesce(code,'') || ' ' || coalesce(product,'')) extensions.gin_trgm_ops)
-) WHERE deleted_at IS NULL;
+CREATE INDEX idx_orders_customer_trgm ON public.orders USING gin (customer extensions.gin_trgm_ops) WHERE deleted_at IS NULL;
+CREATE INDEX idx_orders_code_trgm     ON public.orders USING gin (code extensions.gin_trgm_ops)     WHERE deleted_at IS NULL;
+CREATE INDEX idx_orders_product_trgm  ON public.orders USING gin (product extensions.gin_trgm_ops)  WHERE deleted_at IS NULL;
 
 -- ──────────────────────────────────────────────────────────────
 
@@ -149,9 +149,6 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
 AS $$
-DECLARE
-    v_limit INT := LEAST(GREATEST(COALESCE(p_limit, 20), 1), 100);
-    v_offset INT := GREATEST(COALESCE(p_offset, 0), 0);
 BEGIN
     NEW.updated_by = auth.uid();
     RETURN NEW;
@@ -553,8 +550,9 @@ BEGIN
             FROM public.orders o
             WHERE o.deleted_at IS NULL
                 AND ($1 = '' OR $1 IS NULL OR (
-                    (coalesce(o.customer,'') || ' ' || coalesce(o.code,'') || ' ' || coalesce(o.product,''))
-                        ILIKE '%%' || $1 || '%%'
+                    o.customer ILIKE '%%' || $1 || '%%' OR
+                    o.code     ILIKE '%%' || $1 || '%%' OR
+                    o.product  ILIKE '%%' || $1 || '%%'
                 ))
                 AND ($2 IS NULL OR array_length($2, 1) IS NULL OR o.status  = ANY($2))
                 AND ($3 IS NULL OR array_length($3, 1) IS NULL OR o.channel = ANY($3))
@@ -934,10 +932,6 @@ BEGIN
             OR EXTRACT(HOUR FROM o.start_time)::INT = ANY(v_hours))
         AND (array_length(p_excluded_ids, 1) IS NULL OR o.id != ALL(p_excluded_ids));
 
-    IF v_count > 10000 THEN
-        RAISE EXCEPTION 'Too many orders selected at once';
-    END IF;
-
     SELECT COALESCE(jsonb_agg(jsonb_build_object('recordId', r.id, 'recordCode', r.code)), '[]'::jsonb)
     INTO v_records
     FROM (
@@ -1064,6 +1058,70 @@ AS $$
     END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.render_order_template(
+    p_template TEXT,
+    p_id UUID,
+    p_date DATE,
+    p_customer TEXT,
+    p_product TEXT,
+    p_category TEXT,
+    p_start_time TIME,
+    p_end_time TIME,
+    p_code TEXT,
+    p_status TEXT,
+    p_channel TEXT,
+    p_quantity INT,
+    p_amount NUMERIC,
+    p_region TEXT,
+    p_payment TEXT,
+    p_priority TEXT,
+    p_created_at TIMESTAMPTZ
+)
+RETURNS TEXT
+LANGUAGE plpgsql
+STABLE
+SET search_path = ''
+AS $$
+DECLARE
+    v_result TEXT := COALESCE(p_template, '');
+    v_field  TEXT;
+BEGIN
+    v_result := replace(v_result, '\n', E'\n');
+    v_result := replace(v_result, '\t', E'\t');
+
+    FOREACH v_field IN ARRAY ARRAY[
+        'id','date','customer','product','category','time','start_time','end_time',
+        'code','status','channel','quantity','amount','region','payment','priority','created_at'
+    ] LOOP
+        v_result := replace(
+            v_result,
+            '{' || v_field || '}',
+            COALESCE(public.order_export_value(
+                v_field,
+                p_id,
+                p_date,
+                p_customer,
+                p_product,
+                p_category,
+                p_start_time,
+                p_end_time,
+                p_code,
+                p_status,
+                p_channel,
+                p_quantity,
+                p_amount,
+                p_region,
+                p_payment,
+                p_priority,
+                p_created_at
+            ), '')
+        );
+    END LOOP;
+
+    RETURN v_result;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.export_orders_by_filter(
     p_search       TEXT    DEFAULT '',
     p_status       TEXT[]  DEFAULT NULL,
@@ -1074,7 +1132,9 @@ CREATE OR REPLACE FUNCTION public.export_orders_by_filter(
     p_sort_col     TEXT    DEFAULT NULL,
     p_sort_dir     TEXT    DEFAULT NULL,
     p_format       TEXT    DEFAULT 'csv',
-    p_fields       TEXT[]  DEFAULT NULL
+    p_fields       TEXT[]  DEFAULT NULL,
+    p_headers      BOOLEAN DEFAULT TRUE,
+    p_template     TEXT    DEFAULT NULL
 )
 RETURNS JSON
 LANGUAGE plpgsql
@@ -1124,14 +1184,22 @@ BEGIN
         SELECT array_agg(x::INT) INTO v_hours FROM unnest(p_start_hour) x WHERE x ~ '^\d+$';
     END IF;
 
-    v_delim := CASE WHEN v_format = 'tsv' THEN E'\t' ELSE ',' END;
+    v_delim := CASE
+        WHEN v_format = 'tsv' THEN E'\t'
+        WHEN v_format = 'lines' THEN ' - '
+        ELSE ','
+    END;
 
     v_sql := format($query$
         WITH filtered AS (
             SELECT o.*
             FROM public.orders o
             WHERE o.deleted_at IS NULL
-                AND ($1 = '' OR $1 IS NULL OR ((coalesce(o.customer,'') || ' ' || coalesce(o.code,'') || ' ' || coalesce(o.product,'')) ILIKE '%%' || $1 || '%%'))
+                AND ($1 = '' OR $1 IS NULL OR (
+                    o.customer ILIKE '%%' || $1 || '%%' OR
+                    o.code     ILIKE '%%' || $1 || '%%' OR
+                    o.product  ILIKE '%%' || $1 || '%%'
+                ))
                 AND ($2 IS NULL OR array_length($2, 1) IS NULL OR o.status = ANY($2))
                 AND ($3 IS NULL OR array_length($3, 1) IS NULL OR o.channel = ANY($3))
                 AND ($4 IS NULL OR o.date = $4)
@@ -1151,13 +1219,14 @@ BEGIN
                    o.id,
                    string_agg(
                        CASE
+                           WHEN $9 = 'custom' THEN public.render_order_template($11, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority, o.created_at)
                            WHEN $9 = 'csv' THEN public.text_csv_escape(public.order_export_value(f.field, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority, o.created_at))
                            ELSE COALESCE(replace(public.order_export_value(f.field, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority, o.created_at), E'\t', ' '), '')
                        END,
                        $8 ORDER BY f.ordinality
                    ) AS line
             FROM ordered o
-            CROSS JOIN unnest($7::text[]) WITH ORDINALITY AS f(field, ordinality)
+            CROSS JOIN unnest(CASE WHEN $9 = 'custom' THEN ARRAY['id'] ELSE $7 END::text[]) WITH ORDINALITY AS f(field, ordinality)
             GROUP BY o.rn, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time,
                      o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment,
                      o.priority, o.created_at
@@ -1182,15 +1251,18 @@ BEGIN
                     '| ' || array_to_string(ARRAY(SELECT '---' FROM unnest($7)), ' | ') || ' |' || E'\n' ||
                     COALESCE((SELECT string_agg('| ' || replace(line, $8, ' | ') || ' |', E'\n' ORDER BY rn) FROM row_lines), '')
                 )
+                WHEN $9 = 'custom' THEN (
+                    COALESCE((SELECT string_agg(line, E'\n' ORDER BY rn) FROM row_lines), '')
+                )
                 ELSE (
-                    CASE WHEN $9 IN ('csv','tsv') THEN array_to_string($7, $8) || E'\n' ELSE '' END ||
+                    CASE WHEN $9 IN ('csv','tsv') AND $10 THEN array_to_string($7, $8) || E'\n' ELSE '' END ||
                     COALESCE((SELECT string_agg(line, E'\n' ORDER BY rn) FROM row_lines), '')
                 )
             END
     $query$, v_sort_c, v_sort_d);
 
     EXECUTE v_sql
-    USING p_search, p_status, p_channel, p_date, v_hours, p_excluded_ids, v_fields, v_delim, v_format
+    USING p_search, p_status, p_channel, p_date, v_hours, p_excluded_ids, v_fields, v_delim, v_format, p_headers, p_template
     INTO v_count, v_content;
 
     RETURN json_build_object('content', COALESCE(v_content, ''), 'row_count', COALESCE(v_count, 0));
@@ -1314,6 +1386,7 @@ GRANT EXECUTE ON FUNCTION public.get_orders_stats()                         TO a
 GRANT EXECUTE ON FUNCTION public.get_order_history(INT,INT)                 TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_start_hours()                   TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_by_filter(TEXT,TEXT[],TEXT[],DATE,TEXT[],UUID[],TEXT,TEXT,INT,INT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.export_orders_by_filter(TEXT,TEXT[],TEXT[],DATE,TEXT[],UUID[],TEXT,TEXT,TEXT,TEXT[],BOOLEAN,TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_filter(TEXT,TEXT[],TEXT[],DATE,TEXT[],UUID[]) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_by_ids(UUID[])                  TO authenticated;
 GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_ids(UUID[])          TO authenticated;

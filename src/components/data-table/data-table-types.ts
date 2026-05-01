@@ -54,13 +54,15 @@ export type DataTableSelectionState =
       excludedIds: string[]
     }
 
-export type ServerExportFormat = "csv" | "tsv" | "json" | "md"
+export type ServerExportFormat = "csv" | "tsv" | "json" | "md" | "lines" | "custom"
 
 export interface ServerScopeExportRequest {
   scope: DataTableSelectionScope
   excludedIds?: string[]
   format: ServerExportFormat
   fields: string[]
+  headers?: boolean
+  template?: string
 }
 
 export interface ServerScopeExportResult {
