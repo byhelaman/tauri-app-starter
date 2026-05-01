@@ -43,7 +43,7 @@ CREATE TABLE public.orders (
     category    TEXT        NOT NULL CHECK (char_length(trim(category)) > 0),
     start_time  TIME        NOT NULL,
     end_time    TIME        NOT NULL,
-    code        TEXT        NOT NULL UNIQUE CHECK (code ~ '^ORD-[A-Z0-9]{5,6}$'),
+    code        TEXT        NOT NULL CHECK (code ~ '^ORD-[A-Z0-9]{5,6}$'),
     status      TEXT        NOT NULL DEFAULT 'pending'
                             CHECK (status IN ('pending','processing','shipped','delivered','cancelled')),
     channel     TEXT        NOT NULL
@@ -64,6 +64,7 @@ CREATE INDEX idx_orders_status     ON public.orders(status);
 CREATE INDEX idx_orders_channel    ON public.orders(channel);
 CREATE INDEX idx_orders_date       ON public.orders(date DESC);
 CREATE INDEX idx_orders_created_at ON public.orders(created_at DESC);
+CREATE UNIQUE INDEX orders_code_active_key ON public.orders(code) WHERE deleted_at IS NULL;
 CREATE INDEX idx_orders_search     ON public.orders USING gin(
     to_tsvector('simple', coalesce(customer,'') || ' ' || coalesce(code,'') || ' ' || coalesce(product,''))
 );
@@ -72,7 +73,7 @@ CREATE INDEX idx_orders_search     ON public.orders USING gin(
 
 CREATE TABLE public.queue_orders (
     id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    code        TEXT        NOT NULL REFERENCES public.orders(code) ON DELETE CASCADE,
+    code        TEXT        NOT NULL,
     start_time  TIME        NOT NULL,
     end_time    TIME        NOT NULL,
     customer    TEXT        NOT NULL,
@@ -88,6 +89,7 @@ CREATE TABLE public.queue_orders (
 
 CREATE INDEX idx_queue_status     ON public.queue_orders(status);
 CREATE INDEX idx_queue_created_at ON public.queue_orders(created_at DESC);
+CREATE INDEX idx_queue_code       ON public.queue_orders(code);
 
 -- ──────────────────────────────────────────────────────────────
 
@@ -158,7 +160,7 @@ DECLARE
     v_action TEXT;
     v_desc TEXT;
     v_email TEXT;
-    v_details JSONB := '{}'::jsonb;
+    v_details JSONB := '[]'::jsonb;
     v_col TEXT;
     v_is_soft_delete BOOLEAN := false;
     v_order_id UUID;
@@ -190,13 +192,21 @@ BEGIN
         IF NOT v_is_soft_delete THEN
             FOR v_col IN SELECT * FROM jsonb_object_keys(to_jsonb(NEW))
             LOOP
+                IF v_col IN ('updated_at', 'updated_by') THEN
+                    CONTINUE;
+                END IF;
+
                 IF to_jsonb(OLD)->>v_col IS DISTINCT FROM to_jsonb(NEW)->>v_col THEN
-                    v_details := jsonb_set(v_details, ARRAY[v_col], to_jsonb(NEW)->v_col);
+                    v_details := v_details || jsonb_build_array(jsonb_build_object(
+                        'field', v_col,
+                        'oldValue', to_jsonb(OLD)->v_col,
+                        'newValue', to_jsonb(NEW)->v_col
+                    ));
                 END IF;
             END LOOP;
         END IF;
         
-        IF v_details = '{}'::jsonb AND NOT v_is_soft_delete THEN
+        IF v_details = '[]'::jsonb AND NOT v_is_soft_delete THEN
             RETURN NEW;
         END IF;
 
@@ -210,7 +220,7 @@ BEGIN
         action, description, actor_email, order_id, details
     ) VALUES (
         v_action, v_desc, v_email, v_order_id,
-        NULLIF(v_details, '{}'::jsonb)
+        NULLIF(v_details, '[]'::jsonb)
     );
 
     IF TG_OP = 'DELETE' THEN
@@ -223,6 +233,27 @@ $$;
 CREATE TRIGGER on_order_audit
     AFTER INSERT OR UPDATE OR DELETE ON public.orders
     FOR EACH ROW EXECUTE FUNCTION public.orders_audit_trigger();
+
+CREATE OR REPLACE FUNCTION public.sync_queue_orders_for_order_change()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+    IF OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL THEN
+        DELETE FROM public.queue_orders WHERE code = NEW.code;
+    ELSIF OLD.code IS DISTINCT FROM NEW.code AND NEW.deleted_at IS NULL THEN
+        UPDATE public.queue_orders SET code = NEW.code WHERE code = OLD.code;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER on_order_sync_queue
+    AFTER UPDATE OF code, deleted_at ON public.orders
+    FOR EACH ROW EXECUTE FUNCTION public.sync_queue_orders_for_order_change();
 
 -- Realtime agregado por sentencia: una carga SQL de 500k filas produce un solo
 -- evento en order_change_events, no 500k eventos en el WebSocket.
@@ -1109,7 +1140,7 @@ BEGIN
             payments  [1 + (random() * (array_length(payments,  1)-1))::INT],
             priorities[1 + (random() * (array_length(priorities,1)-1))::INT]
         )
-        ON CONFLICT (code) DO NOTHING;
+        ON CONFLICT (code) WHERE deleted_at IS NULL DO NOTHING;
     END LOOP;
 END;
 $$;

@@ -43,7 +43,7 @@ DECLARE
     v_action TEXT;
     v_desc TEXT;
     v_email TEXT;
-    v_details JSONB := '{}'::jsonb;
+    v_details JSONB := '[]'::jsonb;
     v_col TEXT;
     v_is_soft_delete BOOLEAN := false;
     v_order_id UUID;
@@ -70,13 +70,21 @@ BEGIN
         IF NOT v_is_soft_delete THEN
             FOR v_col IN SELECT * FROM jsonb_object_keys(to_jsonb(NEW))
             LOOP
+                IF v_col IN ('updated_at', 'updated_by') THEN
+                    CONTINUE;
+                END IF;
+
                 IF to_jsonb(OLD)->>v_col IS DISTINCT FROM to_jsonb(NEW)->>v_col THEN
-                    v_details := jsonb_set(v_details, ARRAY[v_col], to_jsonb(NEW)->v_col);
+                    v_details := v_details || jsonb_build_array(jsonb_build_object(
+                        'field', v_col,
+                        'oldValue', to_jsonb(OLD)->v_col,
+                        'newValue', to_jsonb(NEW)->v_col
+                    ));
                 END IF;
             END LOOP;
         END IF;
 
-        IF v_details = '{}'::jsonb AND NOT v_is_soft_delete THEN
+        IF v_details = '[]'::jsonb AND NOT v_is_soft_delete THEN
             RETURN NEW;
         END IF;
     ELSIF TG_OP = 'DELETE' THEN
@@ -89,7 +97,7 @@ BEGIN
         action, description, actor_email, order_id, details
     ) VALUES (
         v_action, v_desc, v_email, v_order_id,
-        NULLIF(v_details, '{}'::jsonb)
+        NULLIF(v_details, '[]'::jsonb)
     );
 
     IF TG_OP = 'DELETE' THEN

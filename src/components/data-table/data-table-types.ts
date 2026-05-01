@@ -89,6 +89,8 @@ export interface DataTableMeta {
   visibleSelectedIds?: string[]
   /** Cantidad total de filas en el filtro actual */
   totalRowCount?: number
+  /** Refresca datos cuando el usuario re-aplica el mismo ordenamiento remoto */
+  refreshSorting?: () => void
 }
 
 export interface HistoryDetail {

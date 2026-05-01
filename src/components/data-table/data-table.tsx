@@ -80,6 +80,7 @@ interface DataTableProps<TData, TValue> {
   onGlobalFilterChange?: OnChangeFn<string>
   sorting?: SortingState
   onSortingChange?: OnChangeFn<SortingState>
+  onSortingRefresh?: () => void
   /** Activa modo infinite scroll con virtualización. Oculta el paginador. */
   infiniteScroll?: InfiniteScrollConfig
   /** Alto estimado de cada fila en px para el virtualizer (default 40) */
@@ -114,6 +115,7 @@ export function DataTable<TData, TValue>({
   onGlobalFilterChange: setExternalGlobalFilter,
   sorting: externalSorting,
   onSortingChange: setExternalSorting,
+  onSortingRefresh,
   infiniteScroll,
   estimatedRowHeight = 48,
   allowDataExport = true,
@@ -259,6 +261,7 @@ export function DataTable<TData, TValue>({
     meta.visibleSelectedCount = visibleSelectedIds.length
     meta.visibleSelectedIds = visibleSelectedIds
     meta.totalRowCount = totalRows
+    meta.refreshSorting = onSortingRefresh
     meta.selectAll = selectAll
     meta.deselectAll = deselectAll
     meta.isSelectingAll = isSelectingAll

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { useInfiniteQuery, useQuery, useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query"
 import { type ColumnFiltersState, type Updater, type SortingState } from "@tanstack/react-table"
 import { toast } from "sonner"
@@ -26,7 +26,10 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
   }, [])
 
   // Clave de query — incluye filtros para que al cambiar se refetche desde chunk 0
-  const ordersQueryKey = ["orders", "infinite", columnFilters, globalFilter, dateFilter, sorting]
+  const ordersQueryKey = useMemo(
+    () => ["orders", "infinite", columnFilters, globalFilter, dateFilter, sorting] as const,
+    [columnFilters, globalFilter, dateFilter, sorting]
+  )
 
   const {
     data: infiniteData,
@@ -293,6 +296,10 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
     await doBulkDeleteAsync(ids)
   }, [doBulkDeleteAsync])
 
+  const refreshCurrentOrderSort = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ordersQueryKey })
+  }, [queryClient, ordersQueryKey])
+
 
 
   return {
@@ -344,6 +351,7 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
     setColumnFilters: handleSetColumnFilters,
     globalFilter,
     setGlobalFilter: handleSetGlobalFilter,
+    refreshCurrentOrderSort,
     queueOrders,
     totalQueueOrders,
     isQueueLoading,

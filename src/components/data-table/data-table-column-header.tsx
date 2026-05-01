@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown, PinIcon, PinOffIcon } from "lucide-rea
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
+import type { DataTableMeta } from "./data-table-types"
 
 interface DataTableColumnHeaderProps<TData, TValue>
   extends React.ComponentProps<"div"> {
@@ -20,6 +21,7 @@ export function DataTableColumnHeader<TData, TValue>({
   const sorted = column.getIsSorted()
   const canSort = column.getCanSort()
   const canPin = column.getCanPin()
+  const meta = table.options.meta as DataTableMeta | undefined
 
   function handleSortToggle() {
     if (!canSort) return
@@ -35,6 +37,17 @@ export function DataTableColumnHeader<TData, TValue>({
 
   function setSort(mode: "asc" | "desc" | "none") {
     if (!canSort) return
+
+    const currentSorting = table.getState().sorting
+    const current = currentSorting.find((s) => s.id === column.id)
+    if (
+      mode !== "none" &&
+      current &&
+      current.desc === (mode === "desc") &&
+      currentSorting[0]?.id === column.id
+    ) {
+      meta?.refreshSorting?.()
+    }
 
     table.setSorting((prev) => {
       const others = prev.filter((s) => s.id !== column.id)

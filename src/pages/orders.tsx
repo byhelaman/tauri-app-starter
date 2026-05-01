@@ -115,6 +115,7 @@ export function OrdersPage() {
     setColumnFilters,
     globalFilter,
     setGlobalFilter,
+    refreshCurrentOrderSort,
     queueOrders,
     isQueueLoading,
     actions
@@ -191,6 +192,7 @@ export function OrdersPage() {
         onGlobalFilterChange={setGlobalFilter}
         sorting={sorting}
         onSortingChange={setSorting}
+        onSortingRefresh={refreshCurrentOrderSort}
         tableId="orders"
         sidePanel={(onClose) => (
           <TableHistoryCard 
