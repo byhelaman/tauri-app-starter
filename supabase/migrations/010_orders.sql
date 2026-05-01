@@ -110,6 +110,7 @@ CREATE TABLE public.order_change_events (
     id          BIGSERIAL   PRIMARY KEY,
     table_name  TEXT        NOT NULL CHECK (table_name IN ('orders','queue_orders','order_history')),
     action      TEXT        NOT NULL CHECK (action IN ('insert','update','delete','bulk')),
+    actor_id    UUID        REFERENCES auth.users(id) ON DELETE SET NULL,
     row_count   INT         NOT NULL DEFAULT 0,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -249,8 +250,8 @@ BEGIN
     END IF;
 
     IF v_count > 0 THEN
-        INSERT INTO public.order_change_events (table_name, action, row_count)
-        VALUES ('orders', 'insert', v_count);
+        INSERT INTO public.order_change_events (table_name, action, actor_id, row_count)
+        VALUES ('orders', 'insert', auth.uid(), v_count);
     END IF;
     RETURN NULL;
 END;
@@ -267,8 +268,8 @@ DECLARE
 BEGIN
     SELECT COUNT(*) INTO v_count FROM new_rows;
     IF v_count > 0 THEN
-        INSERT INTO public.order_change_events (table_name, action, row_count)
-        VALUES ('orders', 'update', v_count);
+        INSERT INTO public.order_change_events (table_name, action, actor_id, row_count)
+        VALUES ('orders', 'update', auth.uid(), v_count);
     END IF;
     RETURN NULL;
 END;
@@ -285,8 +286,8 @@ DECLARE
 BEGIN
     SELECT COUNT(*) INTO v_count FROM old_rows;
     IF v_count > 0 THEN
-        INSERT INTO public.order_change_events (table_name, action, row_count)
-        VALUES ('orders', 'delete', v_count);
+        INSERT INTO public.order_change_events (table_name, action, actor_id, row_count)
+        VALUES ('orders', 'delete', auth.uid(), v_count);
     END IF;
     RETURN NULL;
 END;
@@ -463,9 +464,10 @@ BEGIN
         SELECT
             (SELECT COUNT(*) FROM filtered),
             (
-                SELECT COALESCE(json_agg(row_to_json(r)), '[]'::json)
+                SELECT COALESCE(json_agg((to_jsonb(r) - '__row_order') ORDER BY r.__row_order), '[]'::json)
                 FROM (
                     SELECT
+                        ROW_NUMBER() OVER (ORDER BY %I %s NULLS LAST, created_at DESC, id DESC) AS __row_order,
                         id,
                         date::TEXT,
                         customer,
@@ -483,11 +485,11 @@ BEGIN
                         priority,
                         created_at
                     FROM filtered
-                    ORDER BY %I %s NULLS LAST, created_at DESC
+                    ORDER BY %I %s NULLS LAST, created_at DESC, id DESC
                     LIMIT $6 OFFSET $7
                 ) r
             )
-    $query$, v_sort_c, v_sort_d);
+    $query$, v_sort_c, v_sort_d, v_sort_c, v_sort_d);
 
     EXECUTE v_sql
     USING p_search, p_status, p_channel, p_date, v_hours, p_limit, p_offset
@@ -740,9 +742,10 @@ BEGIN
                     OR EXTRACT(HOUR FROM o.start_time)::INT = ANY($5))
                 AND (array_length($6, 1) IS NULL OR o.id != ALL($6))
         )
-        SELECT COALESCE(json_agg(row_to_json(r)), '[]'::json)
+        SELECT COALESCE(json_agg((to_jsonb(r) - '__row_order') ORDER BY r.__row_order), '[]'::json)
         FROM (
             SELECT
+                ROW_NUMBER() OVER (ORDER BY %I %s NULLS LAST, created_at DESC, id DESC) AS __row_order,
                 id,
                 date::TEXT,
                 customer,
@@ -760,10 +763,10 @@ BEGIN
                 priority,
                 created_at
             FROM filtered
-            ORDER BY %I %s NULLS LAST, created_at DESC
+            ORDER BY %I %s NULLS LAST, created_at DESC, id DESC
             LIMIT $7 OFFSET $8
         ) r
-    $query$, v_sort_c, v_sort_d);
+    $query$, v_sort_c, v_sort_d, v_sort_c, v_sort_d);
 
     EXECUTE v_sql
     USING p_search, p_status, p_channel, p_date, v_hours, p_excluded_ids, v_limit, v_offset

@@ -8,12 +8,16 @@ CREATE TABLE IF NOT EXISTS public.order_change_events (
     id          BIGSERIAL   PRIMARY KEY,
     table_name  TEXT        NOT NULL CHECK (table_name IN ('orders','queue_orders','order_history')),
     action      TEXT        NOT NULL CHECK (action IN ('insert','update','delete','bulk')),
+    actor_id    UUID        REFERENCES auth.users(id) ON DELETE SET NULL,
     row_count   INT         NOT NULL DEFAULT 0,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_order_change_events_created_at
     ON public.order_change_events(created_at DESC);
+
+ALTER TABLE public.order_change_events
+    ADD COLUMN IF NOT EXISTS actor_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
 
 ALTER TABLE public.order_change_events ENABLE ROW LEVEL SECURITY;
 
@@ -117,8 +121,8 @@ BEGIN
             jsonb_build_object('row_count', v_count)
         );
 
-        INSERT INTO public.order_change_events (table_name, action, row_count)
-        VALUES ('orders', 'insert', v_count);
+        INSERT INTO public.order_change_events (table_name, action, actor_id, row_count)
+        VALUES ('orders', 'insert', auth.uid(), v_count);
     END IF;
     RETURN NULL;
 END;
@@ -135,8 +139,8 @@ DECLARE
 BEGIN
     SELECT COUNT(*) INTO v_count FROM new_rows;
     IF v_count > 0 THEN
-        INSERT INTO public.order_change_events (table_name, action, row_count)
-        VALUES ('orders', 'update', v_count);
+        INSERT INTO public.order_change_events (table_name, action, actor_id, row_count)
+        VALUES ('orders', 'update', auth.uid(), v_count);
     END IF;
     RETURN NULL;
 END;
@@ -153,8 +157,8 @@ DECLARE
 BEGIN
     SELECT COUNT(*) INTO v_count FROM old_rows;
     IF v_count > 0 THEN
-        INSERT INTO public.order_change_events (table_name, action, row_count)
-        VALUES ('orders', 'delete', v_count);
+        INSERT INTO public.order_change_events (table_name, action, actor_id, row_count)
+        VALUES ('orders', 'delete', auth.uid(), v_count);
     END IF;
     RETURN NULL;
 END;

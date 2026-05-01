@@ -18,6 +18,7 @@ import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/contexts/auth-context"
 
 const REALTIME_INVALIDATION_DEBOUNCE_MS = 750
+type OrderChangeEvent = { actor_id?: string | null }
 
 /** Prefijo de query key para infinite scroll — coincide con ordersQueryKey en useOrders */
 const ORDERS_KEY = ["orders", "infinite"] as const
@@ -57,7 +58,11 @@ export function useOrdersRealtime() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "order_change_events" },
-        invalidateOrders
+        (payload) => {
+          const change = payload.new as OrderChangeEvent
+          if (change.actor_id && change.actor_id === user.id) return
+          invalidateOrders()
+        }
       )
 
       // ── Queue orders: cualquier cambio ────────────────────────
