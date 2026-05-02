@@ -161,6 +161,7 @@ export function DataTable<TData, TValue>({
     visibleSelectedIds,
     selectionState,
     selectedCount,
+    displaySelectedCount,
     selectAll,
     deselectAll,
     isSelectingAll,
@@ -259,7 +260,7 @@ export function DataTable<TData, TValue>({
   }, [table, table.getState().pagination.pageIndex, table.getPageCount()])
 
   const totalRows = infiniteScroll?.totalRowCount ?? rowCount ?? 0
-  const displayedSelectedCount = selectedCount
+  const displayedSelectedCount = displaySelectedCount
 
   // Patch meta values after computation
   if (table.options.meta) {
@@ -268,6 +269,7 @@ export function DataTable<TData, TValue>({
     meta.visibleSelectedIds = visibleSelectedIds
     meta.selectionState = selectionState
     meta.selectedCount = selectedCount
+    meta.displaySelectedCount = displaySelectedCount
     meta.totalRowCount = totalRows
     meta.refreshSorting = onSortingRefresh
     meta.selectAll = selectAll
