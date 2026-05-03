@@ -204,11 +204,11 @@ supabase/
 │   └── admin-update-user-email/    # Cambio de email con audit
 └── migrations/
     ├── 001_foundation.sql     # Core RBAC, profiles, JWT hook, RLS base
-    ├── 002_admin_rbac.sql     # RPCs admin y gestión de roles/permisos
-    ├── 003_audit_and_notifications.sql  # Audit log + notificaciones + overrides con auditoría
+    ├── 002_admin_rbac.sql     # RPCs admin, roles/permisos, audit log y notificaciones
     ├── 004_admin_sync_email.sql         # Trigger sync email + helpers admin de auditoría
-    ├── 006_ai_chat.sql                  # permiso ai.chat + schema + execute_ai_query endurecida
-    └── 009_rate_limiting.sql            # rate limit genérico + gates en RPCs sensibles
+    ├── 006_ai_chat.sql                  # permiso ai.chat + schema allowlist
+    ├── 009_rate_limiting.sql            # rate limit genérico + gates en RPCs sensibles
+    └── 010_orders.sql                   # orders, queue, historial, realtime y acciones masivas
 ```
 
 ---

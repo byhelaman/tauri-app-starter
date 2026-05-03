@@ -44,10 +44,10 @@ ejecútalo en una query nueva.
 
 1. `supabase/migrations/001_foundation.sql`
 2. `supabase/migrations/002_admin_rbac.sql`
-3. `supabase/migrations/003_audit_and_notifications.sql`
-4. `supabase/migrations/004_admin_sync_email.sql`
-5. `supabase/migrations/006_ai_chat.sql`
-6. `supabase/migrations/009_rate_limiting.sql`
+3. `supabase/migrations/004_admin_sync_email.sql`
+4. `supabase/migrations/006_ai_chat.sql`
+5. `supabase/migrations/009_rate_limiting.sql`
+6. `supabase/migrations/010_orders.sql`
 
 Nota: las correcciones históricas (antes distribuidas en migraciones de fix)
 fueron integradas directamente en las migraciones base actuales.
@@ -59,12 +59,12 @@ script.
 
 | Migración | Objetos principales                                                                                                                                                                                                                                                                                                                                            |
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `001`     | `profiles`, `handle_new_user` trigger, `custom_access_token_hook`, `has_permission`, `get_my_profile`, `verify_user_password`, `check_email_exists`, RLS                                                                                                                                                                                                       |
-| `002`     | `roles`, `permissions`, `role_permissions`, `get_all_users`, `update_user_role`, `update_user_display_name`, `delete_user`, `delete_own_account`, `create_role`, `update_role`, `delete_role`, `duplicate_role`, `assign_role_permission`, `remove_role_permission`, `get_all_roles`, `get_all_permissions`, `get_role_permission_matrix`, `set_new_user_role` |
-| `003`     | `audit_log`, `notifications`, `log_audit_event`, `log_audit_event_as_admin`, `notify_user`, `notify_admins`, `get_audit_log`, `get_my_notifications`, `mark_notification_read`, `mark_all_notifications_read`, `dismiss_notification`                                                                                                                          |
+| `001`     | `profiles`, `handle_new_user` trigger, `custom_access_token_hook`, helpers de permisos, `get_my_profile`, `verify_user_password`, `check_email_exists`, RLS base                                                                                                                                                                                               |
+| `002`     | `audit_log`, `notifications`, helpers de auditoría/notificaciones, RPCs de consulta, administración de usuarios, gestión de roles/permisos y auditoría de esas acciones                                                                                                                         |
 | `004`     | Trigger `on_auth_user_email_updated` (sincroniza `profiles.email`), `admin_audit_email_change`, `log_audit_event_as_admin`                                                                                                                                                                                                                                     |
-| `006`     | Permiso `ai.chat`, RPC `get_ai_schema`, RPC `execute_ai_query` endurecida (solo lectura + timeout + límite efectivo)                                                                                                                                                                                                                                           |
+| `006`     | Permiso `ai.chat`, RPC `get_ai_schema` con allowlist y `execute_ai_query` deshabilitada                                                                                                                                                                                                                                                                        |
 | `009`     | Infraestructura de `rate_limits`, `check_rate_limit`, `check_ai_chat_rate_limit`, throttle de `verify_user_password`                                                                                                                                                                                                                                           |
+| `010`     | `orders`, `queue_orders`, `order_history`, RLS granular, búsqueda trigram, scroll por chunks, selección por scope y acciones masivas server-side                                                                                                                                                                                                                |
 
 ---
 

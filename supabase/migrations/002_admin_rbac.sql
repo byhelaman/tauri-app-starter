@@ -1,15 +1,294 @@
 -- ============================================================
--- 002: Administración RBAC — RPCs y Grants
+-- 002: Administración RBAC + Audit Log + Notificaciones
 -- ============================================================
 -- Ejecutar después de `001_foundation.sql`.
 --
 -- Qué configura:
---   1. RPCs de administración de usuarios
---   2. RPCs de gestión de roles y permisos
---   3. Grants de ejecución para funciones administrativas
+--   1. Tablas, RLS y RPCs de audit log/notificaciones
+--   2. RPCs de administración de usuarios
+--   3. RPCs de gestión de roles y permisos
+--   4. Grants de ejecución para funciones administrativas
 
 -- ============================================================
--- 1. RPCs DE ADMINISTRACIÓN
+-- 1. TABLA AUDIT_LOG
+-- ============================================================
+CREATE TABLE public.audit_log (
+    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    action      TEXT NOT NULL,
+    description TEXT NOT NULL,
+    actor_id    UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    actor_email TEXT,
+    target_id   UUID,
+    metadata    JSONB DEFAULT '{}',
+    created_at  TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+
+CREATE INDEX idx_audit_log_created_at ON public.audit_log(created_at DESC);
+CREATE INDEX idx_audit_log_action     ON public.audit_log(action);
+CREATE INDEX idx_audit_log_actor_id   ON public.audit_log(actor_id);
+
+ALTER TABLE public.audit_log ENABLE ROW LEVEL SECURITY;
+
+-- Solo usuarios con system.view pueden leer el audit log
+CREATE POLICY "audit_log_select"
+ON public.audit_log
+FOR SELECT
+TO authenticated
+USING (
+    (SELECT public.has_current_permission('system.view'))
+    OR (SELECT public.has_current_permission('users.view'))
+    OR (SELECT public.get_current_user_level()) >= 80
+);
+
+-- Nadie puede insertar/editar/eliminar directamente — solo via funciones SECURITY DEFINER
+CREATE POLICY "audit_log_deny_insert" ON public.audit_log FOR INSERT TO authenticated WITH CHECK (false);
+CREATE POLICY "audit_log_deny_update" ON public.audit_log FOR UPDATE TO authenticated USING (false);
+CREATE POLICY "audit_log_deny_delete" ON public.audit_log FOR DELETE TO authenticated USING (false);
+
+-- Habilitar Realtime para la tabla audit_log
+ALTER PUBLICATION supabase_realtime ADD TABLE public.audit_log;
+
+-- ============================================================
+-- 2. TABLA NOTIFICATIONS
+-- ============================================================
+CREATE TABLE public.notifications (
+    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id    UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    title      TEXT NOT NULL,
+    body       TEXT NOT NULL,
+    type       TEXT NOT NULL DEFAULT 'info' CHECK (type IN ('info', 'success', 'warning')),
+    read       BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+
+CREATE INDEX idx_notifications_user_id    ON public.notifications(user_id, created_at DESC);
+CREATE INDEX idx_notifications_unread     ON public.notifications(user_id) WHERE read = false;
+
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications FORCE ROW LEVEL SECURITY;
+
+-- Cada usuario solo ve sus propias notificaciones
+CREATE POLICY "notifications_select_own"
+ON public.notifications FOR SELECT TO authenticated
+USING (user_id = auth.uid());
+
+CREATE POLICY "notifications_update_own"
+ON public.notifications FOR UPDATE TO authenticated
+USING (user_id = auth.uid())
+WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "notifications_delete_own"
+ON public.notifications FOR DELETE TO authenticated
+USING (user_id = auth.uid());
+
+-- Insert solo via funciones SECURITY DEFINER
+CREATE POLICY "notifications_deny_insert"
+ON public.notifications FOR INSERT TO authenticated
+WITH CHECK (false);
+
+-- Habilitar Realtime para la tabla notifications
+ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+
+-- ============================================================
+-- 3. FUNCIONES HELPER (internas, no expuestas)
+-- ============================================================
+
+-- Registra un evento en el audit log
+CREATE OR REPLACE FUNCTION public.log_audit_event(
+    p_action      TEXT,
+    p_description TEXT,
+    p_actor_id    UUID DEFAULT NULL,
+    p_actor_email TEXT DEFAULT NULL,
+    p_target_id   UUID DEFAULT NULL,
+    p_metadata    JSONB DEFAULT '{}'
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $
+DECLARE
+    _actor_id    UUID;
+    _actor_email TEXT;
+BEGIN
+    _actor_id := COALESCE(p_actor_id, auth.uid());
+    _actor_email := p_actor_email;
+
+    -- Si no se pasó email, buscarlo
+    IF _actor_email IS NULL AND _actor_id IS NOT NULL THEN
+        SELECT email INTO _actor_email
+        FROM public.profiles
+        WHERE id = _actor_id;
+    END IF;
+
+    INSERT INTO public.audit_log (action, description, actor_id, actor_email, target_id, metadata)
+    VALUES (p_action, p_description, _actor_id, COALESCE(_actor_email, 'system'), p_target_id, p_metadata);
+END;
+$;
+
+-- Crea una notificación para un usuario específico
+CREATE OR REPLACE FUNCTION public.notify_user(
+    p_user_id UUID,
+    p_title   TEXT,
+    p_body    TEXT,
+    p_type    TEXT DEFAULT 'info'
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $
+BEGIN
+    INSERT INTO public.notifications (user_id, title, body, type)
+    VALUES (p_user_id, p_title, p_body, p_type);
+END;
+$;
+
+-- Notifica a todos los usuarios con permiso system.view (excepto el actor actual)
+CREATE OR REPLACE FUNCTION public.notify_admins(
+    p_title TEXT,
+    p_body  TEXT,
+    p_type  TEXT DEFAULT 'info'
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $
+DECLARE
+    _caller_id UUID := auth.uid();
+    _admin_id  UUID;
+BEGIN
+    FOR _admin_id IN
+        SELECT DISTINCT p.id
+        FROM public.profiles p
+        JOIN public.roles r ON p.role = r.name
+        LEFT JOIN public.role_permissions rp ON rp.role = p.role
+        WHERE (
+            -- Owner (level >= 100 tiene todos los permisos)
+            r.hierarchy_level >= 100
+            -- O tiene system.view explícito
+            OR rp.permission = 'system.view'
+        )
+        AND p.id IS DISTINCT FROM _caller_id
+    LOOP
+        INSERT INTO public.notifications (user_id, title, body, type)
+        VALUES (_admin_id, p_title, p_body, p_type);
+    END LOOP;
+END;
+$;
+
+-- ============================================================
+-- 4. RPCs DE AUDITORÍA Y NOTIFICACIONES
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.get_audit_log(
+    p_limit  INT DEFAULT 50,
+    p_offset INT DEFAULT 0
+)
+RETURNS TABLE (
+    id          BIGINT,
+    action      TEXT,
+    description TEXT,
+    actor_email TEXT,
+    target_id   UUID,
+    metadata    JSONB,
+    created_at  TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $
+DECLARE
+    v_limit INT := LEAST(GREATEST(COALESCE(p_limit, 50), 1), 100);
+    v_offset INT := GREATEST(COALESCE(p_offset, 0), 0);
+BEGIN
+    IF NOT (SELECT public.has_current_permission('system.view'))
+       AND NOT (SELECT public.has_current_permission('users.view')) THEN
+        RAISE EXCEPTION 'Permiso denegado: requiere system.view o users.view';
+    END IF;
+
+    RETURN QUERY
+    SELECT a.id, a.action, a.description, a.actor_email, a.target_id, a.metadata, a.created_at
+    FROM public.audit_log a
+    ORDER BY a.created_at DESC
+    LIMIT v_limit
+    OFFSET v_offset;
+END;
+$;
+
+CREATE OR REPLACE FUNCTION public.get_my_notifications(
+    p_limit  INT DEFAULT 20,
+    p_offset INT DEFAULT 0
+)
+RETURNS TABLE (
+    id         BIGINT,
+    title      TEXT,
+    body       TEXT,
+    type       TEXT,
+    read       BOOLEAN,
+    created_at TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $
+DECLARE
+    v_limit INT := LEAST(GREATEST(COALESCE(p_limit, 20), 1), 100);
+    v_offset INT := GREATEST(COALESCE(p_offset, 0), 0);
+BEGIN
+    RETURN QUERY
+    SELECT n.id, n.title, n.body, n.type, n.read, n.created_at
+    FROM public.notifications n
+    WHERE n.user_id = auth.uid()
+    ORDER BY n.created_at DESC
+    LIMIT v_limit
+    OFFSET v_offset;
+END;
+$;
+
+CREATE OR REPLACE FUNCTION public.mark_notification_read(p_id BIGINT)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $
+BEGIN
+    UPDATE public.notifications
+    SET read = true
+    WHERE id = p_id AND user_id = auth.uid();
+END;
+$;
+
+CREATE OR REPLACE FUNCTION public.mark_all_notifications_read()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $
+BEGIN
+    UPDATE public.notifications
+    SET read = true
+    WHERE user_id = auth.uid() AND read = false;
+END;
+$;
+
+CREATE OR REPLACE FUNCTION public.dismiss_notification(p_id BIGINT)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $
+BEGIN
+    DELETE FROM public.notifications
+    WHERE id = p_id AND user_id = auth.uid();
+END;
+$;
+
+-- ============================================================
+-- 5. RPCs DE ADMINISTRACIÓN
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.get_all_users()
@@ -116,18 +395,20 @@ DECLARE
     caller_level   int;
     target_level   int;
     new_role_level int;
+    target_email   text;
+    old_role       text;
 BEGIN
     caller_id := auth.uid();
-    caller_level := public.get_current_user_level();
+    caller_level := (SELECT public.get_current_user_level());
 
-    IF NOT public.has_current_permission('users.manage') THEN
+    IF NOT (SELECT public.has_current_permission('users.manage')) THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
     IF target_user_id = caller_id THEN
         RAISE EXCEPTION 'No puedes modificar tu propio rol';
     END IF;
 
-    SELECT r.hierarchy_level INTO target_level
+    SELECT p.email, p.role, r.hierarchy_level INTO target_email, old_role, target_level
     FROM public.profiles p
     JOIN public.roles r ON p.role = r.name
     WHERE p.id = target_user_id;
@@ -150,6 +431,25 @@ BEGIN
     SET role = new_role
     WHERE id = target_user_id;
 
+    -- Audit + Notify
+    PERFORM public.log_audit_event(
+        'role_change',
+        format('Changed %s role from %s to %s', target_email, old_role, new_role),
+        caller_id, NULL, target_user_id,
+        jsonb_build_object('old_role', old_role, 'new_role', new_role)
+    );
+    PERFORM public.notify_user(
+        target_user_id,
+        'Role updated',
+        format('Your role has been changed to %s', new_role),
+        'info'
+    );
+    PERFORM public.notify_admins(
+        'Role change',
+        format('%s role changed from %s to %s', target_email, old_role, new_role),
+        'info'
+    );
+
     RETURN json_build_object('success', true, 'user_id', target_user_id, 'new_role', new_role);
 END;
 $$;
@@ -164,18 +464,19 @@ DECLARE
     caller_id    uuid;
     caller_level int;
     target_level int;
+    target_email text;
 BEGIN
     caller_id := auth.uid();
-    caller_level := public.get_current_user_level();
+    caller_level := (SELECT public.get_current_user_level());
 
-    IF NOT public.has_current_permission('users.manage') THEN
+    IF NOT (SELECT public.has_current_permission('users.manage')) THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
     IF target_user_id = caller_id THEN
         RAISE EXCEPTION 'No puedes eliminar tu propia cuenta';
     END IF;
 
-    SELECT r.hierarchy_level INTO target_level
+    SELECT p.email, r.hierarchy_level INTO target_email, target_level
     FROM public.profiles p
     JOIN public.roles r ON p.role = r.name
     WHERE p.id = target_user_id;
@@ -185,6 +486,19 @@ BEGIN
     IF target_level >= caller_level THEN
         RAISE EXCEPTION 'No puedes eliminar un usuario con igual o mayor privilegio';
     END IF;
+
+    -- Audit + Notify BEFORE delete (cascade will remove profile)
+    PERFORM public.log_audit_event(
+        'user_removed',
+        format('Removed user %s', COALESCE(target_email, target_user_id::text)),
+        caller_id, NULL, target_user_id,
+        jsonb_build_object('email', target_email)
+    );
+    PERFORM public.notify_admins(
+        'User removed',
+        format('%s has been removed from the workspace', COALESCE(target_email, target_user_id::text)),
+        'warning'
+    );
 
     DELETE FROM auth.users WHERE id = target_user_id;
     RETURN json_build_object('success', true, 'deleted_user_id', target_user_id);
@@ -205,18 +519,19 @@ DECLARE
     caller_id            uuid;
     caller_level         int;
     target_current_level int;
+    target_email         text;
 BEGIN
     caller_id := auth.uid();
-    caller_level := public.get_current_user_level();
+    caller_level := (SELECT public.get_current_user_level());
 
-    IF NOT public.has_current_permission('users.manage') THEN
+    IF NOT (SELECT public.has_current_permission('users.manage')) THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
     IF target_user_id = caller_id THEN
         RAISE EXCEPTION 'Permiso denegado: usa update_my_display_name para tu propia cuenta';
     END IF;
 
-    SELECT r.hierarchy_level INTO target_current_level
+    SELECT p.email, r.hierarchy_level INTO target_email, target_current_level
     FROM public.profiles p
     JOIN public.roles r ON p.role = r.name
     WHERE p.id = target_user_id;
@@ -233,6 +548,14 @@ BEGIN
     UPDATE auth.users
     SET raw_user_meta_data = raw_user_meta_data || jsonb_build_object('display_name', new_display_name)
     WHERE id = target_user_id;
+
+    -- Audit
+    PERFORM public.log_audit_event(
+        'display_name_change',
+        format('Changed display name for %s to "%s"', COALESCE(target_email, target_user_id::text), new_display_name),
+        caller_id, NULL, target_user_id,
+        jsonb_build_object('new_display_name', new_display_name)
+    );
 
     RETURN json_build_object('success', true, 'user_id', target_user_id, 'new_display_name', new_display_name);
 END;
@@ -254,14 +577,14 @@ DECLARE
     target_role_level    int;
     target_current_role  text;
     target_current_level int;
+    target_email         text;
 BEGIN
-    caller_level := public.get_current_user_level();
+    caller_level := (SELECT public.get_current_user_level());
 
-    IF NOT public.has_current_permission('users.manage') THEN
+    IF NOT (SELECT public.has_current_permission('users.manage')) THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
 
-    -- Verificar que el usuario objetivo existe y obtener su rol actual
     SELECT p.role, r.hierarchy_level
     INTO target_current_role, target_current_level
     FROM public.profiles p
@@ -272,9 +595,7 @@ BEGIN
         RAISE EXCEPTION 'Usuario no encontrado: %', target_user_id;
     END IF;
 
-    -- Esta función es exclusiva para usuarios guest (hierarchy_level = 0).
-    -- Previene el bypass de jerarquía: sin esta validación se podría usar esta función
-    -- sobre usuarios existentes saltándose las comprobaciones de update_user_role().
+    -- Solo aplica a usuarios guest para evitar bypass de update_user_role.
     IF target_current_level > 0 THEN
         RAISE EXCEPTION
             'set_new_user_role solo aplica a usuarios guest. Usa update_user_role() para el usuario %',
@@ -294,6 +615,21 @@ BEGIN
     SET role = target_role
     WHERE id = target_user_id;
 
+    SELECT email INTO target_email FROM public.profiles WHERE id = target_user_id;
+
+    -- Audit + Notify
+    PERFORM public.log_audit_event(
+        'user_created',
+        format('New user %s invited with role %s', COALESCE(target_email, target_user_id::text), target_role),
+        NULL, NULL, target_user_id,
+        jsonb_build_object('role', target_role)
+    );
+    PERFORM public.notify_admins(
+        'New user invited',
+        format('%s was invited with role %s', COALESCE(target_email, target_user_id::text), target_role),
+        'success'
+    );
+
     RETURN json_build_object('success', true, 'user_id', target_user_id, 'role', target_role);
 END;
 $$;
@@ -309,11 +645,12 @@ AS $$
 DECLARE
     _uid         UUID := auth.uid();
     _user_role   TEXT;
+    _user_email  TEXT;
     _owner_count INT;
 BEGIN
     IF _uid IS NULL THEN RAISE EXCEPTION 'No autenticado'; END IF;
 
-    SELECT role INTO _user_role
+    SELECT role, email INTO _user_role, _user_email
     FROM public.profiles
     WHERE id = _uid;
 
@@ -327,12 +664,24 @@ BEGIN
         END IF;
     END IF;
 
+    -- Audit + Notify BEFORE delete
+    PERFORM public.log_audit_event(
+        'account_deleted',
+        format('User %s deleted their own account', COALESCE(_user_email, _uid::text)),
+        _uid, _user_email, _uid
+    );
+    PERFORM public.notify_admins(
+        'Account deleted',
+        format('%s has deleted their account', COALESCE(_user_email, _uid::text)),
+        'warning'
+    );
+
     DELETE FROM auth.users WHERE id = _uid;
 END;
 $$;
 
 -- ============================================================
--- 2. RPCs DE GESTIÓN DE ROLES
+-- 6. RPCs DE GESTIÓN DE ROLES
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.create_role(
@@ -348,7 +697,7 @@ AS $$
 DECLARE
     caller_level int;
 BEGIN
-    caller_level := public.get_current_user_level();
+    caller_level := (SELECT public.get_current_user_level());
 
     IF caller_level < 100 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
@@ -362,6 +711,19 @@ BEGIN
 
     INSERT INTO public.roles (name, description, hierarchy_level)
     VALUES (role_name, role_description, role_level);
+
+    -- Audit + Notify
+    PERFORM public.log_audit_event(
+        'role_created',
+        format('Created role "%s" (level %s)', role_name, role_level),
+        NULL, NULL, NULL,
+        jsonb_build_object('role_name', role_name, 'level', role_level)
+    );
+    PERFORM public.notify_admins(
+        'Role created',
+        format('A new role "%s" has been created', role_name),
+        'info'
+    );
 
     RETURN json_build_object('success', true, 'role_name', role_name);
 END;
@@ -387,7 +749,7 @@ DECLARE
     effective_desc    text;
     effective_level   int;
 BEGIN
-    caller_level := public.get_current_user_level();
+    caller_level := (SELECT public.get_current_user_level());
 
     IF caller_level < 100 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
@@ -425,13 +787,28 @@ BEGIN
         RAISE EXCEPTION 'El rol ya existe: %', effective_name;
     END IF;
 
-    -- Gracias a ON UPDATE CASCADE en profiles/role_permissions, el rename
-    -- se propaga de forma automática y consistente.
     UPDATE public.roles
     SET name = effective_name,
         description = effective_desc,
         hierarchy_level = effective_level
     WHERE name = role_name;
+
+    -- Audit + Notify
+    PERFORM public.log_audit_event(
+        'role_updated',
+        format('Updated role "%s"', role_name),
+        NULL, NULL, NULL,
+        jsonb_build_object(
+            'old_name', role_name, 'new_name', effective_name,
+            'old_level', target_role_level, 'new_level', effective_level,
+            'renamed', effective_name <> role_name
+        )
+    );
+    PERFORM public.notify_admins(
+        'Role updated',
+        format('Role "%s" has been updated', effective_name),
+        'info'
+    );
 
     RETURN json_build_object(
         'success', true,
@@ -449,14 +826,14 @@ RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
-AS $$
+AS $
 DECLARE
     caller_level      int;
     target_role_level int;
     fallback_role     text;
     downgraded_users  int := 0;
 BEGIN
-    caller_level := public.get_current_user_level();
+    caller_level := (SELECT public.get_current_user_level());
 
     IF caller_level < 100 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
@@ -474,8 +851,6 @@ BEGIN
         RAISE EXCEPTION 'Permiso denegado: no puedes eliminar un rol con igual o mayor nivel';
     END IF;
 
-    -- Fallback al rol más bajo disponible (típicamente 'guest').
-    -- Decisión intencional: caer al mínimo evita promover usuarios accidentalmente.
     SELECT r.name
     INTO fallback_role
     FROM public.roles r
@@ -494,6 +869,19 @@ BEGIN
 
     DELETE FROM public.roles WHERE name = role_name;
 
+    -- Audit + Notify
+    PERFORM public.log_audit_event(
+        'role_deleted',
+        format('Deleted role "%s" (%s users moved to "%s")', role_name, downgraded_users, fallback_role),
+        NULL, NULL, NULL,
+        jsonb_build_object('role_name', role_name, 'fallback_role', fallback_role, 'downgraded_users', downgraded_users)
+    );
+    PERFORM public.notify_admins(
+        'Role deleted',
+        format('Role "%s" has been deleted. %s users moved to "%s"', role_name, downgraded_users, fallback_role),
+        'warning'
+    );
+
     RETURN json_build_object(
         'success', true,
         'deleted_role', role_name,
@@ -501,7 +889,77 @@ BEGIN
         'downgraded_users', downgraded_users
     );
 END;
-$$;
+$;
+
+CREATE OR REPLACE FUNCTION public.duplicate_role(
+    p_source_role TEXT,
+    p_new_name    TEXT
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $
+DECLARE
+    caller_level      int;
+    source_role_desc  text;
+    source_role_level int;
+    perms_copied      int := 0;
+BEGIN
+    caller_level := (SELECT public.get_current_user_level());
+
+    IF caller_level < 100 THEN
+        RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
+    END IF;
+
+    SELECT r.description, r.hierarchy_level
+    INTO source_role_desc, source_role_level
+    FROM public.roles r
+    WHERE r.name = p_source_role;
+
+    IF source_role_level IS NULL THEN RAISE EXCEPTION 'Rol origen no encontrado: %', p_source_role; END IF;
+    IF source_role_level >= caller_level THEN
+        RAISE EXCEPTION 'Permiso denegado: no puedes duplicar un rol con igual o mayor nivel';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM public.roles r WHERE r.name = p_new_name) THEN
+        RAISE EXCEPTION 'Ya existe un rol con el nombre: %', p_new_name;
+    END IF;
+
+    -- Creamos el nuevo rol manteniendo el nivel del original
+    INSERT INTO public.roles (name, description, hierarchy_level)
+    VALUES (p_new_name, format('%s (Copia de %s)', COALESCE(source_role_desc, ''), p_source_role), source_role_level);
+
+    -- Copiamos los permisos en bloque y contamos inserciones reales.
+    INSERT INTO public.role_permissions (role, permission)
+    SELECT p_new_name, rp.permission
+    FROM public.role_permissions rp
+    WHERE rp.role = p_source_role
+    ON CONFLICT (role, permission) DO NOTHING;
+
+    GET DIAGNOSTICS perms_copied = ROW_COUNT;
+
+    -- Audit + Notify
+    PERFORM public.log_audit_event(
+        'role_duplicated',
+        format('Duplicated role "%s" into "%s" (%s permissions copied)', p_source_role, p_new_name, perms_copied),
+        NULL, NULL, NULL,
+        jsonb_build_object('source_role', p_source_role, 'new_name', p_new_name, 'permissions_copied', perms_copied)
+    );
+    PERFORM public.notify_admins(
+        'Role duplicated',
+        format('Role "%s" has been duplicated as "%s"', p_source_role, p_new_name),
+        'info'
+    );
+
+    RETURN json_build_object(
+        'success', true,
+        'source_role', p_source_role,
+        'new_role', p_new_name,
+        'permissions_copied', perms_copied
+    );
+END;
+$;
 
 CREATE OR REPLACE FUNCTION public.get_role_permissions(target_role TEXT)
 RETURNS TABLE (permission TEXT)
@@ -570,7 +1028,7 @@ DECLARE
     target_role_level int;
     perm_min_level    int;
 BEGIN
-    caller_level := public.get_current_user_level();
+    caller_level := (SELECT public.get_current_user_level());
 
     IF caller_level < 100 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
@@ -604,6 +1062,19 @@ BEGIN
     VALUES (target_role, permission_name)
     ON CONFLICT (role, permission) DO NOTHING;
 
+    -- Audit + Notify
+    PERFORM public.log_audit_event(
+        'permission_update',
+        format('Granted "%s" to role "%s"', permission_name, target_role),
+        NULL, NULL, NULL,
+        jsonb_build_object('role', target_role, 'permission', permission_name, 'action', 'grant')
+    );
+    PERFORM public.notify_admins(
+        'Permission granted',
+        format('Permission "%s" granted to role "%s"', permission_name, target_role),
+        'info'
+    );
+
     RETURN json_build_object('success', true, 'role', target_role, 'permission', permission_name);
 END;
 $$;
@@ -622,7 +1093,7 @@ DECLARE
     caller_level      int;
     target_role_level int;
 BEGIN
-    caller_level := public.get_current_user_level();
+    caller_level := (SELECT public.get_current_user_level());
 
     IF caller_level < 100 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere privilegios de owner';
@@ -643,12 +1114,25 @@ BEGIN
     DELETE FROM public.role_permissions
     WHERE role = target_role AND permission = permission_name;
 
+    -- Audit + Notify
+    PERFORM public.log_audit_event(
+        'permission_update',
+        format('Revoked "%s" from role "%s"', permission_name, target_role),
+        NULL, NULL, NULL,
+        jsonb_build_object('role', target_role, 'permission', permission_name, 'action', 'revoke')
+    );
+    PERFORM public.notify_admins(
+        'Permission revoked',
+        format('Permission "%s" revoked from role "%s"', permission_name, target_role),
+        'warning'
+    );
+
     RETURN json_build_object('success', true, 'role', target_role, 'permission_removed', permission_name);
 END;
 $$;
 
 -- ============================================================
--- 3. GRANTS (ADMIN + GESTIÓN DE ROLES)
+-- 7. GRANTS (ADMIN + GESTIÓN DE ROLES)
 -- ============================================================
 
 REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC, anon;
@@ -677,3 +1161,31 @@ REVOKE ALL ON FUNCTION public.remove_role_permission(text, text) FROM PUBLIC, an
 GRANT EXECUTE ON FUNCTION public.assign_role_permission(text, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.remove_role_permission(text, text) TO authenticated;
 
+-- ============================================================
+-- 7.1 GRANTS (AUDIT LOG + NOTIFICACIONES)
+-- ============================================================
+
+-- Audit log
+REVOKE ALL ON FUNCTION public.get_audit_log(int, int) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_audit_log(int, int) TO authenticated;
+
+-- Notifications
+REVOKE ALL ON FUNCTION public.get_my_notifications(int, int) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_my_notifications(int, int) TO authenticated;
+REVOKE ALL ON FUNCTION public.mark_notification_read(bigint) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.mark_notification_read(bigint) TO authenticated;
+REVOKE ALL ON FUNCTION public.mark_all_notifications_read() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.mark_all_notifications_read() TO authenticated;
+REVOKE ALL ON FUNCTION public.dismiss_notification(bigint) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.dismiss_notification(bigint) TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.duplicate_role(text, text) TO authenticated;
+
+-- Internal helpers (no direct access from frontend)
+REVOKE ALL ON FUNCTION public.log_audit_event(text, text, uuid, text, uuid, jsonb) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.notify_user(uuid, text, text, text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.notify_admins(text, text, text) FROM PUBLIC, anon, authenticated;
+
+-- Tables (RLS handles row-level access, but we also restrict table-level)
+GRANT SELECT ON TABLE public.audit_log TO authenticated;
+GRANT SELECT, UPDATE, DELETE ON TABLE public.notifications TO authenticated;
