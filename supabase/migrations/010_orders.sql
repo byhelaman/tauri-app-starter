@@ -7,7 +7,7 @@
 --   1. Permisos RBAC para orders (granulares: view/create/update/delete/bulk_delete/export/copy)
 --   2. Tablas: orders, queue_orders, order_history
 --   3. Triggers: updated_at, set_updated_by (para realtime skip-own)
---   4. RLS granular basada en has_permission_live()
+--   4. RLS granular basada en has_current_permission()
 --   5. RPCs: get_orders, get_queue_orders, get_orders_stats, get_order_history
 --   6. Realtime agregado vía order_change_events
 --   7. Seed de 50 órdenes de ejemplo
@@ -423,18 +423,18 @@ ALTER TABLE public.order_change_events ENABLE ROW LEVEL SECURITY;
 -- orders: ver
 CREATE POLICY "orders_select" ON public.orders
     FOR SELECT TO authenticated
-    USING ((SELECT public.has_permission_live('orders.view')) AND deleted_at IS NULL);
+    USING ((SELECT public.has_current_permission('orders.view')) AND deleted_at IS NULL);
 
 -- orders: crear
 CREATE POLICY "orders_insert" ON public.orders
     FOR INSERT TO authenticated
-    WITH CHECK ((SELECT public.has_permission_live('orders.create')));
+    WITH CHECK ((SELECT public.has_current_permission('orders.create')));
 
 -- orders: editar
 CREATE POLICY "orders_update" ON public.orders
     FOR UPDATE TO authenticated
-    USING  ((SELECT public.has_permission_live('orders.update')) AND deleted_at IS NULL)
-    WITH CHECK ((SELECT public.has_permission_live('orders.update')) AND deleted_at IS NULL);
+    USING  ((SELECT public.has_current_permission('orders.update')) AND deleted_at IS NULL)
+    WITH CHECK ((SELECT public.has_current_permission('orders.update')) AND deleted_at IS NULL);
 
 -- No hay DELETE directo: las operaciones destructivas deben pasar por RPCs
 -- que aplican soft delete, permisos específicos y auditoría.
@@ -442,25 +442,25 @@ CREATE POLICY "orders_update" ON public.orders
 -- queue_orders
 CREATE POLICY "queue_select" ON public.queue_orders
     FOR SELECT TO authenticated
-    USING ((SELECT public.has_permission_live('orders.view')));
+    USING ((SELECT public.has_current_permission('orders.view')));
 
 CREATE POLICY "queue_insert" ON public.queue_orders
     FOR INSERT TO authenticated
-    WITH CHECK ((SELECT public.has_permission_live('orders.create')));
+    WITH CHECK ((SELECT public.has_current_permission('orders.create')));
 
 CREATE POLICY "queue_update" ON public.queue_orders
     FOR UPDATE TO authenticated
-    USING  ((SELECT public.has_permission_live('orders.update')))
-    WITH CHECK ((SELECT public.has_permission_live('orders.update')));
+    USING  ((SELECT public.has_current_permission('orders.update')))
+    WITH CHECK ((SELECT public.has_current_permission('orders.update')));
 
 CREATE POLICY "queue_delete" ON public.queue_orders
     FOR DELETE TO authenticated
-    USING ((SELECT public.has_permission_live('orders.delete')));
+    USING ((SELECT public.has_current_permission('orders.delete')));
 
 -- order_history: solo lectura para manage; escribir vía SECURITY DEFINER RPCs
 CREATE POLICY "order_history_select" ON public.order_history
     FOR SELECT TO authenticated
-    USING ((SELECT public.has_permission_live('orders.view')));
+    USING ((SELECT public.has_current_permission('orders.view')));
 
 -- Bloquear INSERT directo — solo las RPCs SECURITY DEFINER pueden escribir
 CREATE POLICY "order_history_insert_deny" ON public.order_history
@@ -471,7 +471,7 @@ CREATE POLICY "order_history_insert_deny" ON public.order_history
 -- desde triggers SECURITY DEFINER.
 CREATE POLICY "order_change_events_select" ON public.order_change_events
     FOR SELECT TO authenticated
-    USING ((SELECT public.has_permission_live('orders.view')));
+    USING ((SELECT public.has_current_permission('orders.view')));
 
 CREATE POLICY "order_change_events_insert_deny" ON public.order_change_events
     FOR INSERT TO authenticated
@@ -510,7 +510,7 @@ DECLARE
     v_offset     INT;
 BEGIN
     
-    IF NOT (SELECT public.has_permission_live('orders.view')) THEN
+    IF NOT (SELECT public.has_current_permission('orders.view')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.view';
     END IF;
 
@@ -619,7 +619,7 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-    IF NOT (SELECT public.has_permission_live('orders.view')) THEN
+    IF NOT (SELECT public.has_current_permission('orders.view')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.view';
     END IF;
 
@@ -652,7 +652,7 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-    IF NOT (SELECT public.has_permission_live('orders.view')) THEN
+    IF NOT (SELECT public.has_current_permission('orders.view')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.view';
     END IF;
 
@@ -681,7 +681,7 @@ DECLARE
     v_by_channel JSON;
     v_revenue    NUMERIC;
 BEGIN
-    IF NOT (SELECT public.has_permission_live('orders.view')) THEN
+    IF NOT (SELECT public.has_current_permission('orders.view')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.view';
     END IF;
 
@@ -722,7 +722,7 @@ DECLARE
     v_limit  INT := LEAST(GREATEST(COALESCE(p_limit, 20), 1), 100);
     v_offset INT := GREATEST(COALESCE(p_offset, 0), 0);
 BEGIN
-    IF NOT (SELECT public.has_permission_live('orders.view')) THEN
+    IF NOT (SELECT public.has_current_permission('orders.view')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.view';
     END IF;
 
@@ -801,7 +801,7 @@ DECLARE
     v_offset     INT;
 BEGIN
     
-    IF NOT (SELECT public.has_permission_live('orders.export')) THEN
+    IF NOT (SELECT public.has_current_permission('orders.export')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.export';
     END IF;
 
@@ -916,7 +916,7 @@ DECLARE
     v_hours INT[];
     v_target_ids UUID[];
 BEGIN
-    IF NOT (SELECT public.has_permission_live('orders.bulk_delete')) THEN
+    IF NOT (SELECT public.has_current_permission('orders.bulk_delete')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.bulk_delete';
     END IF;
 
@@ -1137,7 +1137,7 @@ DECLARE
     v_delim      TEXT;
     v_format     TEXT := lower(COALESCE(p_format, 'csv'));
 BEGIN
-    IF NOT (SELECT public.has_permission_live('orders.export')) AND NOT (SELECT public.has_permission_live('orders.copy')) THEN
+    IF NOT (SELECT public.has_current_permission('orders.export')) AND NOT (SELECT public.has_current_permission('orders.copy')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.export or orders.copy';
     END IF;
 
@@ -1285,7 +1285,7 @@ AS $$
 DECLARE
     v_data JSON;
 BEGIN
-    IF NOT (SELECT public.has_permission_live('orders.export')) THEN
+    IF NOT (SELECT public.has_current_permission('orders.export')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.export';
     END IF;
 
@@ -1337,11 +1337,11 @@ DECLARE
     v_requested_count INT := COALESCE(array_length(p_ids, 1), 0);
 BEGIN
     IF v_requested_count = 1 THEN
-        IF NOT (SELECT public.has_permission_live('orders.delete'))
-           AND NOT (SELECT public.has_permission_live('orders.bulk_delete')) THEN
+        IF NOT (SELECT public.has_current_permission('orders.delete'))
+           AND NOT (SELECT public.has_current_permission('orders.bulk_delete')) THEN
             RAISE EXCEPTION 'Permission denied: requires orders.delete';
         END IF;
-    ELSIF NOT (SELECT public.has_permission_live('orders.bulk_delete')) THEN
+    ELSIF NOT (SELECT public.has_current_permission('orders.bulk_delete')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.bulk_delete';
     END IF;
 

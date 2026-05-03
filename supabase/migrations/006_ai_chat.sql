@@ -41,7 +41,7 @@ DECLARE
     v_allowed_tables TEXT[] := ARRAY['orders', 'queue_orders'];
     v_requested_tables TEXT[];
 BEGIN
-    IF NOT public.has_permission_live('ai.chat') THEN
+    IF NOT public.has_current_permission('ai.chat') THEN
         RAISE EXCEPTION 'Permission denied: requires ai.chat';
     END IF;
 

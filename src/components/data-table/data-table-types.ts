@@ -140,7 +140,6 @@ export interface HistoryDetail {
 
 export interface HistorySummary {
   rowCount?: number
-  omittedCount?: number
   search?: string | null
   status?: string[] | null
   excludedIds?: string[] | null

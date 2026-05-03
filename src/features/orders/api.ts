@@ -123,7 +123,6 @@ function normalizeHistorySummary(value: unknown): HistoryEntry["summary"] {
 
   return {
     rowCount:      typeof value.rowCount === "number" ? value.rowCount : undefined,
-    omittedCount:  typeof value.omittedCount === "number" ? value.omittedCount : undefined,
     search:        typeof value.search === "string" ? value.search : null,
     status:        Array.isArray(value.status) ? value.status.map(String) : null,
     excludedIds:   Array.isArray(value.excludedIds) ? value.excludedIds.map(String) : null,

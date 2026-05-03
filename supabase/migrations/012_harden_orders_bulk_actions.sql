@@ -27,8 +27,8 @@ CREATE INDEX IF NOT EXISTS idx_orders_active_start_hour_created_at
 DROP POLICY IF EXISTS "orders_update" ON public.orders;
 CREATE POLICY "orders_update" ON public.orders
     FOR UPDATE TO authenticated
-    USING  ((SELECT public.has_permission_live('orders.update')) AND deleted_at IS NULL)
-    WITH CHECK ((SELECT public.has_permission_live('orders.update')) AND deleted_at IS NULL);
+    USING  ((SELECT public.has_current_permission('orders.update')) AND deleted_at IS NULL)
+    WITH CHECK ((SELECT public.has_current_permission('orders.update')) AND deleted_at IS NULL);
 
 DROP POLICY IF EXISTS "orders_delete" ON public.orders;
 
@@ -121,7 +121,7 @@ DECLARE
     v_hours INT[];
     v_target_ids UUID[];
 BEGIN
-    IF NOT (SELECT public.has_permission_live('orders.bulk_delete')) THEN
+    IF NOT (SELECT public.has_current_permission('orders.bulk_delete')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.bulk_delete';
     END IF;
 
@@ -199,11 +199,11 @@ DECLARE
     v_requested_count INT := COALESCE(array_length(p_ids, 1), 0);
 BEGIN
     IF v_requested_count = 1 THEN
-        IF NOT (SELECT public.has_permission_live('orders.delete'))
-           AND NOT (SELECT public.has_permission_live('orders.bulk_delete')) THEN
+        IF NOT (SELECT public.has_current_permission('orders.delete'))
+           AND NOT (SELECT public.has_current_permission('orders.bulk_delete')) THEN
             RAISE EXCEPTION 'Permission denied: requires orders.delete';
         END IF;
-    ELSIF NOT (SELECT public.has_permission_live('orders.bulk_delete')) THEN
+    ELSIF NOT (SELECT public.has_current_permission('orders.bulk_delete')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.bulk_delete';
     END IF;
 
@@ -267,7 +267,7 @@ DECLARE
     v_delim      TEXT;
     v_format     TEXT := lower(COALESCE(p_format, 'csv'));
 BEGIN
-    IF NOT (SELECT public.has_permission_live('orders.export')) AND NOT (SELECT public.has_permission_live('orders.copy')) THEN
+    IF NOT (SELECT public.has_current_permission('orders.export')) AND NOT (SELECT public.has_current_permission('orders.copy')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.export or orders.copy';
     END IF;
 
@@ -416,7 +416,7 @@ DECLARE
     v_allowed_tables TEXT[] := ARRAY['orders', 'queue_orders'];
     v_requested_tables TEXT[];
 BEGIN
-    IF NOT public.has_permission_live('ai.chat') THEN
+    IF NOT public.has_current_permission('ai.chat') THEN
         RAISE EXCEPTION 'Permission denied: requires ai.chat';
     END IF;
 

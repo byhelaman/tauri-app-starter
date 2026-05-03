@@ -28,7 +28,7 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-    IF NOT public.has_permission_live('users.view') THEN
+    IF NOT public.has_current_permission('users.view') THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.view';
     END IF;
 
@@ -50,8 +50,8 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-    IF NOT public.has_permission_live('system.view')
-       AND NOT public.has_permission_live('users.view')
+    IF NOT public.has_current_permission('system.view')
+       AND NOT public.has_current_permission('users.view')
        AND public.get_current_user_level() < 80 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere system.view o users.view';
     END IF;
@@ -71,8 +71,8 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-    IF NOT public.has_permission_live('system.view')
-       AND NOT public.has_permission_live('users.view')
+    IF NOT public.has_current_permission('system.view')
+       AND NOT public.has_current_permission('users.view')
        AND public.get_current_user_level() < 80 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere system.view o users.view';
     END IF;
@@ -120,7 +120,7 @@ BEGIN
     caller_id := auth.uid();
     caller_level := public.get_current_user_level();
 
-    IF NOT public.has_permission_live('users.manage') THEN
+    IF NOT public.has_current_permission('users.manage') THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
     IF target_user_id = caller_id THEN
@@ -168,7 +168,7 @@ BEGIN
     caller_id := auth.uid();
     caller_level := public.get_current_user_level();
 
-    IF NOT public.has_permission_live('users.manage') THEN
+    IF NOT public.has_current_permission('users.manage') THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
     IF target_user_id = caller_id THEN
@@ -209,7 +209,7 @@ BEGIN
     caller_id := auth.uid();
     caller_level := public.get_current_user_level();
 
-    IF NOT public.has_permission_live('users.manage') THEN
+    IF NOT public.has_current_permission('users.manage') THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
     IF target_user_id = caller_id THEN
@@ -257,7 +257,7 @@ DECLARE
 BEGIN
     caller_level := public.get_current_user_level();
 
-    IF NOT public.has_permission_live('users.manage') THEN
+    IF NOT public.has_current_permission('users.manage') THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
 
@@ -522,8 +522,8 @@ BEGIN
     END IF;
 
     IF target_role <> caller_role
-       AND NOT public.has_permission_live('system.view')
-       AND NOT public.has_permission_live('users.view') THEN
+       AND NOT public.has_current_permission('system.view')
+       AND NOT public.has_current_permission('users.view') THEN
         RAISE EXCEPTION 'Permiso denegado: no puedes consultar permisos de otro rol';
     END IF;
 
@@ -543,8 +543,8 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-    IF NOT public.has_permission_live('system.view')
-       AND NOT public.has_permission_live('users.view')
+    IF NOT public.has_current_permission('system.view')
+       AND NOT public.has_current_permission('users.view')
        AND public.get_current_user_level() < 80 THEN
         RAISE EXCEPTION 'Permiso denegado: requiere system.view o users.view';
     END IF;

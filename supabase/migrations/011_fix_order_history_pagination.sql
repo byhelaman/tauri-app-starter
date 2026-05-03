@@ -16,7 +16,7 @@ DECLARE
     v_limit  INT := LEAST(GREATEST(COALESCE(p_limit, 20), 1), 100);
     v_offset INT := GREATEST(COALESCE(p_offset, 0), 0);
 BEGIN
-    IF NOT (SELECT public.has_permission_live('orders.view')) THEN
+    IF NOT (SELECT public.has_current_permission('orders.view')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.view';
     END IF;
 

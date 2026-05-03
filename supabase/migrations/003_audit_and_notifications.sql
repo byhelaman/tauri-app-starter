@@ -39,8 +39,8 @@ ON public.audit_log
 FOR SELECT
 TO authenticated
 USING (
-    (SELECT public.has_permission_live('system.view'))
-    OR (SELECT public.has_permission_live('users.view'))
+    (SELECT public.has_current_permission('system.view'))
+    OR (SELECT public.has_current_permission('users.view'))
     OR (SELECT public.get_current_user_level()) >= 80
 );
 
@@ -208,8 +208,8 @@ DECLARE
     v_limit INT := LEAST(GREATEST(COALESCE(p_limit, 50), 1), 100);
     v_offset INT := GREATEST(COALESCE(p_offset, 0), 0);
 BEGIN
-    IF NOT (SELECT public.has_permission_live('system.view'))
-       AND NOT (SELECT public.has_permission_live('users.view')) THEN
+    IF NOT (SELECT public.has_current_permission('system.view'))
+       AND NOT (SELECT public.has_current_permission('users.view')) THEN
         RAISE EXCEPTION 'Permiso denegado: requiere system.view o users.view';
     END IF;
 
@@ -315,7 +315,7 @@ BEGIN
     caller_id := auth.uid();
     caller_level := (SELECT public.get_current_user_level());
 
-    IF NOT (SELECT public.has_permission_live('users.manage')) THEN
+    IF NOT (SELECT public.has_current_permission('users.manage')) THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
     IF target_user_id = caller_id THEN
@@ -384,7 +384,7 @@ BEGIN
     caller_id := auth.uid();
     caller_level := (SELECT public.get_current_user_level());
 
-    IF NOT (SELECT public.has_permission_live('users.manage')) THEN
+    IF NOT (SELECT public.has_current_permission('users.manage')) THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
     IF target_user_id = caller_id THEN
@@ -439,7 +439,7 @@ BEGIN
     caller_id := auth.uid();
     caller_level := (SELECT public.get_current_user_level());
 
-    IF NOT (SELECT public.has_permission_live('users.manage')) THEN
+    IF NOT (SELECT public.has_current_permission('users.manage')) THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
     IF target_user_id = caller_id THEN
@@ -495,7 +495,7 @@ DECLARE
 BEGIN
     caller_level := (SELECT public.get_current_user_level());
 
-    IF NOT (SELECT public.has_permission_live('users.manage')) THEN
+    IF NOT (SELECT public.has_current_permission('users.manage')) THEN
         RAISE EXCEPTION 'Permiso denegado: requiere users.manage';
     END IF;
 

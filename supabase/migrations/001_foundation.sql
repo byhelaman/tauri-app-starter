@@ -216,7 +216,7 @@ GRANT SELECT ON TABLE public.role_permissions TO supabase_auth_admin;
 -- ============================================================
 
 -- Verifica un permiso desde el JWT y corrobora existencia en profiles
-CREATE OR REPLACE FUNCTION public.has_permission(required_permission text)
+CREATE OR REPLACE FUNCTION public.has_claimed_permission(required_permission text)
 RETURNS boolean
 LANGUAGE plpgsql
 STABLE
@@ -243,14 +243,14 @@ BEGIN
     RETURN true;
 
 EXCEPTION WHEN OTHERS THEN
-    RAISE WARNING 'has_permission(%) falló inesperadamente: %', required_permission, SQLERRM;
+    RAISE WARNING 'has_claimed_permission(%) falló inesperadamente: %', required_permission, SQLERRM;
     RETURN false;
 END;
 $$;
 
 -- Verifica permisos contra la base de datos viva, no contra claims del JWT.
 -- Usar en RPCs sensibles donde una revocación debe aplicar sin esperar al refresh del token.
-CREATE OR REPLACE FUNCTION public.has_permission_live(required_permission text)
+CREATE OR REPLACE FUNCTION public.has_current_permission(required_permission text)
 RETURNS boolean
 LANGUAGE plpgsql
 STABLE
@@ -287,9 +287,30 @@ BEGIN
     );
 
 EXCEPTION WHEN OTHERS THEN
-    RAISE WARNING 'has_permission_live(%) falló inesperadamente: %', required_permission, SQLERRM;
+    RAISE WARNING 'has_current_permission(%) falló inesperadamente: %', required_permission, SQLERRM;
     RETURN false;
 END;
+$$;
+
+-- Aliases de compatibilidad para instalaciones que aún llamen los nombres antiguos.
+CREATE OR REPLACE FUNCTION public.has_permission(required_permission text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+    SELECT public.has_claimed_permission(required_permission);
+$$;
+
+CREATE OR REPLACE FUNCTION public.has_permission_live(required_permission text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+    SELECT public.has_current_permission(required_permission);
 $$;
 
 -- Devuelve la jerarquía actual leyendo profiles + roles en vivo.
@@ -565,8 +586,10 @@ CREATE TRIGGER check_role_update
 -- ============================================================
 -- 10. GRANTS (UTILITARIAS)
 -- ============================================================
-GRANT EXECUTE ON FUNCTION public.has_permission(text)          TO authenticated;
-GRANT EXECUTE ON FUNCTION public.has_permission_live(text)     TO authenticated;
+GRANT EXECUTE ON FUNCTION public.has_claimed_permission(text)          TO authenticated;
+GRANT EXECUTE ON FUNCTION public.has_current_permission(text)     TO authenticated;
+GRANT EXECUTE ON FUNCTION public.has_permission(text)             TO authenticated;
+GRANT EXECUTE ON FUNCTION public.has_permission_live(text)        TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_current_user_level()      TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_my_profile()              TO authenticated;
 GRANT EXECUTE ON FUNCTION public.check_email_exists(text)      TO authenticated;
