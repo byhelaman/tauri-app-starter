@@ -418,15 +418,6 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
           scope={effectiveScope}
           open={bulkCopyOpen}
           onOpenChange={setBulkCopyOpen}
-          fetchAllByFilter={infiniteScroll?.fetchAllByFilter}
-          fetchAllUnfiltered={infiniteScroll?.fetchAllUnfiltered}
-          fetchByIds={infiniteScroll?.fetchByIds}
-          exportByScope={infiniteScroll?.exportByScope}
-          currentScope={infiniteScroll?.currentScope}
-          selectionState={tableMeta?.selectionState}
-          selectedIds={selectedIds}
-          rowLimit={bulkActionLimit}
-          rowCount={selectedScopeCount}
         />
       )}
 

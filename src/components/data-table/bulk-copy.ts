@@ -76,8 +76,7 @@ export function readBulkCopySettings(tableId: string): Partial<BulkCopySettings>
     }
 }
 
-export function buildBulkCopyText(records: Record<string, unknown>[], tableId: string): string {
-    if (records.length === 0) return ""
+export function resolveBulkCopySettings(tableId: string, fallbackFields: string[]): BulkCopySettings {
     const settings = readBulkCopySettings(tableId) ?? {}
     const format: BulkCopyFormat =
         settings.format === "lines" || settings.format === "csv" ||
@@ -85,11 +84,21 @@ export function buildBulkCopyText(records: Record<string, unknown>[], tableId: s
         settings.format === "custom"
             ? settings.format
             : "lines"
-    const headers = settings.headers ?? true
-    const template = settings.template ?? BULK_COPY_DEFAULT_TEMPLATE
+    const defaultFields = fallbackFields.slice(0, 1)
+    const fields = (settings.fields ?? defaultFields).filter((field) => fallbackFields.includes(field))
+
+    return {
+        format,
+        headers: settings.headers ?? true,
+        template: settings.template ?? BULK_COPY_DEFAULT_TEMPLATE,
+        fields: fields.length > 0 ? fields : defaultFields,
+    }
+}
+
+export function buildBulkCopyText(records: Record<string, unknown>[], tableId: string): string {
+    if (records.length === 0) return ""
     const fieldSet = new Set(Object.keys(records[0] ?? {}))
-    const fields = (settings.fields ?? Array.from(fieldSet).slice(0, 1))
-        .filter((field) => fieldSet.has(field))
+    const { format, headers, template, fields } = resolveBulkCopySettings(tableId, Array.from(fieldSet))
     const parsed = parseBulkCopyTemplate(template, fieldSet)
 
     if (format === "custom") {

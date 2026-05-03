@@ -28,7 +28,7 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { Separator } from "@/components/ui/separator"
 import type { DataTableSelectionState, FacetedFilterOption } from "@/components/data-table/data-table-types"
 import { ImportDialog } from "@/components/data-table/import-dialog"
-import { buildBulkCopyText } from "@/components/data-table/bulk-copy"
+import { buildBulkCopyText, resolveBulkCopySettings } from "@/components/data-table/bulk-copy"
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -79,6 +79,22 @@ const CHANNEL_FILTER_OPTIONS: FacetedFilterOption[] = [
   { label: "Retail", value: "Retail", icon: Store },
   { label: "Partner", value: "Partner", icon: Handshake },
   { label: "Phone", value: "Phone", icon: Phone },
+]
+
+const ORDER_COPY_FIELDS = [
+  "date",
+  "customer",
+  "product",
+  "category",
+  "time",
+  "code",
+  "status",
+  "channel",
+  "quantity",
+  "amount",
+  "region",
+  "payment",
+  "priority",
 ]
 
 const QUEUE_STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
@@ -257,6 +273,7 @@ export function OrdersPage() {
                   const toastId = "copy-all"
                   toast.loading(`Preparing copy...`, { id: toastId })
                   try {
+                    const copySettings = resolveBulkCopySettings("orders", ORDER_COPY_FIELDS)
                     const rowsToCopy = selection.mode === "filter"
                       ? null
                       : selectedIds.length === selectedLoadedRows.length
@@ -267,8 +284,7 @@ export function OrdersPage() {
                       ? (await infiniteScroll.exportByScope!({
                           scope: selection.scope,
                           excludedIds: selection.excludedIds,
-                          format: "tsv",
-                          fields: ["date", "customer", "product", "category", "time", "code", "status", "channel", "quantity", "amount", "region", "payment", "priority"],
+                          ...copySettings,
                         })).content
                       : buildBulkCopyText(rowsToCopy as unknown as Record<string, unknown>[], "orders")
                     if (!content) { toast.error("Nothing to copy", { id: toastId }); return }
