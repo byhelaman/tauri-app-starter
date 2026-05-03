@@ -651,6 +651,8 @@ $$;
 -- 3. GRANTS (ADMIN + GESTIÓN DE ROLES)
 -- ============================================================
 
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC, anon;
+
 -- RPCs de administración
 REVOKE ALL ON FUNCTION public.get_all_users() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_all_users() TO authenticated;

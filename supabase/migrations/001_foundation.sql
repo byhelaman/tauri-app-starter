@@ -18,6 +18,9 @@
 --     → Schema: public | Function: custom_access_token_hook
 --     → Guardar
 
+-- Las funciones nuevas no deben quedar ejecutables por PUBLIC por defecto.
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+
 -- ============================================================
 -- 1. ROLES
 -- ============================================================

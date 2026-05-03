@@ -27,9 +27,9 @@ ON CONFLICT DO NOTHING;
 -- 2. ESQUEMA
 -- ============================================================
 
--- Devuelve columnas y relaciones FK de las tablas de usuario.
--- Excluye tablas de infraestructura RBAC para no exponer la
--- arquitectura de seguridad al modelo de IA.
+-- Devuelve solo el esquema aprobado para herramientas de IA.
+-- Por defecto usa allowlist estricta; no expone metadata de RBAC,
+-- perfiles, auditoría, notificaciones ni tablas internas.
 CREATE OR REPLACE FUNCTION public.get_ai_schema(p_allowed_tables TEXT[] DEFAULT NULL)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -38,15 +38,19 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-    excluded_tables TEXT[] := ARRAY[
-        'permissions', 'roles', 'role_permissions', 'audit_log', 'rate_limits'
-    ];
+    v_allowed_tables TEXT[] := ARRAY['orders', 'queue_orders'];
+    v_requested_tables TEXT[];
 BEGIN
     IF NOT public.has_permission_live('ai.chat') THEN
         RAISE EXCEPTION 'Permission denied: requires ai.chat';
     END IF;
 
-    RETURN (
+    SELECT COALESCE(array_agg(t), ARRAY[]::TEXT[])
+    INTO v_requested_tables
+    FROM unnest(COALESCE(p_allowed_tables, v_allowed_tables)) AS t
+    WHERE t = ANY(v_allowed_tables);
+
+    RETURN COALESCE((
         SELECT jsonb_agg(t ORDER BY t->>'table')
         FROM (
             SELECT jsonb_build_object(
@@ -59,6 +63,18 @@ BEGIN
                     FROM information_schema.columns c2
                     WHERE c2.table_schema = 'public'
                       AND c2.table_name = c.table_name
+                      AND (
+                          (c2.table_name = 'orders' AND c2.column_name = ANY(ARRAY[
+                              'id','date','customer','product','category','start_time','end_time',
+                              'code','status','channel','quantity','amount','region','payment',
+                              'priority','created_at'
+                          ]))
+                          OR
+                          (c2.table_name = 'queue_orders' AND c2.column_name = ANY(ARRAY[
+                              'id','code','start_time','end_time','customer','status','channel',
+                              'agent','priority','created_at'
+                          ]))
+                      )
                 ),
                 'relationships', (
                     -- Relaciones FK para que el modelo pueda hacer joins con select anidado
@@ -77,17 +93,17 @@ BEGIN
                     WHERE tc.constraint_type = 'FOREIGN KEY'
                       AND tc.table_schema    = 'public'
                       AND tc.table_name      = c.table_name
+                      AND ccu.table_name     = ANY(v_allowed_tables)
                 )
             ) AS t
             FROM (
                 SELECT DISTINCT table_name
                 FROM information_schema.columns
                 WHERE table_schema = 'public'
-                  AND table_name != ALL(excluded_tables)
-                  AND (p_allowed_tables IS NULL OR table_name = ANY(p_allowed_tables))
+                  AND table_name = ANY(v_requested_tables)
             ) c
         ) sub
-    );
+    ), '[]'::JSONB);
 END;
 $$;
 

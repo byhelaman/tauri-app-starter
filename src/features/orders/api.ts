@@ -120,23 +120,13 @@ function normalizeHistoryDetails(value: unknown): HistoryEntry["details"] {
 
 function normalizeHistorySummary(value: unknown): HistoryEntry["summary"] {
   if (!isRecord(value) || Array.isArray(value)) return undefined
-  const sampleRecords = Array.isArray(value.sampleRecords)
-    ? value.sampleRecords
-        .filter(isRecord)
-        .map((record) => ({
-          recordId:   String(record.recordId),
-          recordCode: typeof record.recordCode === "string" ? record.recordCode : undefined,
-        }))
-    : undefined
 
   return {
     rowCount:      typeof value.rowCount === "number" ? value.rowCount : undefined,
-    sampleRecords,
     omittedCount:  typeof value.omittedCount === "number" ? value.omittedCount : undefined,
     search:        typeof value.search === "string" ? value.search : null,
     status:        Array.isArray(value.status) ? value.status.map(String) : null,
     excludedIds:   Array.isArray(value.excludedIds) ? value.excludedIds.map(String) : null,
-    deletedIds:    Array.isArray(value.deletedIds) ? value.deletedIds.map(String) : null,
   }
 }
 
@@ -194,9 +184,7 @@ export const createOrder = async (orderData: Partial<Order>) => {
 }
 
 export const deleteOrder = async (id: string) => {
-  const db = assertSupabase()
-  const { error } = await db.from("orders").delete().eq("id", id)
-  if (error) throw new Error(error.message)
+  await bulkDeleteOrders([id])
 }
 
 export const bulkDeleteOrders = async (ids: string[]) => {
@@ -235,6 +223,7 @@ export const bulkDeleteOrdersBySelection = async (selection: DataTableSelectionS
   const db = assertSupabase()
   const { data, error } = await db.rpc("bulk_delete_orders_by_filter", {
     ...scopeRpcParams(selection.scope, selection.excludedIds),
+    p_expected_count: Math.max(0, selection.total - selection.excludedIds.length),
   })
   if (error) throw new Error(error.message)
   return (data as number) ?? 0

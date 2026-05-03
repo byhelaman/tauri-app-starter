@@ -56,7 +56,6 @@ function getHistorySearchValues(entry: HistoryEntry) {
       formatHistoryValue(detail.oldValue),
       formatHistoryValue(detail.newValue),
     ]) ?? []),
-    ...(entry.summary?.sampleRecords?.flatMap((record) => [record.recordId, record.recordCode]) ?? []),
   ]
 }
 
@@ -102,30 +101,11 @@ export function TableHistoryCard({
   }
 
   function renderSummary(summary: HistorySummary) {
-    const records = summary.sampleRecords ?? []
     return (
       <div className="mt-2 space-y-1.5 border-l-2 border-muted pl-3">
         {typeof summary.rowCount === "number" && (
           <div className="text-sm text-muted-foreground">
             {summary.rowCount.toLocaleString()} affected records
-          </div>
-        )}
-        {records.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {records.map((record) => (
-              <span
-                key={record.recordId}
-                className="rounded border bg-muted/40 px-1.5 py-0.5 font-mono text-xs"
-                title={record.recordId}
-              >
-                {record.recordCode ?? record.recordId.slice(0, 8)}
-              </span>
-            ))}
-            {!!summary.omittedCount && summary.omittedCount > 0 && (
-              <span className="text-xs text-muted-foreground">
-                +{summary.omittedCount.toLocaleString()} more
-              </span>
-            )}
           </div>
         )}
       </div>

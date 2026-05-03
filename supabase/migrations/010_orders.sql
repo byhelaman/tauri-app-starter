@@ -69,10 +69,17 @@ CREATE TABLE public.orders (
     deleted_at  TIMESTAMPTZ DEFAULT NULL
 );
 
-CREATE INDEX idx_orders_status     ON public.orders(status);
-CREATE INDEX idx_orders_channel    ON public.orders(channel);
-CREATE INDEX idx_orders_date       ON public.orders(date DESC);
-CREATE INDEX idx_orders_created_at ON public.orders(created_at DESC);
+CREATE INDEX idx_orders_active_created_at ON public.orders(created_at DESC, id DESC)
+    WHERE deleted_at IS NULL;
+CREATE INDEX idx_orders_active_date_created_at ON public.orders(date DESC, created_at DESC, id DESC)
+    WHERE deleted_at IS NULL;
+CREATE INDEX idx_orders_active_status_created_at ON public.orders(status, created_at DESC, id DESC)
+    WHERE deleted_at IS NULL;
+CREATE INDEX idx_orders_active_channel_created_at ON public.orders(channel, created_at DESC, id DESC)
+    WHERE deleted_at IS NULL;
+CREATE INDEX idx_orders_active_start_hour_created_at
+    ON public.orders ((EXTRACT(HOUR FROM start_time)::INT), created_at DESC, id DESC)
+    WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX orders_code_active_key ON public.orders(code) WHERE deleted_at IS NULL;
 CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions;
 CREATE INDEX idx_orders_customer_trgm ON public.orders USING gin (customer extensions.gin_trgm_ops) WHERE deleted_at IS NULL;
@@ -128,6 +135,23 @@ CREATE TABLE public.order_change_events (
 );
 
 CREATE INDEX idx_order_change_events_created_at ON public.order_change_events(created_at DESC);
+
+CREATE OR REPLACE FUNCTION public.prune_order_change_events()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+    DELETE FROM public.order_change_events
+    WHERE created_at < NOW() - INTERVAL '30 days';
+    RETURN NULL;
+END;
+$$;
+
+CREATE TRIGGER prune_order_change_events_after_insert
+    AFTER INSERT ON public.order_change_events
+    FOR EACH STATEMENT EXECUTE FUNCTION public.prune_order_change_events();
 
 -- ============================================================
 -- 3. TRIGGERS
@@ -324,22 +348,7 @@ BEGIN
             'create',
             'Bulk created ' || v_count::TEXT || ' orders',
             COALESCE(auth.jwt() ->> 'email', 'system'),
-            jsonb_build_object(
-                'rowCount', v_count,
-                'sampleRecords', (
-                    SELECT COALESCE(jsonb_agg(jsonb_build_object(
-                        'recordId', r.id,
-                        'recordCode', r.code
-                    )), '[]'::jsonb)
-                    FROM (
-                        SELECT id, code
-                        FROM new_rows
-                        ORDER BY created_at DESC
-                        LIMIT 100
-                    ) r
-                ),
-                'omittedCount', GREATEST(v_count - 100, 0)
-            )
+            jsonb_build_object('rowCount', v_count)
         );
     END IF;
 
@@ -424,13 +433,11 @@ CREATE POLICY "orders_insert" ON public.orders
 -- orders: editar
 CREATE POLICY "orders_update" ON public.orders
     FOR UPDATE TO authenticated
-    USING  ((SELECT public.has_permission_live('orders.update')))
-    WITH CHECK ((SELECT public.has_permission_live('orders.update')));
+    USING  ((SELECT public.has_permission_live('orders.update')) AND deleted_at IS NULL)
+    WITH CHECK ((SELECT public.has_permission_live('orders.update')) AND deleted_at IS NULL);
 
--- orders: eliminar
-CREATE POLICY "orders_delete" ON public.orders
-    FOR DELETE TO authenticated
-    USING ((SELECT public.has_permission_live('orders.delete')));
+-- No hay DELETE directo: las operaciones destructivas deben pasar por RPCs
+-- que aplican soft delete, permisos específicos y auditoría.
 
 -- queue_orders
 CREATE POLICY "queue_select" ON public.queue_orders
@@ -895,7 +902,8 @@ CREATE OR REPLACE FUNCTION public.bulk_delete_orders_by_filter(
     p_channel      TEXT[]  DEFAULT NULL,
     p_date         DATE    DEFAULT NULL,
     p_start_hour   TEXT[]  DEFAULT NULL,
-    p_excluded_ids UUID[]  DEFAULT ARRAY[]::UUID[]
+    p_excluded_ids UUID[]  DEFAULT ARRAY[]::UUID[],
+    p_expected_count INT   DEFAULT NULL
 )
 RETURNS INT
 LANGUAGE plpgsql
@@ -906,7 +914,7 @@ AS $$
 DECLARE
     v_count INT;
     v_hours INT[];
-    v_records JSONB;
+    v_target_ids UUID[];
 BEGIN
     IF NOT (SELECT public.has_permission_live('orders.bulk_delete')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.bulk_delete';
@@ -919,7 +927,8 @@ BEGIN
         WHERE x ~ '^\d+$';
     END IF;
 
-    SELECT COUNT(*) INTO v_count
+    SELECT COALESCE(array_agg(o.id ORDER BY o.created_at DESC, o.id DESC), ARRAY[]::UUID[])
+    INTO v_target_ids
     FROM public.orders o
     WHERE
         o.deleted_at IS NULL
@@ -935,45 +944,18 @@ BEGIN
             OR EXTRACT(HOUR FROM o.start_time)::INT = ANY(v_hours))
         AND (array_length(p_excluded_ids, 1) IS NULL OR o.id != ALL(p_excluded_ids));
 
-    SELECT COALESCE(jsonb_agg(jsonb_build_object('recordId', r.id, 'recordCode', r.code)), '[]'::jsonb)
-    INTO v_records
-    FROM (
-        SELECT o.id, o.code
-        FROM public.orders o
-        WHERE
-            o.deleted_at IS NULL
-            AND (p_search = '' OR p_search IS NULL OR (
-                o.customer ILIKE '%' || p_search || '%' OR
-                o.code     ILIKE '%' || p_search || '%' OR
-                o.product  ILIKE '%' || p_search || '%'
-            ))
-            AND (p_status IS NULL      OR array_length(p_status, 1) IS NULL      OR o.status = ANY(p_status))
-            AND (p_channel IS NULL     OR array_length(p_channel, 1) IS NULL     OR o.channel = ANY(p_channel))
-            AND (p_date IS NULL        OR o.date = p_date)
-            AND (v_hours IS NULL       OR array_length(v_hours, 1) IS NULL
-                OR EXTRACT(HOUR FROM o.start_time)::INT = ANY(v_hours))
-            AND (array_length(p_excluded_ids, 1) IS NULL OR o.id != ALL(p_excluded_ids))
-        ORDER BY o.created_at DESC
-        LIMIT 100
-    ) r;
+    v_count := COALESCE(array_length(v_target_ids, 1), 0);
+
+    IF p_expected_count IS NOT NULL AND v_count <> p_expected_count THEN
+        RAISE EXCEPTION 'Bulk delete scope changed: expected %, found %', p_expected_count, v_count;
+    END IF;
 
     PERFORM set_config('app.bulk_op', 'true', true);
 
     UPDATE public.orders o
     SET deleted_at = NOW()
-    WHERE
-        o.deleted_at IS NULL
-        AND (p_search = '' OR p_search IS NULL OR (
-            o.customer ILIKE '%' || p_search || '%' OR
-            o.code     ILIKE '%' || p_search || '%' OR
-            o.product  ILIKE '%' || p_search || '%'
-        ))
-        AND (p_status IS NULL     OR array_length(p_status, 1) IS NULL     OR o.status  = ANY(p_status))
-        AND (p_channel IS NULL    OR array_length(p_channel, 1) IS NULL    OR o.channel = ANY(p_channel))
-        AND (p_date IS NULL       OR o.date = p_date)
-        AND (v_hours IS NULL      OR array_length(v_hours, 1) IS NULL
-            OR EXTRACT(HOUR FROM o.start_time)::INT = ANY(v_hours))
-        AND (array_length(p_excluded_ids, 1) IS NULL OR o.id != ALL(p_excluded_ids));
+    WHERE o.id = ANY(v_target_ids)
+      AND o.deleted_at IS NULL;
 
     GET DIAGNOSTICS v_count = ROW_COUNT;
     
@@ -985,8 +967,6 @@ BEGIN
             COALESCE(auth.jwt() ->> 'email', 'system'),
             jsonb_build_object(
                 'rowCount', v_count,
-                'sampleRecords', v_records,
-                'omittedCount', GREATEST(v_count - 100, 0),
                 'search', p_search,
                 'status', p_status,
                 'excludedIds', p_excluded_ids
@@ -1153,6 +1133,7 @@ DECLARE
     v_fields     TEXT[];
     v_content    TEXT;
     v_count      INT;
+    v_max_direct_rows INT := 10000;
     v_delim      TEXT;
     v_format     TEXT := lower(COALESCE(p_format, 'csv'));
 BEGIN
@@ -1192,6 +1173,26 @@ BEGIN
         WHEN v_format = 'lines' THEN ' - '
         ELSE ','
     END;
+
+    SELECT COUNT(*)
+    INTO v_count
+    FROM public.orders o
+    WHERE o.deleted_at IS NULL
+        AND (p_search = '' OR p_search IS NULL OR (
+            o.customer ILIKE '%' || p_search || '%' OR
+            o.code     ILIKE '%' || p_search || '%' OR
+            o.product  ILIKE '%' || p_search || '%'
+        ))
+        AND (p_status IS NULL OR array_length(p_status, 1) IS NULL OR o.status = ANY(p_status))
+        AND (p_channel IS NULL OR array_length(p_channel, 1) IS NULL OR o.channel = ANY(p_channel))
+        AND (p_date IS NULL OR o.date = p_date)
+        AND (v_hours IS NULL OR array_length(v_hours, 1) IS NULL OR EXTRACT(HOUR FROM o.start_time)::INT = ANY(v_hours))
+        AND (array_length(p_excluded_ids, 1) IS NULL OR o.id != ALL(p_excluded_ids));
+
+    IF v_count > v_max_direct_rows THEN
+        RAISE EXCEPTION 'Direct export is limited to % rows. Use an async export job for % rows.',
+            v_max_direct_rows, v_count;
+    END IF;
 
     v_sql := format($query$
         WITH filtered AS (
@@ -1333,25 +1334,20 @@ SET search_path = ''
 AS $$
 DECLARE
     v_count INT;
-    v_records JSONB;
+    v_requested_count INT := COALESCE(array_length(p_ids, 1), 0);
 BEGIN
-    IF NOT (SELECT public.has_permission_live('orders.bulk_delete')) THEN
+    IF v_requested_count = 1 THEN
+        IF NOT (SELECT public.has_permission_live('orders.delete'))
+           AND NOT (SELECT public.has_permission_live('orders.bulk_delete')) THEN
+            RAISE EXCEPTION 'Permission denied: requires orders.delete';
+        END IF;
+    ELSIF NOT (SELECT public.has_permission_live('orders.bulk_delete')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.bulk_delete';
     END IF;
 
-    IF COALESCE(array_length(p_ids, 1), 0) > 10000 THEN
+    IF v_requested_count > 10000 THEN
         RAISE EXCEPTION 'Too many orders selected at once';
     END IF;
-
-    SELECT COALESCE(jsonb_agg(jsonb_build_object('recordId', r.id, 'recordCode', r.code)), '[]'::jsonb)
-    INTO v_records
-    FROM (
-        SELECT id, code
-        FROM public.orders
-        WHERE id = ANY(p_ids) AND deleted_at IS NULL
-        ORDER BY array_position(p_ids, id)
-        LIMIT 100
-    ) r;
 
     PERFORM set_config('app.bulk_op', 'true', true);
 
@@ -1364,12 +1360,7 @@ BEGIN
             'delete',
             'Bulk deleted ' || v_count::TEXT || ' orders manually',
             COALESCE(auth.jwt() ->> 'email', 'system'),
-            jsonb_build_object(
-                'rowCount', v_count,
-                'sampleRecords', v_records,
-                'omittedCount', GREATEST(v_count - 100, 0),
-                'deletedIds', p_ids
-            )
+            jsonb_build_object('rowCount', v_count)
         );
     END IF;
 
@@ -1390,7 +1381,7 @@ GRANT EXECUTE ON FUNCTION public.get_order_history(INT,INT)                 TO a
 GRANT EXECUTE ON FUNCTION public.get_orders_start_hours()                   TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_by_filter(TEXT,TEXT[],TEXT[],DATE,TEXT[],UUID[],TEXT,TEXT,INT,INT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.export_orders_by_filter(TEXT,TEXT[],TEXT[],DATE,TEXT[],UUID[],TEXT,TEXT,TEXT,TEXT[],BOOLEAN,TEXT) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_filter(TEXT,TEXT[],TEXT[],DATE,TEXT[],UUID[]) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_filter(TEXT,TEXT[],TEXT[],DATE,TEXT[],UUID[],INT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_by_ids(UUID[])                  TO authenticated;
 GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_ids(UUID[])          TO authenticated;
 GRANT SELECT ON public.order_change_events TO authenticated;
@@ -1399,6 +1390,7 @@ REVOKE ALL ON FUNCTION public.record_order_history(TEXT,TEXT,UUID,JSONB) FROM PU
 REVOKE ALL ON FUNCTION public.record_orders_insert_event() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.record_orders_update_event() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.record_orders_delete_event() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.prune_order_change_events() FROM PUBLIC, anon, authenticated;
 
 -- ============================================================
 -- 7. REALTIME
