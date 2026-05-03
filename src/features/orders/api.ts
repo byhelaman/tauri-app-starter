@@ -42,6 +42,11 @@ function pickHourFilter(filters: ColumnFiltersState): string[] | null {
   return null
 }
 
+function pickBooleanFilter(filters: ColumnFiltersState, id: string): boolean | null {
+  const f = filters.find((f) => f.id === id)
+  return typeof f?.value === "boolean" ? f.value : null
+}
+
 // ── Orders ────────────────────────────────────────────────────────────────────
 
 export const fetchOrders = async ({
@@ -81,9 +86,30 @@ export const fetchOrders = async ({
 
 // ── Queue Orders ──────────────────────────────────────────────────────────────
 
-export const fetchQueueOrders = async (): Promise<{ data: QueueOrder[]; total: number }> => {
+export const fetchQueueOrders = async ({
+  limit = 20,
+  offset = 0,
+  search = "",
+  filters = [],
+  sorting = [],
+}: {
+  limit?: number
+  offset?: number
+  search?: string
+  filters?: ColumnFiltersState
+  sorting?: SortingState
+} = {}): Promise<{ data: QueueOrder[]; total: number }> => {
   const db = assertSupabase()
-  const { data, error } = await db.rpc("get_queue_orders")
+  const { data, error } = await db.rpc("get_queue_orders", {
+    p_limit:    limit,
+    p_offset:   offset,
+    p_search:   search || "",
+    p_status:   pickFilter(filters, "status"),
+    p_channel:  pickFilter(filters, "channel"),
+    p_priority: pickBooleanFilter(filters, "priority"),
+    p_sort_col: sorting[0]?.id ?? null,
+    p_sort_dir: sorting[0]?.desc ? "desc" : (sorting[0] ? "asc" : null),
+  })
   if (error) throw new Error(error.message)
   const result = data as { data: QueueOrder[]; total: number }
   return { data: result.data ?? [], total: result.total ?? 0 }
@@ -140,6 +166,33 @@ export const fetchOrderHistory = async ({
   })
   if (error) throw new Error(error.message)
   // Map snake_case → camelCase to match HistoryEntry interface
+  return ((data as Record<string, unknown>[]) ?? []).map((r) => {
+    const details = normalizeHistoryDetails(r.details)
+    return {
+      id:          String(r.id),
+      action:      r.action as HistoryEntry["action"],
+      user:        (r.actor_email as string).split("@")[0].split(".").join(" "),
+      description: r.description as string,
+      actorEmail:  r.actor_email as string,
+      createdAt:   r.created_at as string,
+      orderId:     typeof r.order_id === "string" ? r.order_id : undefined,
+      recordCode:  details?.[0]?.recordCode ?? (typeof r.record_code === "string" ? r.record_code : undefined),
+      details,
+      summary:     normalizeHistorySummary(r.details),
+    }
+  })
+}
+
+export const fetchQueueHistory = async ({
+  limit = 20,
+  offset = 0,
+} = {}): Promise<HistoryEntry[]> => {
+  const db = assertSupabase()
+  const { data, error } = await db.rpc("get_queue_history", {
+    p_limit:  limit,
+    p_offset: offset,
+  })
+  if (error) throw new Error(error.message)
   return ((data as Record<string, unknown>[]) ?? []).map((r) => {
     const details = normalizeHistoryDetails(r.details)
     return {
@@ -215,6 +268,24 @@ function scopeExportRpcParams(scope: DataTableSelectionScope, excludedIds: strin
   }
 }
 
+function queueScopeRpcParams(scope: DataTableSelectionScope, excludedIds: string[] = []) {
+  return {
+    p_search:       scope.search || "",
+    p_status:       pickFilter(scope.filters, "status"),
+    p_channel:      pickFilter(scope.filters, "channel"),
+    p_priority:     pickBooleanFilter(scope.filters, "priority"),
+    p_excluded_ids: excludedIds.length > 0 ? excludedIds : [],
+  }
+}
+
+function queueScopeExportRpcParams(scope: DataTableSelectionScope, excludedIds: string[] = []) {
+  return {
+    ...queueScopeRpcParams(scope, excludedIds),
+    p_sort_col: scope.sorting?.[0]?.id ?? null,
+    p_sort_dir: scope.sorting?.[0]?.desc ? "desc" : (scope.sorting?.[0] ? "asc" : null),
+  }
+}
+
 export const bulkDeleteOrdersBySelection = async (selection: DataTableSelectionState) => {
   if (selection.mode === "ids") {
     return bulkDeleteOrders(selection.ids)
@@ -222,6 +293,30 @@ export const bulkDeleteOrdersBySelection = async (selection: DataTableSelectionS
   const db = assertSupabase()
   const { data, error } = await db.rpc("bulk_delete_orders_by_filter", {
     ...scopeRpcParams(selection.scope, selection.excludedIds),
+    p_expected_count: Math.max(0, selection.total - selection.excludedIds.length),
+  })
+  if (error) throw new Error(error.message)
+  return (data as number) ?? 0
+}
+
+export const bulkDeleteQueueOrders = async (ids: string[]) => {
+  if (ids.length === 0) return 0
+  if (ids.length > MAX_BULK_ORDER_ROWS) {
+    throw new Error(`Bulk delete is limited to ${MAX_BULK_ORDER_ROWS.toLocaleString()} queue rows at a time`)
+  }
+  const db = assertSupabase()
+  const { data, error } = await db.rpc("bulk_delete_queue_orders_by_ids", { p_ids: ids })
+  if (error) throw new Error(error.message)
+  return (data as number) ?? 0
+}
+
+export const bulkDeleteQueueOrdersBySelection = async (selection: DataTableSelectionState) => {
+  if (selection.mode === "ids") {
+    return bulkDeleteQueueOrders(selection.ids)
+  }
+  const db = assertSupabase()
+  const { data, error } = await db.rpc("bulk_delete_queue_orders_by_filter", {
+    ...queueScopeRpcParams(selection.scope, selection.excludedIds),
     p_expected_count: Math.max(0, selection.total - selection.excludedIds.length),
   })
   if (error) throw new Error(error.message)
@@ -246,6 +341,37 @@ export const exportOrdersByScope = async ({
   const db = assertSupabase()
   const { data, error } = await db.rpc("export_orders_by_filter", {
     ...scopeExportRpcParams(scope, excludedIds),
+    p_format: format,
+    p_fields: fields,
+    p_headers: headers ?? true,
+    p_template: template ?? null,
+  })
+  if (error) throw new Error(error.message)
+  const result = data as { content?: string; row_count?: number } | null
+  return {
+    content: result?.content ?? "",
+    rowCount: result?.row_count ?? 0,
+  }
+}
+
+export const exportQueueOrdersByScope = async ({
+  scope,
+  excludedIds = [],
+  format,
+  fields,
+  headers,
+  template,
+}: {
+  scope: DataTableSelectionScope
+  excludedIds?: string[]
+  format: ServerExportFormat
+  fields: string[]
+  headers?: boolean
+  template?: string
+}): Promise<ServerScopeExportResult> => {
+  const db = assertSupabase()
+  const { data, error } = await db.rpc("export_queue_orders_by_filter", {
+    ...queueScopeExportRpcParams(scope, excludedIds),
     p_format: format,
     p_fields: fields,
     p_headers: headers ?? true,
@@ -310,6 +436,17 @@ export const fetchOrdersByIds = async (ids: string[]): Promise<Order[]> => {
   const { data, error } = await db.rpc("get_orders_by_ids", { p_ids: ids })
   if (error) throw new Error(error.message)
   return (data as Order[]) ?? []
+}
+
+export const fetchQueueOrdersByIds = async (ids: string[]): Promise<QueueOrder[]> => {
+  if (ids.length === 0) return []
+  if (ids.length > MAX_BULK_ORDER_ROWS) {
+    throw new Error(`Copy/export is limited to ${MAX_BULK_ORDER_ROWS.toLocaleString()} queue rows at a time`)
+  }
+  const db = assertSupabase()
+  const { data, error } = await db.rpc("get_queue_orders_by_ids", { p_ids: ids })
+  if (error) throw new Error(error.message)
+  return (data as QueueOrder[]) ?? []
 }
 
 

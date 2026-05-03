@@ -142,34 +142,154 @@ $$;
 
 -- ──────────────────────────────────────────────────────────────
 
--- get_queue_orders
-CREATE OR REPLACE FUNCTION public.get_queue_orders()
+-- get_queue_orders — paginación server-side con filtros y ordenamiento dinámico
+CREATE OR REPLACE FUNCTION public.get_queue_orders(
+    p_limit      INT      DEFAULT 25,
+    p_offset     INT      DEFAULT 0,
+    p_search     TEXT     DEFAULT '',
+    p_status     TEXT[]   DEFAULT NULL,
+    p_channel    TEXT[]   DEFAULT NULL,
+    p_priority   BOOLEAN  DEFAULT NULL,
+    p_sort_col   TEXT     DEFAULT NULL,
+    p_sort_dir   TEXT     DEFAULT NULL
+)
 RETURNS JSON
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = ''
 AS $$
+DECLARE
+    v_total  INT;
+    v_data   JSON;
+    v_sql    TEXT;
+    v_sort_c TEXT := 'created_at';
+    v_sort_d TEXT := 'DESC';
+    v_limit  INT;
+    v_offset INT;
 BEGIN
     IF NOT (SELECT public.has_current_permission('orders.view')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.view';
     END IF;
 
+    v_sort_c := CASE p_sort_col
+        WHEN 'id' THEN 'id'
+        WHEN 'time' THEN 'start_time'
+        WHEN 'start_time' THEN 'start_time'
+        WHEN 'end_time' THEN 'end_time'
+        WHEN 'code' THEN 'code'
+        WHEN 'customer' THEN 'customer'
+        WHEN 'status' THEN 'status'
+        WHEN 'channel' THEN 'channel'
+        WHEN 'agent' THEN 'agent'
+        WHEN 'priority' THEN 'priority'
+        WHEN 'created_at' THEN 'created_at'
+        ELSE 'created_at'
+    END;
+
+    IF lower(p_sort_dir) = 'asc' THEN
+        v_sort_d := 'ASC';
+    ELSIF lower(p_sort_dir) = 'desc' THEN
+        v_sort_d := 'DESC';
+    END IF;
+
+    v_limit := LEAST(GREATEST(COALESCE(p_limit, 25), 1), 1000);
+    v_offset := GREATEST(COALESCE(p_offset, 0), 0);
+
+    v_sql := format($query$
+        WITH filtered AS (
+            SELECT q.*
+            FROM public.queue_orders q
+            WHERE ($1 = '' OR $1 IS NULL OR (
+                q.customer ILIKE '%%' || $1 || '%%' OR
+                q.code     ILIKE '%%' || $1 || '%%' OR
+                q.agent    ILIKE '%%' || $1 || '%%'
+            ))
+            AND ($2 IS NULL OR array_length($2, 1) IS NULL OR q.status = ANY($2))
+            AND ($3 IS NULL OR array_length($3, 1) IS NULL OR q.channel = ANY($3))
+            AND ($4 IS NULL OR q.priority = $4)
+        )
+        SELECT
+            (SELECT COUNT(*) FROM filtered),
+            (
+                SELECT COALESCE(json_agg((to_jsonb(r) - '__row_order') ORDER BY r.__row_order), '[]'::json)
+                FROM (
+                    SELECT
+                        ROW_NUMBER() OVER (ORDER BY %I %s NULLS LAST, created_at DESC, id DESC) AS __row_order,
+                        id,
+                        to_char(start_time, 'HH24:MI') AS start_time,
+                        to_char(end_time,   'HH24:MI') AS end_time,
+                        code,
+                        customer,
+                        status,
+                        channel,
+                        agent,
+                        priority,
+                        created_at
+                    FROM filtered
+                    ORDER BY %I %s NULLS LAST, created_at DESC, id DESC
+                    LIMIT $5 OFFSET $6
+                ) r
+            )
+    $query$, v_sort_c, v_sort_d, v_sort_c, v_sort_d);
+
+    EXECUTE v_sql
+    USING p_search, p_status, p_channel, p_priority, v_limit, v_offset
+    INTO v_total, v_data;
+
     RETURN json_build_object(
-        'data', COALESCE((
-            SELECT json_agg(row_to_json(r) ORDER BY r.created_at DESC)
-            FROM (
-                SELECT
-                    id,
-                    to_char(start_time, 'HH24:MI') AS start_time,
-                    to_char(end_time,   'HH24:MI') AS end_time,
-                    code, customer, status, channel, agent, priority, created_at
-                FROM public.queue_orders
-                ORDER BY created_at DESC
-            ) r
-        ), '[]'::JSON),
-        'total', (SELECT COUNT(*) FROM public.queue_orders)
+        'data', v_data,
+        'total', v_total
     );
+END;
+$$;
+
+-- ──────────────────────────────────────────────────────────────
+
+-- get_queue_history
+CREATE OR REPLACE FUNCTION public.get_queue_history(
+    p_limit  INT DEFAULT 20,
+    p_offset INT DEFAULT 0
+)
+RETURNS TABLE (
+    id          BIGINT,
+    action      TEXT,
+    description TEXT,
+    actor_email TEXT,
+    order_id    UUID,
+    record_code TEXT,
+    details     JSONB,
+    created_at  TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_limit INT;
+    v_offset INT;
+BEGIN
+    IF NOT (SELECT public.has_current_permission('orders.view')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.view';
+    END IF;
+
+    v_limit := LEAST(GREATEST(COALESCE(p_limit, 20), 1), 100);
+    v_offset := GREATEST(COALESCE(p_offset, 0), 0);
+
+    RETURN QUERY
+    SELECT
+        h.id,
+        h.action,
+        h.description,
+        h.actor_email,
+        h.queue_id AS order_id,
+        h.record_code,
+        h.details,
+        h.created_at
+    FROM public.queue_history h
+    ORDER BY h.created_at DESC, h.id DESC
+    LIMIT v_limit OFFSET v_offset;
 END;
 $$;
 
@@ -902,15 +1022,376 @@ BEGIN
 END;
 $$;
 
+-- ──────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION public.queue_export_value(
+    p_field TEXT,
+    p_id UUID,
+    p_start_time TIME,
+    p_end_time TIME,
+    p_code TEXT,
+    p_customer TEXT,
+    p_status TEXT,
+    p_channel TEXT,
+    p_agent TEXT,
+    p_priority BOOLEAN,
+    p_created_at TIMESTAMPTZ
+)
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+SET search_path = ''
+AS $$
+    SELECT CASE p_field
+        WHEN 'id' THEN p_id::text
+        WHEN 'time' THEN to_char(p_start_time, 'HH24:MI') || ' - ' || to_char(p_end_time, 'HH24:MI')
+        WHEN 'start_time' THEN to_char(p_start_time, 'HH24:MI')
+        WHEN 'end_time' THEN to_char(p_end_time, 'HH24:MI')
+        WHEN 'code' THEN p_code
+        WHEN 'customer' THEN p_customer
+        WHEN 'status' THEN p_status
+        WHEN 'channel' THEN p_channel
+        WHEN 'agent' THEN p_agent
+        WHEN 'priority' THEN CASE WHEN p_priority THEN 'true' ELSE 'false' END
+        WHEN 'created_at' THEN p_created_at::text
+        ELSE NULL
+    END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.render_queue_template(
+    p_template TEXT,
+    p_id UUID,
+    p_start_time TIME,
+    p_end_time TIME,
+    p_code TEXT,
+    p_customer TEXT,
+    p_status TEXT,
+    p_channel TEXT,
+    p_agent TEXT,
+    p_priority BOOLEAN,
+    p_created_at TIMESTAMPTZ
+)
+RETURNS TEXT
+LANGUAGE plpgsql
+STABLE
+SET search_path = ''
+AS $$
+DECLARE
+    v_result TEXT := COALESCE(p_template, '');
+    v_field  TEXT;
+BEGIN
+    v_result := replace(v_result, '\n', E'\n');
+    v_result := replace(v_result, '\t', E'\t');
+
+    FOREACH v_field IN ARRAY ARRAY[
+        'id','time','start_time','end_time','code','customer','status','channel','agent','priority','created_at'
+    ] LOOP
+        v_result := replace(
+            v_result,
+            '{' || v_field || '}',
+            COALESCE(public.queue_export_value(
+                v_field,
+                p_id,
+                p_start_time,
+                p_end_time,
+                p_code,
+                p_customer,
+                p_status,
+                p_channel,
+                p_agent,
+                p_priority,
+                p_created_at
+            ), '')
+        );
+    END LOOP;
+
+    RETURN v_result;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.export_queue_orders_by_filter(
+    p_search       TEXT    DEFAULT '',
+    p_status       TEXT[]  DEFAULT NULL,
+    p_channel      TEXT[]  DEFAULT NULL,
+    p_priority     BOOLEAN DEFAULT NULL,
+    p_excluded_ids UUID[]  DEFAULT ARRAY[]::UUID[],
+    p_sort_col     TEXT    DEFAULT NULL,
+    p_sort_dir     TEXT    DEFAULT NULL,
+    p_format       TEXT    DEFAULT 'csv',
+    p_fields       TEXT[]  DEFAULT NULL,
+    p_headers      BOOLEAN DEFAULT TRUE,
+    p_template     TEXT    DEFAULT NULL
+)
+RETURNS JSON
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_sql        TEXT;
+    v_sort_c     TEXT := 'created_at';
+    v_sort_d     TEXT := 'DESC';
+    v_fields     TEXT[];
+    v_content    TEXT;
+    v_count      INT;
+    v_max_direct_rows INT := 10000;
+    v_delim      TEXT;
+    v_format     TEXT := lower(COALESCE(p_format, 'csv'));
+BEGIN
+    IF NOT (SELECT public.has_current_permission('orders.export')) AND NOT (SELECT public.has_current_permission('orders.copy')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.export or orders.copy';
+    END IF;
+
+    v_fields := COALESCE(p_fields, ARRAY['time','code','customer','status','channel','agent','priority']);
+    SELECT array_agg(field)
+    INTO v_fields
+    FROM unnest(v_fields) field
+    WHERE field = ANY(ARRAY['id','time','start_time','end_time','code','customer','status','channel','agent','priority','created_at']);
+
+    IF array_length(v_fields, 1) IS NULL THEN
+        RAISE EXCEPTION 'No exportable fields selected';
+    END IF;
+
+    v_sort_c := CASE p_sort_col
+        WHEN 'id' THEN 'id' WHEN 'time' THEN 'start_time' WHEN 'start_time' THEN 'start_time'
+        WHEN 'end_time' THEN 'end_time' WHEN 'code' THEN 'code' WHEN 'customer' THEN 'customer'
+        WHEN 'status' THEN 'status' WHEN 'channel' THEN 'channel' WHEN 'agent' THEN 'agent'
+        WHEN 'priority' THEN 'priority' WHEN 'created_at' THEN 'created_at' ELSE 'created_at'
+    END;
+
+    IF lower(p_sort_dir) = 'asc' THEN v_sort_d := 'ASC';
+    ELSIF lower(p_sort_dir) = 'desc' THEN v_sort_d := 'DESC';
+    END IF;
+
+    v_delim := CASE
+        WHEN v_format = 'tsv' THEN E'\t'
+        WHEN v_format = 'lines' THEN ' - '
+        ELSE ','
+    END;
+
+    SELECT COUNT(*)
+    INTO v_count
+    FROM public.queue_orders q
+    WHERE (p_search = '' OR p_search IS NULL OR (
+        q.customer ILIKE '%' || p_search || '%' OR
+        q.code     ILIKE '%' || p_search || '%' OR
+        q.agent    ILIKE '%' || p_search || '%'
+    ))
+    AND (p_status IS NULL OR array_length(p_status, 1) IS NULL OR q.status = ANY(p_status))
+    AND (p_channel IS NULL OR array_length(p_channel, 1) IS NULL OR q.channel = ANY(p_channel))
+    AND (p_priority IS NULL OR q.priority = p_priority)
+    AND (array_length(p_excluded_ids, 1) IS NULL OR q.id != ALL(p_excluded_ids));
+
+    IF v_count > v_max_direct_rows THEN
+        RAISE EXCEPTION 'Direct export is limited to % rows. Use an async export job for % rows.',
+            v_max_direct_rows, v_count;
+    END IF;
+
+    v_sql := format($query$
+        WITH filtered AS (
+            SELECT q.*
+            FROM public.queue_orders q
+            WHERE ($1 = '' OR $1 IS NULL OR (
+                q.customer ILIKE '%%' || $1 || '%%' OR
+                q.code     ILIKE '%%' || $1 || '%%' OR
+                q.agent    ILIKE '%%' || $1 || '%%'
+            ))
+            AND ($2 IS NULL OR array_length($2, 1) IS NULL OR q.status = ANY($2))
+            AND ($3 IS NULL OR array_length($3, 1) IS NULL OR q.channel = ANY($3))
+            AND ($4 IS NULL OR q.priority = $4)
+            AND (array_length($5, 1) IS NULL OR q.id != ALL($5))
+        ),
+        ordered AS (
+            SELECT row_number() OVER () AS rn, ordered_rows.*
+            FROM (
+                SELECT *
+                FROM filtered
+                ORDER BY %I %s NULLS LAST, created_at DESC, id DESC
+            ) ordered_rows
+        ),
+        row_lines AS (
+            SELECT q.rn,
+                   q.id,
+                   string_agg(
+                       CASE
+                           WHEN $8 = 'custom' THEN public.render_queue_template($10, q.id, q.start_time, q.end_time, q.code, q.customer, q.status, q.channel, q.agent, q.priority, q.created_at)
+                           WHEN $8 = 'csv' THEN public.text_csv_escape(public.queue_export_value(f.field, q.id, q.start_time, q.end_time, q.code, q.customer, q.status, q.channel, q.agent, q.priority, q.created_at))
+                           ELSE COALESCE(replace(public.queue_export_value(f.field, q.id, q.start_time, q.end_time, q.code, q.customer, q.status, q.channel, q.agent, q.priority, q.created_at), E'\t', ' '), '')
+                       END,
+                       $7 ORDER BY f.ordinality
+                   ) AS line
+            FROM ordered q
+            CROSS JOIN unnest(CASE WHEN $8 = 'custom' THEN ARRAY['id'] ELSE $6 END::text[]) WITH ORDINALITY AS f(field, ordinality)
+            GROUP BY q.rn, q.id, q.start_time, q.end_time, q.code, q.customer, q.status, q.channel, q.agent, q.priority, q.created_at
+        )
+        SELECT
+            (SELECT COUNT(*) FROM ordered),
+            CASE
+                WHEN $8 = 'json' THEN (
+                    SELECT COALESCE(jsonb_agg(obj ORDER BY rn)::text, '[]')
+                    FROM (
+                        SELECT q.rn,
+                               jsonb_object_agg(f.field, public.queue_export_value(f.field, q.id, q.start_time, q.end_time, q.code, q.customer, q.status, q.channel, q.agent, q.priority, q.created_at) ORDER BY f.ordinality) AS obj
+                        FROM ordered q
+                        CROSS JOIN unnest($6::text[]) WITH ORDINALITY AS f(field, ordinality)
+                        GROUP BY q.rn, q.id, q.start_time, q.end_time, q.code, q.customer, q.status, q.channel, q.agent, q.priority, q.created_at
+                    ) j
+                )
+                WHEN $8 = 'md' THEN (
+                    '| ' || array_to_string($6, ' | ') || ' |' || E'\n' ||
+                    '| ' || array_to_string(ARRAY(SELECT '---' FROM unnest($6)), ' | ') || ' |' || E'\n' ||
+                    COALESCE((SELECT string_agg('| ' || replace(line, $7, ' | ') || ' |', E'\n' ORDER BY rn) FROM row_lines), '')
+                )
+                WHEN $8 = 'custom' THEN (
+                    COALESCE((SELECT string_agg(line, E'\n' ORDER BY rn) FROM row_lines), '')
+                )
+                ELSE (
+                    CASE WHEN $8 IN ('csv','tsv') AND $9 THEN array_to_string($6, $7) || E'\n' ELSE '' END ||
+                    COALESCE((SELECT string_agg(line, E'\n' ORDER BY rn) FROM row_lines), '')
+                )
+            END
+    $query$, v_sort_c, v_sort_d);
+
+    EXECUTE v_sql
+    USING p_search, p_status, p_channel, p_priority, p_excluded_ids, v_fields, v_delim, v_format, p_headers, p_template
+    INTO v_count, v_content;
+
+    RETURN json_build_object('content', COALESCE(v_content, ''), 'row_count', COALESCE(v_count, 0));
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_queue_orders_by_ids(p_ids UUID[])
+RETURNS JSON
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_data JSON;
+BEGIN
+    IF NOT (SELECT public.has_current_permission('orders.export')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.export';
+    END IF;
+
+    IF COALESCE(array_length(p_ids, 1), 0) > 10000 THEN
+        RAISE EXCEPTION 'Too many queue rows requested at once';
+    END IF;
+
+    SELECT COALESCE(json_agg(row_to_json(r)), '[]'::json) INTO v_data
+    FROM (
+        SELECT
+            id,
+            to_char(start_time, 'HH24:MI') AS start_time,
+            to_char(end_time,   'HH24:MI') AS end_time,
+            code,
+            customer,
+            status,
+            channel,
+            agent,
+            priority,
+            created_at
+        FROM public.queue_orders
+        WHERE id = ANY(p_ids)
+        ORDER BY array_position(p_ids, id)
+    ) r;
+
+    RETURN v_data;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.bulk_delete_queue_orders_by_ids(p_ids UUID[])
+RETURNS INT
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_count INT;
+    v_requested_count INT := COALESCE(array_length(p_ids, 1), 0);
+BEGIN
+    IF v_requested_count > 1 AND NOT (SELECT public.has_current_permission('orders.bulk_delete')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.bulk_delete';
+    ELSIF v_requested_count <= 1 AND NOT (SELECT public.has_current_permission('orders.update')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.update';
+    END IF;
+
+    IF v_requested_count > 10000 THEN
+        RAISE EXCEPTION 'Too many queue rows selected at once';
+    END IF;
+
+    DELETE FROM public.queue_orders WHERE id = ANY(p_ids);
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+    RETURN v_count;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.bulk_delete_queue_orders_by_filter(
+    p_search         TEXT    DEFAULT '',
+    p_status         TEXT[]  DEFAULT NULL,
+    p_channel        TEXT[]  DEFAULT NULL,
+    p_priority       BOOLEAN DEFAULT NULL,
+    p_excluded_ids   UUID[]  DEFAULT ARRAY[]::UUID[],
+    p_expected_count INT     DEFAULT NULL
+)
+RETURNS INT
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_count INT;
+BEGIN
+    IF NOT (SELECT public.has_current_permission('orders.bulk_delete')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.bulk_delete';
+    END IF;
+
+    SELECT COUNT(*)
+    INTO v_count
+    FROM public.queue_orders q
+    WHERE (p_search = '' OR p_search IS NULL OR (
+        q.customer ILIKE '%' || p_search || '%' OR
+        q.code     ILIKE '%' || p_search || '%' OR
+        q.agent    ILIKE '%' || p_search || '%'
+    ))
+    AND (p_status IS NULL OR array_length(p_status, 1) IS NULL OR q.status = ANY(p_status))
+    AND (p_channel IS NULL OR array_length(p_channel, 1) IS NULL OR q.channel = ANY(p_channel))
+    AND (p_priority IS NULL OR q.priority = p_priority)
+    AND (array_length(p_excluded_ids, 1) IS NULL OR q.id != ALL(p_excluded_ids));
+
+    IF p_expected_count IS NOT NULL AND v_count IS DISTINCT FROM p_expected_count THEN
+        RAISE EXCEPTION 'Queue bulk delete scope changed: expected %, found %', p_expected_count, v_count;
+    END IF;
+
+    DELETE FROM public.queue_orders q
+    WHERE (p_search = '' OR p_search IS NULL OR (
+        q.customer ILIKE '%' || p_search || '%' OR
+        q.code     ILIKE '%' || p_search || '%' OR
+        q.agent    ILIKE '%' || p_search || '%'
+    ))
+    AND (p_status IS NULL OR array_length(p_status, 1) IS NULL OR q.status = ANY(p_status))
+    AND (p_channel IS NULL OR array_length(p_channel, 1) IS NULL OR q.channel = ANY(p_channel))
+    AND (p_priority IS NULL OR q.priority = p_priority)
+    AND (array_length(p_excluded_ids, 1) IS NULL OR q.id != ALL(p_excluded_ids));
+
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+    RETURN v_count;
+END;
+$$;
+
 
 -- ============================================================
 -- 2. GRANTS
 -- ============================================================
 
 GRANT EXECUTE ON FUNCTION public.get_orders(INT,INT,TEXT,TEXT[],TEXT[],DATE,TEXT[],TEXT,TEXT) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.get_queue_orders()                         TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_queue_orders(INT,INT,TEXT,TEXT[],TEXT[],BOOLEAN,TEXT,TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_stats()                         TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_order_history(INT,INT)                 TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_queue_history(INT,INT)                 TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_start_hours()                   TO authenticated;
 REVOKE ALL ON FUNCTION public.record_order_history(TEXT,TEXT,UUID,JSONB) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_by_filter(TEXT,TEXT[],TEXT[],DATE,TEXT[],UUID[],TEXT,TEXT,INT,INT) TO authenticated;
@@ -918,3 +1399,7 @@ GRANT EXECUTE ON FUNCTION public.export_orders_by_filter(TEXT,TEXT[],TEXT[],DATE
 GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_filter(TEXT,TEXT[],TEXT[],DATE,TEXT[],UUID[],INT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_by_ids(UUID[])                  TO authenticated;
 GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_ids(UUID[])          TO authenticated;
+GRANT EXECUTE ON FUNCTION public.export_queue_orders_by_filter(TEXT,TEXT[],TEXT[],BOOLEAN,UUID[],TEXT,TEXT,TEXT,TEXT[],BOOLEAN,TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_queue_orders_by_ids(UUID[])            TO authenticated;
+GRANT EXECUTE ON FUNCTION public.bulk_delete_queue_orders_by_ids(UUID[])    TO authenticated;
+GRANT EXECUTE ON FUNCTION public.bulk_delete_queue_orders_by_filter(TEXT,TEXT[],TEXT[],BOOLEAN,UUID[],INT) TO authenticated;

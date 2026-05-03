@@ -62,7 +62,7 @@ import {
 } from "@/features/orders/modal-columns"
 import { TableHistoryCard } from "@/components/data-table/table-history-card"
 import { OrderDialog } from "@/features/orders/order-dialog"
-import { MAX_BULK_ORDER_ROWS, fetchOrderHistory, fetchOrdersStartHours, fetchOrdersByIds } from "@/features/orders/api"
+import { MAX_BULK_ORDER_ROWS, fetchOrderHistory, fetchOrdersStartHours, fetchOrdersByIds, fetchQueueHistory, fetchQueueOrdersByIds } from "@/features/orders/api"
 import { useQuery } from "@tanstack/react-query"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -94,6 +94,16 @@ const ORDER_COPY_FIELDS = [
   "amount",
   "region",
   "payment",
+  "priority",
+]
+
+const QUEUE_COPY_FIELDS = [
+  "time",
+  "code",
+  "customer",
+  "status",
+  "channel",
+  "agent",
   "priority",
 ]
 
@@ -135,6 +145,14 @@ export function OrdersPage() {
     setGlobalFilter,
     refreshCurrentOrderSort,
     queueOrders,
+    queueInfiniteScroll,
+    queueColumnFilters,
+    setQueueColumnFilters,
+    queueGlobalFilter,
+    setQueueGlobalFilter,
+    queueSorting,
+    setQueueSorting,
+    refreshCurrentQueueSort,
     isQueueLoading,
     actions
   } = useOrders({ dateFilter, sorting })
@@ -342,8 +360,24 @@ export function OrdersPage() {
               columns={queueColumns}
               data={queueOrders}
               isLoading={isQueueLoading}
+              infiniteScroll={queueInfiniteScroll}
               allowDataExport={canExportOrders}
+              columnFilters={queueColumnFilters}
+              onColumnFiltersChange={setQueueColumnFilters}
+              globalFilter={queueGlobalFilter}
+              onGlobalFilterChange={setQueueGlobalFilter}
+              sorting={queueSorting}
+              onSortingChange={setQueueSorting}
+              onSortingRefresh={refreshCurrentQueueSort}
               tableId="orders-queue"
+              sidePanel={(onClose) => (
+                <TableHistoryCard
+                  tableId="orders-queue"
+                  onClose={onClose}
+                  queryKey={["orders-queue", "history"]}
+                  queryFn={fetchQueueHistory}
+                />
+              )}
               toolbar={{
                 searchable: true,
                 filterPlaceholder: "Search queue...",
@@ -376,6 +410,70 @@ export function OrdersPage() {
                 },
                 searchDebounceMs: 300,
               }}
+              bulkActions={(selectedLoadedRows, clearSelection, selectedIds, selection) => (
+                <>
+                  {canExportOrders && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        const toastId = "copy-queue"
+                        toast.loading("Preparing copy...", { id: toastId })
+                        try {
+                          const copySettings = resolveBulkCopySettings("orders-queue", QUEUE_COPY_FIELDS)
+                          const rowsToCopy = selection.mode === "filter"
+                            ? null
+                            : selectedIds.length === selectedLoadedRows.length
+                              ? selectedLoadedRows
+                              : await fetchQueueOrdersByIds(selectedIds)
+
+                          const content = selection.mode === "filter"
+                            ? (await queueInfiniteScroll.exportByScope!({
+                                scope: selection.scope,
+                                excludedIds: selection.excludedIds,
+                                ...copySettings,
+                              })).content
+                            : buildBulkCopyText(rowsToCopy as unknown as Record<string, unknown>[], "orders-queue")
+                          if (!content) { toast.error("Nothing to copy", { id: toastId }); return }
+
+                          await navigator.clipboard.writeText(content)
+                          const copiedCount = selection.mode === "filter"
+                            ? Math.max(0, selection.total - selection.excludedIds.length)
+                            : (rowsToCopy?.length ?? 0)
+                          toast.success(`Copied ${copiedCount.toLocaleString()} queue rows`, { id: toastId })
+                        } catch (error) {
+                          toast.error(error instanceof Error ? error.message : "Could not copy queue rows", { id: toastId })
+                        }
+                      }}
+                    >
+                      <Copy />
+                      Copy
+                    </Button>
+                  )}
+                  {canBulkDeleteOrders && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      aria-label="Remove"
+                      onClick={async () => {
+                        const count = selection.mode === "filter" ? Math.max(0, selection.total - selection.excludedIds.length) : selectedIds.length
+                        const toastId = "bulk-delete-queue"
+                        toast.loading(`Removing ${count.toLocaleString()} queue rows...`, { id: toastId })
+                        try {
+                          await actions.deleteBulkQueueOrders(selection)
+                          clearSelection()
+                          toast.success(`${count.toLocaleString()} queue rows removed`, { id: toastId })
+                        } catch (error) {
+                          toast.error(error instanceof Error ? error.message : "Could not remove queue rows", { id: toastId })
+                        }
+                      }}
+                    >
+                      <Trash2 />
+                      Remove
+                    </Button>
+                  )}
+                </>
+              )}
               rowClassName={queueRowClassName}
               getRowId={(row) => row.id}
               rowContextMenu={(order) => (
@@ -390,7 +488,6 @@ export function OrdersPage() {
                   </ContextMenuItem>
                 </>
               )}
-              defaultPageSize={25}
               layout={{
                 scrollAreaClassName: "max-h-[min(calc(100svh-22rem),30rem)] [--table-bg:var(--color-popover)]",
               }}

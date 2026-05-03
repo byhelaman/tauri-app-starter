@@ -89,6 +89,8 @@ interface DataTableProps<TData, TValue> {
   estimatedRowHeight?: number
   /** Permite acciones de copia/exportación masiva */
   allowDataExport?: boolean
+  /** Desactiva la paginación clásica y muestra todas las filas recibidas. */
+  enablePagination?: boolean
 }
 
 export function DataTable<TData, TValue>({
@@ -121,6 +123,7 @@ export function DataTable<TData, TValue>({
   infiniteScroll,
   estimatedRowHeight = 48,
   allowDataExport = true,
+  enablePagination = true,
 }: DataTableProps<TData, TValue>) {
   const [internalSorting, setInternalSorting] = useState<SortingState>([])
   const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>([])
@@ -242,7 +245,7 @@ export function DataTable<TData, TValue>({
       // En modo infinite scroll, el virtualizer maneja qué filas renderizar —
       // por eso sobreescribimos pageSize a MAX para que getPaginationRowModel()
       // no limite los rows y todos los datos cargados queden disponibles.
-      ...(infiniteScroll
+      ...(infiniteScroll || !enablePagination
         ? { pagination: { pageIndex: 0, pageSize: VIRTUAL_PAGE_SIZE } }
         : manualPagination ? { pagination } : {}
       )
@@ -469,7 +472,7 @@ export function DataTable<TData, TValue>({
       </div>
 
       {/* Paginador clásico — oculto en modo infinite scroll */}
-      {!infiniteScroll && <DataTablePagination table={table} pageSizeOptions={pageSizeOptions} />}
+      {!infiniteScroll && enablePagination && <DataTablePagination table={table} pageSizeOptions={pageSizeOptions} />}
 
       {bulkActions && selectedCount > 0 && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">

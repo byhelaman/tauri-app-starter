@@ -10,12 +10,16 @@ import type { DataTableSelectionState } from "@/components/data-table/data-table
 
 /** Número de filas por chunk en modo infinite scroll */
 const ORDER_CHUNK = 1000
+type QueueOrdersResult = { data: QueueOrder[]; total: number }
 
 export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, sorting?: SortingState } = {}) {
   const queryClient = useQueryClient()
   useOrdersRealtime()
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = useState("")
+  const [queueColumnFilters, setQueueColumnFilters] = useState<ColumnFiltersState>([])
+  const [queueGlobalFilter, setQueueGlobalFilter] = useState("")
+  const [queueSorting, setQueueSorting] = useState<SortingState>([])
 
   // Resetea los filtros sin necesidad de resetear una página (ya no hay paginación)
   const handleSetColumnFilters = useCallback((updater: Updater<ColumnFiltersState>) => {
@@ -30,6 +34,11 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
   const ordersQueryKey = useMemo(
     () => ["orders", "infinite", columnFilters, globalFilter, dateFilter, sorting] as const,
     [columnFilters, globalFilter, dateFilter, sorting]
+  )
+
+  const queueQueryKey = useMemo(
+    () => ["queueOrders", "infinite", queueColumnFilters, queueGlobalFilter, queueSorting] as const,
+    [queueColumnFilters, queueGlobalFilter, queueSorting]
   )
 
   const {
@@ -64,18 +73,41 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
 
   // TODO: Activar suscripción realtime de órdenes cuando las tablas de Supabase estén listas
 
-  const { data: queueData, isLoading: isQueueLoading } = useQuery({
-    queryKey: ["queueOrders"],
-    queryFn: api.fetchQueueOrders,
+  const {
+    data: queueInfiniteData,
+    isFetching: isQueueLoading,
+    fetchNextPage: fetchNextQueuePage,
+    hasNextPage: hasNextQueuePage,
+    isFetchingNextPage: isFetchingNextQueuePage,
+  } = useInfiniteQuery({
+    queryKey: queueQueryKey,
+    queryFn: ({ pageParam = 0 }) => api.fetchQueueOrders({
+      limit:   ORDER_CHUNK,
+      offset:  pageParam as number,
+      search:  queueGlobalFilter,
+      filters: queueColumnFilters,
+      sorting: queueSorting,
+    }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (lastPage.data.length < ORDER_CHUNK) return undefined
+      return allPages.length * ORDER_CHUNK
+    },
     enabled: true,
   })
 
-  const queueOrders = queueData?.data ?? []
-  const totalQueueOrders = queueData?.total ?? 0
+  const queueOrders = queueInfiniteData?.pages.flatMap(p => p.data) ?? []
+  const totalQueueOrders = queueInfiniteData?.pages[queueInfiniteData.pages.length - 1]?.total ?? 0
 
   const { data: unfilteredCountData } = useQuery({
     queryKey: ["orders", "unfiltered-count"],
     queryFn: () => api.fetchOrders({ limit: 1, offset: 0 }),
+    staleTime: 60_000,
+  })
+
+  const { data: unfilteredQueueCountData } = useQuery({
+    queryKey: ["queueOrders", "unfiltered-count"],
+    queryFn: () => api.fetchQueueOrders({ limit: 1, offset: 0 }),
     staleTime: 60_000,
   })
 
@@ -193,19 +225,33 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
   const updateQueueOrderMutation = useMutation({
     mutationFn: api.updateQueueOrder,
     onMutate: async (delta) => {
-      await queryClient.cancelQueries({ queryKey: ["queueOrders"] })
-      const previousOrder = queryClient.getQueryData<QueueOrder[]>(["queueOrders"])
-        ?.find(o => o.code === delta.code)
-      queryClient.setQueryData<QueueOrder[]>(["queueOrders"], (old = []) =>
-        old.map(o => o.code === delta.code ? { ...o, ...delta } : o)
-      )
+      await queryClient.cancelQueries({ queryKey: queueQueryKey })
+      const previous = queryClient.getQueryData<InfiniteData<QueueOrdersResult>>(queueQueryKey)
+      const previousOrder = previous?.pages.flatMap(page => page.data).find(o => o.code === delta.code)
+      queryClient.setQueryData<InfiniteData<QueueOrdersResult>>(queueQueryKey, (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          pages: old.pages.map(page => ({
+            ...page,
+            data: page.data.map(o => o.code === delta.code ? { ...o, ...delta } : o)
+          }))
+        }
+      })
       return { previousOrder }
     },
     onError: (_err, delta, context) => {
       if (!context?.previousOrder) return
-      queryClient.setQueryData<QueueOrder[]>(["queueOrders"], (old = []) =>
-        old.map(o => o.code === delta.code ? context.previousOrder! : o)
-      )
+      queryClient.setQueryData<InfiniteData<QueueOrdersResult>>(queueQueryKey, (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          pages: old.pages.map(page => ({
+            ...page,
+            data: page.data.map(o => o.code === delta.code ? context.previousOrder! : o)
+          }))
+        }
+      })
     },
   })
 
@@ -213,19 +259,64 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
   const deleteQueueOrderMutation = useMutation({
     mutationFn: api.deleteQueueOrder,
     onMutate: async (code) => {
-      await queryClient.cancelQueries({ queryKey: ["queueOrders"] })
-      const previousOrder = queryClient.getQueryData<QueueOrder[]>(["queueOrders"])
-        ?.find(o => o.code === code)
-      queryClient.setQueryData<QueueOrder[]>(["queueOrders"], (old = []) =>
-        old.filter(order => order.code !== code)
-      )
+      await queryClient.cancelQueries({ queryKey: queueQueryKey })
+      const previous = queryClient.getQueryData<InfiniteData<QueueOrdersResult>>(queueQueryKey)
+      const previousOrder = previous?.pages.flatMap(page => page.data).find(o => o.code === code)
+      queryClient.setQueryData<InfiniteData<QueueOrdersResult>>(queueQueryKey, (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          pages: old.pages.map(page => ({
+            data: page.data.filter(order => order.code !== code),
+            total: Math.max(0, page.total - (previousOrder ? 1 : 0)),
+          }))
+        }
+      })
       return { previousOrder }
     },
     onError: (_err, _code, context) => {
       if (!context?.previousOrder) return
-      queryClient.setQueryData<QueueOrder[]>(["queueOrders"], (old = []) =>
-        [...old, context.previousOrder!]
-      )
+      queryClient.setQueryData<InfiniteData<QueueOrdersResult>>(queueQueryKey, (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          pages: old.pages.map((page, index) => index === 0
+            ? { data: [context.previousOrder!, ...page.data], total: page.total + 1 }
+            : { ...page, total: page.total + 1 }
+          )
+        }
+      })
+    },
+  })
+
+  const deleteBulkQueueOrdersMutation = useMutation({
+    mutationFn: api.bulkDeleteQueueOrdersBySelection,
+    onMutate: async (selection) => {
+      const selectedIds = selection.mode === "ids" ? selection.ids : []
+      const idSet = new Set(selectedIds)
+      await queryClient.cancelQueries({ queryKey: queueQueryKey })
+      const previous = queryClient.getQueryData<InfiniteData<QueueOrdersResult>>(queueQueryKey)
+      queryClient.setQueryData<InfiniteData<QueueOrdersResult>>(queueQueryKey, (old) => {
+        if (!old) return old
+        const deletedCount = selection.mode === "ids"
+          ? selection.ids.length
+          : Math.max(0, selection.total - selection.excludedIds.length)
+        return {
+          ...old,
+          pages: old.pages.map(page => ({
+            data: selection.mode === "ids" ? page.data.filter(o => !idSet.has(o.id)) : page.data,
+            total: Math.max(0, page.total - deletedCount),
+          }))
+        }
+      })
+      return { previous }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["queueOrders", "infinite"] })
+    },
+    onError: (_err, _selection, context) => {
+      if (context?.previous) queryClient.setQueryData(queueQueryKey, context.previous)
+      toast.error("Failed to delete queue rows")
     },
   })
 
@@ -234,6 +325,7 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
   const { mutate: doDeleteQueue } = deleteQueueOrderMutation
   const { mutate: doDeleteOrder } = deleteOrderMutation
   const { mutateAsync: doBulkDeleteAsync } = deleteBulkOrdersMutation
+  const { mutateAsync: doBulkDeleteQueueAsync } = deleteBulkQueueOrdersMutation
 
   // Delta mutation helper — only sends the changed fields to the server
   const updateOrderField = useCallback((orderId: string, delta: Partial<Order>) => {
@@ -280,12 +372,12 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
   }, [doUpdateQueue])
 
   const handleQueuePriorityToggle = useCallback((code: string) => {
-    const currentOrders = queryClient.getQueryData<QueueOrder[]>(["queueOrders"]) || []
+    const currentOrders = queryClient.getQueryData<InfiniteData<QueueOrdersResult>>(queueQueryKey)?.pages.flatMap(page => page.data) ?? []
     const order = currentOrders.find(o => o.code === code)
     if (order) {
       doUpdateQueue({ code, priority: !order.priority })
     }
-  }, [queryClient, doUpdateQueue])
+  }, [queryClient, queueQueryKey, doUpdateQueue])
 
   const handleQueueRemove = useCallback((code: string) => {
     doDeleteQueue(code)
@@ -300,9 +392,17 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
     await doBulkDeleteAsync(selection)
   }, [doBulkDeleteAsync])
 
+  const deleteBulkQueueOrders = useCallback(async (selection: DataTableSelectionState) => {
+    await doBulkDeleteQueueAsync(selection)
+  }, [doBulkDeleteQueueAsync])
+
   const refreshCurrentOrderSort = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ordersQueryKey })
   }, [queryClient, ordersQueryKey])
+
+  const refreshCurrentQueueSort = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: queueQueryKey })
+  }, [queryClient, queueQueryKey])
 
 
 
@@ -356,17 +456,43 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
     refreshCurrentOrderSort,
     queueOrders,
     totalQueueOrders,
+    queueInfiniteScroll: {
+      fetchNextPage: fetchNextQueuePage,
+      hasNextPage: hasNextQueuePage,
+      isFetchingNextPage: isFetchingNextQueuePage,
+      totalRowCount: totalQueueOrders,
+      unfilteredTotalRowCount: unfilteredQueueCountData?.total ?? totalQueueOrders,
+      bulkActionRowLimit: api.MAX_BULK_ORDER_ROWS,
+      currentScope: {
+        search: queueGlobalFilter,
+        filters: queueColumnFilters,
+        sorting: queueSorting,
+      },
+      exportByScope: api.exportQueueOrdersByScope,
+      fetchByIds: async (ids: string[]): Promise<Record<string, unknown>[]> => {
+        const rows = await api.fetchQueueOrdersByIds(ids)
+        return rows as unknown as Record<string, unknown>[]
+      },
+    },
+    queueColumnFilters,
+    setQueueColumnFilters,
+    queueGlobalFilter,
+    setQueueGlobalFilter,
+    queueSorting,
+    setQueueSorting,
+    refreshCurrentQueueSort,
     isQueueLoading,
     actions: {
       createOrder: createOrderMutation.mutate,
       deleteOrder,
       deleteBulkOrders,
+      deleteBulkQueueOrders,
       handleStatusChange,
       handleCellChange,
       handleQueueStatusChange,
       handleQueuePriorityToggle,
       handleQueueRemove,
     },
-    isPending: updateOrderMutation.isPending || createOrderMutation.isPending || deleteOrderMutation.isPending || deleteBulkOrdersMutation.isPending
+    isPending: updateOrderMutation.isPending || createOrderMutation.isPending || deleteOrderMutation.isPending || deleteBulkOrdersMutation.isPending || deleteBulkQueueOrdersMutation.isPending
   }
 }
