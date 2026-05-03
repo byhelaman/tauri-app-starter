@@ -1,7 +1,7 @@
 -- ============================================================
--- 006: AI Chat — permiso y get_ai_schema
+-- 005: AI Chat — permiso y get_ai_schema
 -- ============================================================
--- Ejecutar después de `005_role_management_fixes.sql`.
+-- Ejecutar después de `004_admin_sync_email.sql`.
 --
 -- Qué configura:
 --   1. Permiso ai.chat

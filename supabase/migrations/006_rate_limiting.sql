@@ -1,5 +1,5 @@
 -- ============================================================
--- 009: Rate limiting genérico + gates en RPCs sensibles
+-- 006: Rate limiting genérico + gates en RPCs sensibles
 -- ============================================================
 -- Introduce una infraestructura de rate-limiting reutilizable
 -- (tabla rate_limits + función check_rate_limit) y la aplica a:

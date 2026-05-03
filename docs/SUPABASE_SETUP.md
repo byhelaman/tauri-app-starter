@@ -43,11 +43,13 @@ Ejecuta los archivos **en orden**. Abre cada uno, copia el contenido completo y
 ejecútalo en una query nueva.
 
 1. `supabase/migrations/001_foundation.sql`
-2. `supabase/migrations/002_admin_rbac.sql`
-3. `supabase/migrations/004_admin_sync_email.sql`
-4. `supabase/migrations/006_ai_chat.sql`
-5. `supabase/migrations/009_rate_limiting.sql`
-6. `supabase/migrations/010_orders.sql`
+2. `supabase/migrations/002_audit_notifications.sql`
+3. `supabase/migrations/003_admin_rbac.sql`
+4. `supabase/migrations/004_admin_sync_email.sql`
+5. `supabase/migrations/005_ai_chat.sql`
+6. `supabase/migrations/006_rate_limiting.sql`
+7. `supabase/migrations/007_orders_schema.sql`
+8. `supabase/migrations/008_orders_rpcs.sql`
 
 Nota: las correcciones históricas (antes distribuidas en migraciones de fix)
 fueron integradas directamente en las migraciones base actuales.
@@ -60,11 +62,13 @@ script.
 | Migración | Objetos principales                                                                                                                                                                                                                                                                                                                                            |
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `001`     | `profiles`, `handle_new_user` trigger, `custom_access_token_hook`, helpers de permisos, `get_my_profile`, `verify_user_password`, `check_email_exists`, RLS base                                                                                                                                                                                               |
-| `002`     | `audit_log`, `notifications`, helpers de auditoría/notificaciones, RPCs de consulta, administración de usuarios, gestión de roles/permisos y auditoría de esas acciones                                                                                                                         |
+| `002`     | `audit_log`, `notifications`, helpers de auditoría/notificaciones y RPCs de consulta/gestión de notificaciones                                                                                                                                                                                  |
+| `003`     | Administración de usuarios, gestión de roles/permisos y auditoría/notificaciones de esas acciones                                                                                                                                                                                                |
 | `004`     | Trigger `on_auth_user_email_updated` (sincroniza `profiles.email`), `admin_audit_email_change`, `log_audit_event_as_admin`                                                                                                                                                                                                                                     |
-| `006`     | Permiso `ai.chat`, RPC `get_ai_schema` con allowlist y `execute_ai_query` deshabilitada                                                                                                                                                                                                                                                                        |
-| `009`     | Infraestructura de `rate_limits`, `check_rate_limit`, `check_ai_chat_rate_limit`, throttle de `verify_user_password`                                                                                                                                                                                                                                           |
-| `010`     | `orders`, `queue_orders`, `order_history`, RLS granular, búsqueda trigram, scroll por chunks, selección por scope y acciones masivas server-side                                                                                                                                                                                                                |
+| `005`     | Permiso `ai.chat`, RPC `get_ai_schema` con allowlist y `execute_ai_query` deshabilitada                                                                                                                                                                                                                                                                        |
+| `006`     | Infraestructura de `rate_limits`, `check_rate_limit`, `check_ai_chat_rate_limit`, throttle de `verify_user_password`                                                                                                                                                                                                                                           |
+| `007`     | `orders`, `queue_orders`, `order_history`, `order_change_events`, índices, triggers, RLS granular, realtime y seed                                                                                                                                                                               |
+| `008`     | RPCs de orders para scroll por chunks, filtros, historial, export/copy/delete por scope o IDs y helpers de exportación                                                                                                                                                                           |
 
 ---
 

@@ -12,7 +12,7 @@
 --   6. RPCs utilitarias
 --
 -- Después de ejecutar:
---   → Ejecutar también `002_admin_rbac.sql` (RPCs de administración)
+--   → Ejecutar también `002_audit_notifications.sql` y `003_admin_rbac.sql`
 --   → En el Dashboard de Supabase: Authentication → Hooks
 --     → "Customize Access Token (JWT) Claims"
 --     → Schema: public | Function: custom_access_token_hook
@@ -614,4 +614,4 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.role_permissions;
 --   Function: custom_access_token_hook
 --   → Guardar
 --
--- Luego ejecuta `supabase/migrations/002_admin_rbac.sql`.
+-- Luego ejecuta `supabase/migrations/002_audit_notifications.sql`.

@@ -62,7 +62,7 @@ This is a **Tauri 2 desktop app template** with React 19 + TypeScript frontend b
 
 ### Supabase / Database
 
-The foundation migrations (`supabase/migrations/001_foundation.sql` + `supabase/migrations/002_admin_rbac.sql`) create:
+The foundation migrations (`supabase/migrations/001_foundation.sql` + `supabase/migrations/002_audit_notifications.sql` + `supabase/migrations/003_admin_rbac.sql`) create:
 - `profiles` table — linked to `auth.users`, stores role assignment
 - `roles`, `permissions`, `role_permissions` — RBAC tables
 
