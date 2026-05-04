@@ -58,7 +58,6 @@ interface BulkCopyDialogProps<TData> {
 }
 
 function renderRow<TData>(tokens: Token[], row: Row<TData>): string {
-    const record = row.original as Record<string, unknown>
     let out = ""
 
     for (const token of tokens) {
@@ -70,7 +69,7 @@ function renderRow<TData>(tokens: Token[], row: Row<TData>): string {
             out += `{${token.name}}`
             continue
         }
-        const value = record[token.name]
+        const value = row.getValue(token.name)
         out += value == null ? "" : String(value)
     }
 
@@ -101,17 +100,15 @@ function buildText<TData>(
 
     if (format === "json") {
         const records = rows.map((row) => {
-            const original = row.original as Record<string, unknown>
-            return Object.fromEntries(fields.map((field) => [field, original[field]]))
+            return Object.fromEntries(fields.map((field) => [field, row.getValue(field)]))
         })
         return JSON.stringify(records, null, 2)
     }
 
     const separator = format === "csv" ? "," : format === "tsv" ? "\t" : " - "
     const lines = rows.map((row) => {
-        const original = row.original as Record<string, unknown>
         return fields.map((field) => {
-            const value = original[field]
+            const value = row.getValue(field)
             const text = value == null ? "" : String(value)
             if (format === "csv") return csvEscape(text)
             if (format === "tsv") return text.replace(/\t/g, " ")

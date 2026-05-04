@@ -6,7 +6,7 @@
 --
 -- Qué configura:
 --   1. Permisos RBAC para orders (granulares: view/create/update/delete/bulk_delete/export/copy)
---   2. Tablas: orders, queue_orders, order_history
+--   2. Tablas: orders, order_history
 --   3. Triggers: updated_at, set_updated_by (para realtime skip-own)
 --   4. RLS granular basada en has_current_permission()
 --   5. Grants internos + realtime
@@ -86,30 +86,6 @@ CREATE INDEX idx_orders_customer_trgm ON public.orders USING gin (customer exten
 CREATE INDEX idx_orders_code_trgm     ON public.orders USING gin (code extensions.gin_trgm_ops)     WHERE deleted_at IS NULL;
 CREATE INDEX idx_orders_product_trgm  ON public.orders USING gin (product extensions.gin_trgm_ops)  WHERE deleted_at IS NULL;
 
--- ──────────────────────────────────────────────────────────────
-
-CREATE TABLE public.queue_orders (
-    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    code        TEXT        NOT NULL,
-    start_time  TIME        NOT NULL,
-    end_time    TIME        NOT NULL,
-    customer    TEXT        NOT NULL,
-    status      TEXT        NOT NULL DEFAULT 'queued'
-                            CHECK (status IN ('queued','processing','ready','delivered')),
-    channel     TEXT        NOT NULL
-                            CHECK (channel IN ('Online','Retail','Partner','Phone')),
-    agent       TEXT        NOT NULL DEFAULT '',
-    priority    BOOLEAN     NOT NULL DEFAULT false,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_queue_status     ON public.queue_orders(status);
-CREATE INDEX idx_queue_created_at ON public.queue_orders(created_at DESC);
-CREATE UNIQUE INDEX queue_orders_code_key ON public.queue_orders(code);
-
--- ──────────────────────────────────────────────────────────────
-
 CREATE TABLE public.order_history (
     id          BIGSERIAL   PRIMARY KEY,
     action      TEXT        NOT NULL CHECK (action IN ('create','update','delete')),
@@ -123,26 +99,11 @@ CREATE TABLE public.order_history (
 CREATE INDEX idx_order_history_order_id   ON public.order_history(order_id);
 CREATE INDEX idx_order_history_created_at ON public.order_history(created_at DESC);
 
-CREATE TABLE public.queue_history (
-    id          BIGSERIAL   PRIMARY KEY,
-    action      TEXT        NOT NULL CHECK (action IN ('create','update','delete')),
-    description TEXT        NOT NULL,
-    actor_email TEXT        NOT NULL,
-    queue_id    UUID        REFERENCES public.queue_orders(id) ON DELETE SET NULL,
-    record_code TEXT,
-    details     JSONB,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_queue_history_queue_id    ON public.queue_history(queue_id);
-CREATE INDEX idx_queue_history_created_at  ON public.queue_history(created_at DESC);
-CREATE INDEX idx_queue_history_record_code ON public.queue_history(record_code);
-
 -- Evento compacto para Realtime. Evita emitir una notificación por fila cuando
 -- hay cargas masivas; los clientes refetchean una vez por sentencia SQL.
 CREATE TABLE public.order_change_events (
     id          BIGSERIAL   PRIMARY KEY,
-    table_name  TEXT        NOT NULL CHECK (table_name IN ('orders','queue_orders','order_history')),
+    table_name  TEXT        NOT NULL CHECK (table_name IN ('orders','order_history')),
     action      TEXT        NOT NULL CHECK (action IN ('insert','update','delete','bulk')),
     actor_id    UUID        REFERENCES auth.users(id) ON DELETE SET NULL,
     row_count   INT         NOT NULL DEFAULT 0,
@@ -177,10 +138,6 @@ CREATE TRIGGER orders_updated_at
     BEFORE UPDATE ON public.orders
     FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
-CREATE TRIGGER queue_orders_updated_at
-    BEFORE UPDATE ON public.queue_orders
-    FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
-
 -- set_updated_by — para que realtime pueda filtrar cambios propios
 CREATE OR REPLACE FUNCTION public.set_updated_by()
 RETURNS TRIGGER
@@ -197,57 +154,6 @@ $$;
 CREATE TRIGGER orders_set_updated_by
     BEFORE INSERT OR UPDATE ON public.orders
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_by();
-
--- Mantiene la queue conectada con las órdenes activas sin depender de mocks.
--- INSERT agrega la orden a la queue; UPDATE sincroniza campos base solo si la
--- fila sigue en queue; soft delete retira la orden de la queue.
-CREATE OR REPLACE FUNCTION public.sync_queue_order_from_order()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-BEGIN
-    PERFORM set_config('app.sync_queue_from_orders', 'true', true);
-
-    IF TG_OP = 'INSERT' THEN
-        INSERT INTO public.queue_orders (
-            code, start_time, end_time, customer, channel
-        ) VALUES (
-            NEW.code, NEW.start_time, NEW.end_time, NEW.customer, NEW.channel
-        )
-        ON CONFLICT (code) DO UPDATE SET
-            start_time = EXCLUDED.start_time,
-            end_time   = EXCLUDED.end_time,
-            customer   = EXCLUDED.customer,
-            channel    = EXCLUDED.channel;
-
-        RETURN NEW;
-    END IF;
-
-    IF NEW.deleted_at IS NOT NULL THEN
-        DELETE FROM public.queue_orders
-        WHERE code = OLD.code;
-
-        RETURN NEW;
-    END IF;
-
-    UPDATE public.queue_orders
-    SET
-        code       = NEW.code,
-        start_time = NEW.start_time,
-        end_time   = NEW.end_time,
-        customer   = NEW.customer,
-        channel    = NEW.channel
-    WHERE code = OLD.code;
-
-    RETURN NEW;
-END;
-$$;
-
-CREATE TRIGGER orders_sync_queue_order
-    AFTER INSERT OR UPDATE ON public.orders
-    FOR EACH ROW EXECUTE FUNCTION public.sync_queue_order_from_order();
 
 -- orders_audit_trigger
 CREATE OR REPLACE FUNCTION public.orders_audit_trigger()
@@ -356,91 +262,6 @@ CREATE TRIGGER on_order_audit
     AFTER INSERT OR UPDATE OR DELETE ON public.orders
     FOR EACH ROW EXECUTE FUNCTION public.orders_audit_trigger();
 
-CREATE OR REPLACE FUNCTION public.queue_orders_audit_trigger()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-DECLARE
-    v_action TEXT;
-    v_desc TEXT;
-    v_email TEXT := COALESCE(auth.jwt() ->> 'email', 'system');
-    v_details JSONB := '[]'::jsonb;
-    v_col TEXT;
-    v_queue_id UUID;
-    v_record_code TEXT;
-BEGIN
-    IF current_setting('app.sync_queue_from_orders', true) = 'true' THEN
-        RETURN COALESCE(NEW, OLD);
-    END IF;
-
-    IF TG_OP = 'INSERT' THEN
-        v_action := 'create';
-        v_desc := 'Queue row created';
-        v_queue_id := NEW.id;
-        v_record_code := NEW.code;
-        v_details := jsonb_build_array(jsonb_build_object(
-            'recordId', NEW.id,
-            'recordCode', NEW.code,
-            'field', 'record',
-            'oldValue', NULL,
-            'newValue', 'created'
-        ));
-    ELSIF TG_OP = 'UPDATE' THEN
-        v_action := 'update';
-        v_desc := 'Queue row updated';
-        v_queue_id := NEW.id;
-        v_record_code := NEW.code;
-
-        FOR v_col IN SELECT * FROM jsonb_object_keys(to_jsonb(NEW))
-        LOOP
-            IF v_col = 'updated_at' THEN
-                CONTINUE;
-            END IF;
-
-            IF to_jsonb(OLD)->>v_col IS DISTINCT FROM to_jsonb(NEW)->>v_col THEN
-                v_details := v_details || jsonb_build_array(jsonb_build_object(
-                    'recordId', NEW.id,
-                    'recordCode', NEW.code,
-                    'field', v_col,
-                    'oldValue', to_jsonb(OLD)->v_col,
-                    'newValue', to_jsonb(NEW)->v_col
-                ));
-            END IF;
-        END LOOP;
-
-        IF v_details = '[]'::jsonb THEN
-            RETURN NEW;
-        END IF;
-    ELSIF TG_OP = 'DELETE' THEN
-        v_action := 'delete';
-        v_desc := 'Queue row removed';
-        v_queue_id := NULL;
-        v_record_code := OLD.code;
-        v_details := jsonb_build_array(jsonb_build_object(
-            'recordId', OLD.id,
-            'recordCode', OLD.code,
-            'field', 'record',
-            'oldValue', 'queued',
-            'newValue', 'removed'
-        ));
-    END IF;
-
-    INSERT INTO public.queue_history (
-        action, description, actor_email, queue_id, record_code, details
-    ) VALUES (
-        v_action, v_desc, v_email, v_queue_id, v_record_code, NULLIF(v_details, '[]'::jsonb)
-    );
-
-    RETURN COALESCE(NEW, OLD);
-END;
-$$;
-
-CREATE TRIGGER on_queue_audit
-    AFTER INSERT OR UPDATE OR DELETE ON public.queue_orders
-    FOR EACH ROW EXECUTE FUNCTION public.queue_orders_audit_trigger();
-
 -- Realtime agregado por sentencia: una carga SQL de 500k filas produce un solo
 -- evento en order_change_events, no 500k eventos en el WebSocket.
 CREATE OR REPLACE FUNCTION public.record_orders_insert_event()
@@ -541,97 +362,12 @@ CREATE TRIGGER orders_delete_realtime_event
     REFERENCING OLD TABLE AS old_rows
     FOR EACH STATEMENT EXECUTE FUNCTION public.record_orders_delete_event();
 
--- Queue realtime también se agrega por sentencia. Los cambios propagados desde
--- orders se omiten porque ya existe un evento agregado de orders para refetch.
-CREATE OR REPLACE FUNCTION public.record_queue_orders_insert_event()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-DECLARE
-    v_count INT;
-BEGIN
-    IF current_setting('app.sync_queue_from_orders', true) = 'true' THEN
-        RETURN NULL;
-    END IF;
-
-    SELECT COUNT(*) INTO v_count FROM new_rows;
-    IF v_count > 0 THEN
-        INSERT INTO public.order_change_events (table_name, action, actor_id, row_count)
-        VALUES ('queue_orders', 'insert', auth.uid(), v_count);
-    END IF;
-    RETURN NULL;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public.record_queue_orders_update_event()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-DECLARE
-    v_count INT;
-BEGIN
-    IF current_setting('app.sync_queue_from_orders', true) = 'true' THEN
-        RETURN NULL;
-    END IF;
-
-    SELECT COUNT(*) INTO v_count FROM new_rows;
-    IF v_count > 0 THEN
-        INSERT INTO public.order_change_events (table_name, action, actor_id, row_count)
-        VALUES ('queue_orders', 'update', auth.uid(), v_count);
-    END IF;
-    RETURN NULL;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public.record_queue_orders_delete_event()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-DECLARE
-    v_count INT;
-BEGIN
-    IF current_setting('app.sync_queue_from_orders', true) = 'true' THEN
-        RETURN NULL;
-    END IF;
-
-    SELECT COUNT(*) INTO v_count FROM old_rows;
-    IF v_count > 0 THEN
-        INSERT INTO public.order_change_events (table_name, action, actor_id, row_count)
-        VALUES ('queue_orders', 'delete', auth.uid(), v_count);
-    END IF;
-    RETURN NULL;
-END;
-$$;
-
-CREATE TRIGGER queue_orders_insert_realtime_event
-    AFTER INSERT ON public.queue_orders
-    REFERENCING NEW TABLE AS new_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION public.record_queue_orders_insert_event();
-
-CREATE TRIGGER queue_orders_update_realtime_event
-    AFTER UPDATE ON public.queue_orders
-    REFERENCING NEW TABLE AS new_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION public.record_queue_orders_update_event();
-
-CREATE TRIGGER queue_orders_delete_realtime_event
-    AFTER DELETE ON public.queue_orders
-    REFERENCING OLD TABLE AS old_rows
-    FOR EACH STATEMENT EXECUTE FUNCTION public.record_queue_orders_delete_event();
-
 -- ============================================================
 -- 4. RLS
 -- ============================================================
 
 ALTER TABLE public.orders       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.queue_orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.order_history ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.queue_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.order_change_events ENABLE ROW LEVEL SECURITY;
 
 -- orders: ver
@@ -653,24 +389,6 @@ CREATE POLICY "orders_update" ON public.orders
 -- No hay DELETE directo: las operaciones destructivas deben pasar por RPCs
 -- que aplican soft delete, permisos específicos y auditoría.
 
--- queue_orders
-CREATE POLICY "queue_select" ON public.queue_orders
-    FOR SELECT TO authenticated
-    USING ((SELECT public.has_current_permission('orders.view')));
-
-CREATE POLICY "queue_insert" ON public.queue_orders
-    FOR INSERT TO authenticated
-    WITH CHECK ((SELECT public.has_current_permission('orders.create')));
-
-CREATE POLICY "queue_update" ON public.queue_orders
-    FOR UPDATE TO authenticated
-    USING  ((SELECT public.has_current_permission('orders.update')))
-    WITH CHECK ((SELECT public.has_current_permission('orders.update')));
-
-CREATE POLICY "queue_delete" ON public.queue_orders
-    FOR DELETE TO authenticated
-    USING ((SELECT public.has_current_permission('orders.update')));
-
 -- order_history: solo lectura para manage; escribir vía SECURITY DEFINER RPCs
 CREATE POLICY "order_history_select" ON public.order_history
     FOR SELECT TO authenticated
@@ -678,14 +396,6 @@ CREATE POLICY "order_history_select" ON public.order_history
 
 -- Bloquear INSERT directo — solo las RPCs SECURITY DEFINER pueden escribir
 CREATE POLICY "order_history_insert_deny" ON public.order_history
-    FOR INSERT TO authenticated
-    WITH CHECK (false);
-
-CREATE POLICY "queue_history_select" ON public.queue_history
-    FOR SELECT TO authenticated
-    USING ((SELECT public.has_current_permission('orders.view')));
-
-CREATE POLICY "queue_history_insert_deny" ON public.queue_history
     FOR INSERT TO authenticated
     WITH CHECK (false);
 
@@ -708,10 +418,6 @@ GRANT SELECT ON public.order_change_events TO authenticated;
 REVOKE ALL ON FUNCTION public.record_orders_insert_event() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.record_orders_update_event() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.record_orders_delete_event() FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.record_queue_orders_insert_event() FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.record_queue_orders_update_event() FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.record_queue_orders_delete_event() FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.queue_orders_audit_trigger() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.prune_order_change_events() FROM PUBLIC, anon, authenticated;
 
 -- ============================================================

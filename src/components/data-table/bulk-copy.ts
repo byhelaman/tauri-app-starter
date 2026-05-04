@@ -95,10 +95,11 @@ export function resolveBulkCopySettings(tableId: string, fallbackFields: string[
     }
 }
 
-export function buildBulkCopyText(records: Record<string, unknown>[], tableId: string): string {
+export function buildBulkCopyText(records: Record<string, unknown>[], tableId: string, fallbackFields?: string[]): string {
     if (records.length === 0) return ""
-    const fieldSet = new Set(Object.keys(records[0] ?? {}))
-    const { format, headers, template, fields } = resolveBulkCopySettings(tableId, Array.from(fieldSet))
+    const availableFields = fallbackFields ?? Array.from(new Set(records.flatMap((record) => Object.keys(record))))
+    const fieldSet = new Set(availableFields)
+    const { format, headers, template, fields } = resolveBulkCopySettings(tableId, availableFields)
     const parsed = parseBulkCopyTemplate(template, fieldSet)
 
     if (format === "custom") {

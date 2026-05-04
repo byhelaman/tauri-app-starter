@@ -49,6 +49,7 @@ interface DataTableViewOptionsProps<TData> {
   excludedIds?: Set<string>
   /** Permite acciones que extraen datos fuera de la tabla visible */
   allowDataExport?: boolean
+  mode?: "full" | "bulk-copy" | "none"
 }
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
@@ -100,7 +101,13 @@ function formatLimit(limit?: number): string {
   return limit == null ? "the configured limit" : limit.toLocaleString()
 }
 
-export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle, infiniteScroll, isSelectAllByFilter, excludedIds, allowDataExport = true }: DataTableViewOptionsProps<TData>) {
+export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle, infiniteScroll, isSelectAllByFilter, excludedIds, allowDataExport = true, mode = "full" }: DataTableViewOptionsProps<TData>) {
+  const [scope, setScope] = useState<Scope>("all")
+  const [bulkCopyOpen, setBulkCopyOpen] = useState(false)
+
+  if (mode === "none") return null
+  const canUseDataActions = allowDataExport && mode === "full"
+  const canUseBulkCopy = allowDataExport && (mode === "full" || mode === "bulk-copy")
   const tableMeta = table.options.meta as DataTableMeta | undefined
   const selectedCount = tableMeta?.selectionState?.mode === "filter"
     ? tableMeta.selectedCount ?? 0
@@ -118,8 +125,6 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
   const effectiveFilteredCount = serverTotal ?? filteredCount
   const effectiveTotalCount    = serverUnfilteredTotal ?? totalCount
 
-  const [scope, setScope] = useState<Scope>("all")
-  const [bulkCopyOpen, setBulkCopyOpen] = useState(false)
   const effectiveScope: Scope = scope === "selected" && selectedCount === 0 ? "filtered" : scope
 
   const scopeCounts: Record<Scope, number> = {
@@ -158,6 +163,7 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
     return {
       scope: selection.scope,
       excludedIds: selection.excludedIds,
+      excludedScopes: selection.excludedScopes,
       format,
       fields: getExportColumns(table).map((column) => column.id),
     }
@@ -339,7 +345,7 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
 
           <DropdownMenuSeparator />
 
-          {allowDataExport && (
+          {canUseBulkCopy && (
             <DropdownMenuItem
               disabled={selectedScopeCount === 0 || scopeExceedsLimit}
               onClick={() => setBulkCopyOpen(true)}
@@ -356,7 +362,7 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
             </DropdownMenuItem>
           )}
 
-          {allowDataExport && (
+          {canUseDataActions && (
             <>
               <DropdownMenuSeparator />
 
@@ -390,10 +396,12 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
             </>
           )}
 
-          <DropdownMenuItem onClick={() => window.print()}>
-            <PrinterIcon />
-            Print
-          </DropdownMenuItem>
+          {mode === "full" && (
+            <DropdownMenuItem onClick={() => window.print()}>
+              <PrinterIcon />
+              Print
+            </DropdownMenuItem>
+          )}
 
           <DropdownMenuSeparator />
 
@@ -411,7 +419,7 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {allowDataExport && (
+      {canUseBulkCopy && (
         <BulkCopyDialog
           table={table}
           tableId={tableId}

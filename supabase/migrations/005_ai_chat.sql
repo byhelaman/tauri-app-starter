@@ -38,7 +38,7 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-    v_allowed_tables TEXT[] := ARRAY['orders', 'queue_orders'];
+    v_allowed_tables TEXT[] := ARRAY['orders'];
     v_requested_tables TEXT[];
 BEGIN
     IF NOT public.has_current_permission('ai.chat') THEN
@@ -68,11 +68,6 @@ BEGIN
                               'id','date','customer','product','category','start_time','end_time',
                               'code','status','channel','quantity','amount','region','payment',
                               'priority','created_at'
-                          ]))
-                          OR
-                          (c2.table_name = 'queue_orders' AND c2.column_name = ANY(ARRAY[
-                              'id','code','start_time','end_time','customer','status','channel',
-                              'agent','priority','created_at'
                           ]))
                       )
                 ),

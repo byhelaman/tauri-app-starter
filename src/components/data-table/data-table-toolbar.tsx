@@ -36,6 +36,8 @@ interface DataTableToolbarProps<TData> {
   onSidePanelToggle?: () => void
   infiniteScroll?: InfiniteScrollConfig
   allowDataExport?: boolean
+  viewActionsMode?: "full" | "bulk-copy" | "none"
+  resultCountMode?: "server" | "client"
 }
 
 export function DataTableToolbar<TData>({
@@ -51,6 +53,8 @@ export function DataTableToolbar<TData>({
   onSidePanelToggle,
   infiniteScroll,
   allowDataExport,
+  viewActionsMode = "full",
+  resultCountMode = "server",
 }: DataTableToolbarProps<TData>) {
   const currentFilterValue = (table.getState().globalFilter as string) ?? ""
 
@@ -76,6 +80,9 @@ export function DataTableToolbar<TData>({
   const activeFiltersCount = table.getState().columnFilters.length
   const hasFiltersList = (facetedFilters && facetedFilters.length > 0) || intervalFilter
   const renderedActions = typeof actions === "function" ? actions(table) : actions
+  const resultCount = resultCountMode === "server"
+    ? infiniteScroll?.totalRowCount ?? table.getFilteredRowModel().rows.length
+    : table.getFilteredRowModel().rows.length
 
   return (
     <div className="flex items-center gap-2">
@@ -91,7 +98,7 @@ export function DataTableToolbar<TData>({
           />
           {isFiltered && (
             <InputGroupAddon align="inline-end">
-              {(infiniteScroll?.totalRowCount ?? table.getRowCount()).toLocaleString()} results
+              {resultCount.toLocaleString()} results
             </InputGroupAddon>
           )}
         </InputGroup>
@@ -248,6 +255,7 @@ export function DataTableToolbar<TData>({
           onSidePanelToggle={onSidePanelToggle}
           infiniteScroll={infiniteScroll}
           allowDataExport={allowDataExport}
+          mode={viewActionsMode}
         />
       )}
     </div>

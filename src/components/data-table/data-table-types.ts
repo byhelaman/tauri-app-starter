@@ -30,6 +30,9 @@ export interface DataTableToolbarConfig<TData> {
   actions?: ToolbarActionsRenderer<TData>
   searchDebounceMs?: number
   showViewOptions?: boolean
+  viewActionsMode?: "full" | "bulk-copy" | "none"
+  resultCountMode?: "server" | "client"
+  selectionMode?: "server" | "client"
 }
 
 export interface DataTableLayoutConfig {
@@ -45,6 +48,11 @@ export interface DataTableSelectionScope {
   sorting?: SortingState
 }
 
+export interface DataTableExcludedSelectionScope {
+  scope: DataTableSelectionScope
+  total: number
+}
+
 export type DataTableSelectionState =
   | { mode: "ids"; ids: string[] }
   | {
@@ -52,6 +60,7 @@ export type DataTableSelectionState =
       scope: DataTableSelectionScope
       total: number
       excludedIds: string[]
+      excludedScopes?: DataTableExcludedSelectionScope[]
     }
 
 export type ServerExportFormat = "csv" | "tsv" | "json" | "md" | "lines" | "custom"
@@ -59,6 +68,7 @@ export type ServerExportFormat = "csv" | "tsv" | "json" | "md" | "lines" | "cust
 export interface ServerScopeExportRequest {
   scope: DataTableSelectionScope
   excludedIds?: string[]
+  excludedScopes?: DataTableExcludedSelectionScope[]
   format: ServerExportFormat
   fields: string[]
   headers?: boolean

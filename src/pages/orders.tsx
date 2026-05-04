@@ -33,9 +33,8 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
 } from "@/components/ui/context-menu"
-import { ToggleActionButtons } from "@/components/toggle-action-buttons"
 import { PageHeader } from "@/components/page-header"
-import { useQueueHighlights, useTableHighlights } from "@/features/orders/table-highlights"
+import { useTableHighlights } from "@/features/orders/table-highlights"
 import { Button } from "@/components/ui/button"
 import {
   AlertDialog,
@@ -62,7 +61,7 @@ import {
 } from "@/features/orders/modal-columns"
 import { TableHistoryCard } from "@/components/data-table/table-history-card"
 import { OrderDialog } from "@/features/orders/order-dialog"
-import { MAX_BULK_ORDER_ROWS, fetchOrderHistory, fetchOrdersStartHours, fetchOrdersByIds, fetchQueueHistory, fetchQueueOrdersByIds } from "@/features/orders/api"
+import { MAX_BULK_ORDER_ROWS, fetchOrderHistory, fetchOrdersStartHours, fetchOrdersByIds } from "@/features/orders/api"
 import { useQuery } from "@tanstack/react-query"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -107,11 +106,10 @@ const QUEUE_COPY_FIELDS = [
   "priority",
 ]
 
-const QUEUE_STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
-  { label: "Queued", value: "queued", icon: Clock },
-  { label: "Processing", value: "processing", icon: LoaderCircle },
-  { label: "Ready", value: "ready", icon: Truck },
-  { label: "Delivered", value: "delivered", icon: CheckCircle2 },
+const PRIORITY_FILTER_OPTIONS: FacetedFilterOption[] = [
+  { label: "High", value: "High", icon: Clock },
+  { label: "Medium", value: "Medium", icon: Clock },
+  { label: "Low", value: "Low", icon: Clock },
 ]
 
 export function OrdersPage() {
@@ -144,21 +142,10 @@ export function OrdersPage() {
     globalFilter,
     setGlobalFilter,
     refreshCurrentOrderSort,
-    queueOrders,
-    queueInfiniteScroll,
-    queueColumnFilters,
-    setQueueColumnFilters,
-    queueGlobalFilter,
-    setQueueGlobalFilter,
-    queueSorting,
-    setQueueSorting,
-    refreshCurrentQueueSort,
-    isQueueLoading,
     actions
   } = useOrders({ dateFilter, sorting })
 
   const { toolbarActions, rowClassName } = useTableHighlights()
-  const { toolbarActions: queueToolbarActions, rowClassName: queueRowClassName } = useQueueHighlights()
 
   // Horas de inicio realmente presentes en la BD — para el filtro de Interval
   const { data: startHours } = useQuery({
@@ -176,14 +163,18 @@ export function OrdersPage() {
     [actions.deleteOrder, actions.handleStatusChange, actions.handleCellChange]
   )
   const queueColumns = useMemo(
-    () => createQueueColumns(actions.handleQueueStatusChange, actions.handleQueuePriorityToggle, actions.handleQueueRemove),
-    [actions.handleQueueStatusChange, actions.handleQueuePriorityToggle, actions.handleQueueRemove]
+    () => createQueueColumns(actions.handleStatusChange),
+    [actions.handleStatusChange]
   )
 
-  const copyQueueCode = useCallback((order: QueueOrder) => {
-    navigator.clipboard.writeText(order.code)
-    toast.success("Order code copied")
-  }, [])
+  const queueRows = useMemo<QueueOrder[]>(
+    () => pageData.map((order) => ({
+      ...order,
+      time: order.start_time && order.end_time ? `${order.start_time} - ${order.end_time}` : "",
+      agent: "",
+    })),
+    [pageData]
+  )
 
 
   return (
@@ -299,17 +290,23 @@ export function OrdersPage() {
                         : await fetchOrdersByIds(selectedIds)
 
                     const content = selection.mode === "filter"
-                      ? (await infiniteScroll.exportByScope!({
+                        ? (await infiniteScroll.exportByScope!({
                           scope: selection.scope,
                           excludedIds: selection.excludedIds,
+                          excludedScopes: selection.excludedScopes,
                           ...copySettings,
                         })).content
-                      : buildBulkCopyText(rowsToCopy as unknown as Record<string, unknown>[], "orders")
+                      : buildBulkCopyText(rowsToCopy as unknown as Record<string, unknown>[], "orders", ORDER_COPY_FIELDS)
                     if (!content) { toast.error("Nothing to copy", { id: toastId }); return }
                     
                     await navigator.clipboard.writeText(content)
                     const copiedCount = selection.mode === "filter"
-                      ? Math.max(0, selection.total - selection.excludedIds.length)
+                      ? Math.max(
+                          0,
+                          selection.total
+                            - selection.excludedIds.length
+                            - (selection.excludedScopes ?? []).reduce((sum, excluded) => sum + excluded.total, 0)
+                        )
                       : (rowsToCopy?.length ?? 0)
                     toast.success(`Copied ${copiedCount.toLocaleString()} rows`, { id: toastId })
                   } catch (error) {
@@ -328,7 +325,14 @@ export function OrdersPage() {
                 aria-label="Delete"
                 onClick={() => {
                   setBulkDeleteOp({
-                    count: selection.mode === "filter" ? Math.max(0, selection.total - selection.excludedIds.length) : selectedIds.length,
+                    count: selection.mode === "filter"
+                      ? Math.max(
+                          0,
+                          selection.total
+                            - selection.excludedIds.length
+                            - (selection.excludedScopes ?? []).reduce((sum, excluded) => sum + excluded.total, 0)
+                        )
+                      : selectedIds.length,
                     selection,
                     clearSelection
                   })
@@ -358,136 +362,52 @@ export function OrdersPage() {
           <DialogBody className="py-1 overflow-y-hidden">
             <DataTable
               columns={queueColumns}
-              data={queueOrders}
-              isLoading={isQueueLoading}
-              infiniteScroll={queueInfiniteScroll}
+              data={queueRows}
+              isLoading={isPageLoading}
+              infiniteScroll={infiniteScroll}
               allowDataExport={canExportOrders}
-              columnFilters={queueColumnFilters}
-              onColumnFiltersChange={setQueueColumnFilters}
-              globalFilter={queueGlobalFilter}
-              onGlobalFilterChange={setQueueGlobalFilter}
-              sorting={queueSorting}
-              onSortingChange={setQueueSorting}
-              onSortingRefresh={refreshCurrentQueueSort}
               tableId="orders-queue"
-              sidePanel={(onClose) => (
-                <TableHistoryCard
-                  tableId="orders-queue"
-                  onClose={onClose}
-                  queryKey={["orders-queue", "history"]}
-                  queryFn={fetchQueueHistory}
-                />
-              )}
               toolbar={{
                 searchable: true,
                 filterPlaceholder: "Search queue...",
                 facetedFilters: [
-                  { columnId: "status", title: "Status", options: QUEUE_STATUS_FILTER_OPTIONS },
+                  { columnId: "status", title: "Status", options: STATUS_FILTER_OPTIONS },
                   { columnId: "channel", title: "Channel", options: CHANNEL_FILTER_OPTIONS },
+                  { columnId: "priority", title: "Priority", options: PRIORITY_FILTER_OPTIONS },
                 ],
-                actions: (table) => {
-                  const priorityColumn = table.getColumn("priority")
-                  if (!priorityColumn) return null
-                  const priorityOnly = priorityColumn.getFilterValue() === true
-
-                  return (
-                    <>
-                      <ToggleActionButtons
-                        items={[
-                          {
-                            id: "priority-only",
-                            label: "Priority",
-                            icon: Clock,
-                            theme: "red",
-                            active: priorityOnly,
-                            onToggle: () => priorityColumn.setFilterValue(priorityOnly ? undefined : true),
-                          },
-                        ]}
-                      />
-                      {queueToolbarActions}
-                    </>
-                  )
-                },
                 searchDebounceMs: 300,
+                viewActionsMode: "bulk-copy",
+                resultCountMode: "client",
+                selectionMode: "client",
               }}
-              bulkActions={(selectedLoadedRows, clearSelection, selectedIds, selection) => (
-                <>
-                  {canExportOrders && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={async () => {
-                        const toastId = "copy-queue"
-                        toast.loading("Preparing copy...", { id: toastId })
-                        try {
-                          const copySettings = resolveBulkCopySettings("orders-queue", QUEUE_COPY_FIELDS)
-                          const rowsToCopy = selection.mode === "filter"
-                            ? null
-                            : selectedIds.length === selectedLoadedRows.length
-                              ? selectedLoadedRows
-                              : await fetchQueueOrdersByIds(selectedIds)
+              bulkActions={(selectedLoadedRows) => (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    const content = buildBulkCopyText(
+                      selectedLoadedRows as unknown as Record<string, unknown>[],
+                      "orders-queue",
+                      QUEUE_COPY_FIELDS
+                    )
+                    if (!content) {
+                      toast.error("Nothing to copy")
+                      return
+                    }
 
-                          const content = selection.mode === "filter"
-                            ? (await queueInfiniteScroll.exportByScope!({
-                                scope: selection.scope,
-                                excludedIds: selection.excludedIds,
-                                ...copySettings,
-                              })).content
-                            : buildBulkCopyText(rowsToCopy as unknown as Record<string, unknown>[], "orders-queue")
-                          if (!content) { toast.error("Nothing to copy", { id: toastId }); return }
-
-                          await navigator.clipboard.writeText(content)
-                          const copiedCount = selection.mode === "filter"
-                            ? Math.max(0, selection.total - selection.excludedIds.length)
-                            : (rowsToCopy?.length ?? 0)
-                          toast.success(`Copied ${copiedCount.toLocaleString()} queue rows`, { id: toastId })
-                        } catch (error) {
-                          toast.error(error instanceof Error ? error.message : "Could not copy queue rows", { id: toastId })
-                        }
-                      }}
-                    >
-                      <Copy />
-                      Copy
-                    </Button>
-                  )}
-                  {canBulkDeleteOrders && (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      aria-label="Remove"
-                      onClick={async () => {
-                        const count = selection.mode === "filter" ? Math.max(0, selection.total - selection.excludedIds.length) : selectedIds.length
-                        const toastId = "bulk-delete-queue"
-                        toast.loading(`Removing ${count.toLocaleString()} queue rows...`, { id: toastId })
-                        try {
-                          await actions.deleteBulkQueueOrders(selection)
-                          clearSelection()
-                          toast.success(`${count.toLocaleString()} queue rows removed`, { id: toastId })
-                        } catch (error) {
-                          toast.error(error instanceof Error ? error.message : "Could not remove queue rows", { id: toastId })
-                        }
-                      }}
-                    >
-                      <Trash2 />
-                      Remove
-                    </Button>
-                  )}
-                </>
+                    try {
+                      await navigator.clipboard.writeText(content)
+                      toast.success(`Copied ${selectedLoadedRows.length.toLocaleString()} rows`)
+                    } catch {
+                      toast.error("Could not copy to clipboard")
+                    }
+                  }}
+                >
+                  <Copy />
+                  Copy
+                </Button>
               )}
-              rowClassName={queueRowClassName}
               getRowId={(row) => row.id}
-              rowContextMenu={(order) => (
-                <>
-                  <ContextMenuItem onSelect={() => copyQueueCode(order)}>Copy code</ContextMenuItem>
-                  <ContextMenuItem onSelect={() => actions.handleQueuePriorityToggle(order.code)}>
-                    {order.priority ? "Set normal priority" : "Set high priority"}
-                  </ContextMenuItem>
-                  <ContextMenuSeparator />
-                  <ContextMenuItem onSelect={() => actions.handleQueueRemove(order.code)}>
-                    Remove from queue
-                  </ContextMenuItem>
-                </>
-              )}
               layout={{
                 scrollAreaClassName: "max-h-[min(calc(100svh-22rem),30rem)] [--table-bg:var(--color-popover)]",
               }}

@@ -157,6 +157,11 @@ export function DataTable<TData, TValue>({
   }, [isSidePanelOpen, tableId])
 
   const loadedRowIds = useMemo(() => data.map((row, index) => getRowId?.(row) ?? String(index)), [data, getRowId])
+  const loadedRowsById = useMemo(
+    () => Object.fromEntries(data.map((row, index) => [getRowId?.(row) ?? String(index), row as Record<string, unknown>])),
+    [data, getRowId]
+  )
+  const usesServerSelection = !!infiniteScroll && toolbar?.selectionMode !== "client"
   const {
     rowSelection,
     setRowSelection,
@@ -169,13 +174,14 @@ export function DataTable<TData, TValue>({
     deselectAll,
     isSelectingAll,
   } = useInfiniteSelection({
-    enabled: !!infiniteScroll,
+    enabled: usesServerSelection,
     globalFilter,
     columnFilters,
     sorting,
     totalRowCount: infiniteScroll?.totalRowCount ?? rowCount ?? data.length,
     date: infiniteScroll?.currentScope?.date,
     loadedRowIds,
+    loadedRowsById,
   })
 
   const fitHeight = layout?.fitHeight ?? false
@@ -263,7 +269,6 @@ export function DataTable<TData, TValue>({
   }, [table, table.getState().pagination.pageIndex, table.getPageCount()])
 
   const totalRows = infiniteScroll?.totalRowCount ?? rowCount ?? 0
-  const displayedSelectedCount = displaySelectedCount
 
   // Patch meta values after computation
   if (table.options.meta) {
@@ -278,7 +283,7 @@ export function DataTable<TData, TValue>({
     meta.selectAll = selectAll
     meta.deselectAll = deselectAll
     meta.isSelectingAll = isSelectingAll
-    meta.isInfiniteScroll = !!infiniteScroll
+    meta.isInfiniteScroll = usesServerSelection
   }
 
   const cellPadding = 8
@@ -286,8 +291,14 @@ export function DataTable<TData, TValue>({
   const leftPinnedWidth = leftPinned.reduce((sum, id) => sum + (table.getColumn(id)?.getSize() ?? 0), 0) + cellPadding
   const rightPinnedWidth = rightPinned.reduce((sum, id) => sum + (table.getColumn(id)?.getSize() ?? 0), 0) + cellPadding
   const headerHeight = 2.5 * 16 + cellPadding // h-10 (2.5rem) sticky header
-  const leftEdgeId = [...leftPinned].reverse().find(id => table.getColumn(id)?.getCanPin())
-  const rightEdgeId = [...rightPinned].reverse().find(id => table.getColumn(id)?.getCanPin())
+  const leftEdgeId = leftPinned
+    .map(id => table.getColumn(id))
+    .filter(column => column?.getCanPin())
+    .sort((a, b) => (b?.getStart("left") ?? 0) - (a?.getStart("left") ?? 0))[0]?.id
+  const rightEdgeId = rightPinned
+    .map(id => table.getColumn(id))
+    .filter(column => column?.getCanPin())
+    .sort((a, b) => (b?.getAfter("right") ?? 0) - (a?.getAfter("right") ?? 0))[0]?.id
 
   // ── Virtualizador de filas (solo en modo infinite scroll) ──────────────────
   const rows = table.getRowModel().rows
@@ -331,6 +342,8 @@ export function DataTable<TData, TValue>({
         actions={toolbar?.actions}
         searchDebounceMs={toolbar?.searchDebounceMs}
         showViewOptions={toolbar?.showViewOptions}
+        viewActionsMode={toolbar?.viewActionsMode}
+        resultCountMode={toolbar?.resultCountMode}
         onSidePanelToggle={sidePanel ? () => setIsSidePanelOpen(!isSidePanelOpen) : undefined}
         infiniteScroll={infiniteScroll}
         allowDataExport={allowDataExport}
@@ -474,17 +487,21 @@ export function DataTable<TData, TValue>({
       {/* Paginador clásico — oculto en modo infinite scroll */}
       {!infiniteScroll && enablePagination && <DataTablePagination table={table} pageSizeOptions={pageSizeOptions} />}
 
-      {bulkActions && selectedCount > 0 && (
+      {selectedCount > 0 && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">
           <div className="flex items-center gap-3 rounded-lg border bg-background p-2 shadow-lg">
             {(() => {
               const selectedLoadedRows = table.getFilteredSelectedRowModel().rows
-              const displayCount = displayedSelectedCount.toLocaleString()
+              const displayCount = selectedCount.toLocaleString()
               return (
                 <>
                   <span className="pl-2 text-sm">{displayCount} selected</span>
-                  <div className="h-4 w-px bg-border" />
-                  {bulkActions(selectedLoadedRows.map((r) => r.original), clearSelection, visibleSelectedIds, selectionState)}
+                  {bulkActions && (
+                    <>
+                      <div className="h-4 w-px bg-border" />
+                      {bulkActions(selectedLoadedRows.map((r) => r.original), clearSelection, visibleSelectedIds, selectionState)}
+                    </>
+                  )}
                   <div className="h-4 w-px bg-border" />
                   <Button variant="ghost" size="icon-sm" onClick={clearSelection}><X /></Button>
                 </>
