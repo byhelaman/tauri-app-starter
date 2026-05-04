@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/input-group"
 import { Textarea } from "@/components/ui/textarea"
 import { csvEscape, getScopeRows, type Scope } from "./table-formats"
+import { expandDataActionFields, readRecordField } from "./data-action-fields"
 import {
     BULK_COPY_DEFAULT_TEMPLATE,
     bulkCopySettingsKey,
@@ -59,6 +60,9 @@ interface BulkCopyDialogProps<TData> {
 
 function renderRow<TData>(tokens: Token[], row: Row<TData>): string {
     let out = ""
+    const record = typeof row.original === "object" && row.original !== null
+        ? row.original as Record<string, unknown>
+        : {}
 
     for (const token of tokens) {
         if (token.type === "text") {
@@ -69,7 +73,7 @@ function renderRow<TData>(tokens: Token[], row: Row<TData>): string {
             out += `{${token.name}}`
             continue
         }
-        const value = row.getValue(token.name)
+        const value = readRecordField(record, token.name)
         out += value == null ? "" : String(value)
     }
 
@@ -97,18 +101,25 @@ function buildText<TData>(
     }
 
     if (fields.length === 0) return ""
+    const outputFields = expandDataActionFields(fields)
 
     if (format === "json") {
         const records = rows.map((row) => {
-            return Object.fromEntries(fields.map((field) => [field, row.getValue(field)]))
+            const record = typeof row.original === "object" && row.original !== null
+                ? row.original as Record<string, unknown>
+                : {}
+            return Object.fromEntries(outputFields.map((field) => [field, readRecordField(record, field)]))
         })
         return JSON.stringify(records, null, 2)
     }
 
     const separator = format === "csv" ? "," : format === "tsv" ? "\t" : " - "
     const lines = rows.map((row) => {
-        return fields.map((field) => {
-            const value = row.getValue(field)
+        const record = typeof row.original === "object" && row.original !== null
+            ? row.original as Record<string, unknown>
+            : {}
+        return outputFields.map((field) => {
+            const value = readRecordField(record, field)
             const text = value == null ? "" : String(value)
             if (format === "csv") return csvEscape(text)
             if (format === "tsv") return text.replace(/\t/g, " ")
@@ -118,8 +129,8 @@ function buildText<TData>(
 
     if ((format === "csv" || format === "tsv") && headers) {
         const headerLine = format === "csv"
-            ? fields.map(csvEscape).join(",")
-            : fields.join("\t")
+            ? outputFields.map(csvEscape).join(",")
+            : outputFields.join("\t")
         return [headerLine, ...lines].join("\n")
     }
 
@@ -176,7 +187,10 @@ export function BulkCopyDialog<TData>({
         [fields, fieldOptions],
     )
 
-    const parsed = useMemo(() => parseBulkCopyTemplate(template, new Set(fieldOptions)), [template, fieldOptions])
+    const parsed = useMemo(
+        () => parseBulkCopyTemplate(template, new Set([...fieldOptions, ...expandDataActionFields(fieldOptions)])),
+        [template, fieldOptions],
+    )
     const invalidFields = useMemo(
         () => Array.from(new Set(parsed.flatMap((token) => token.type === "field" && !token.valid ? [token.name] : []))),
         [parsed],

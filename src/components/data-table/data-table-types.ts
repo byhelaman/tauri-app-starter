@@ -41,6 +41,11 @@ export interface DataTableLayoutConfig {
   tableHeaderClassName?: string
 }
 
+export interface DataTableResetContext {
+  closeSidePanel: () => void
+  resetScroll: () => void
+}
+
 export interface DataTableSelectionScope {
   search: string
   filters: ColumnFiltersState

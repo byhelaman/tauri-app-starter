@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { csvEscape } from "./table-formats"
+import { expandDataActionFields, readRecordField } from "./data-action-fields"
 
 export type BulkCopyFormat = "lines" | "csv" | "tsv" | "json" | "custom"
 
@@ -98,8 +99,9 @@ export function resolveBulkCopySettings(tableId: string, fallbackFields: string[
 export function buildBulkCopyText(records: Record<string, unknown>[], tableId: string, fallbackFields?: string[]): string {
     if (records.length === 0) return ""
     const availableFields = fallbackFields ?? Array.from(new Set(records.flatMap((record) => Object.keys(record))))
-    const fieldSet = new Set(availableFields)
+    const fieldSet = new Set([...availableFields, ...expandDataActionFields(availableFields)])
     const { format, headers, template, fields } = resolveBulkCopySettings(tableId, availableFields)
+    const outputFields = expandDataActionFields(fields)
     const parsed = parseBulkCopyTemplate(template, fieldSet)
 
     if (format === "custom") {
@@ -108,25 +110,25 @@ export function buildBulkCopyText(records: Record<string, unknown>[], tableId: s
             for (const token of parsed) {
                 if (token.type === "text") { out += token.value; continue }
                 if (!token.valid) { out += `{${token.name}}`; continue }
-                const value = record[token.name]
+                const value = readRecordField(record, token.name)
                 out += value == null ? "" : String(value)
             }
             return out
         }).join("\n")
     }
 
-    if (fields.length === 0) return ""
+    if (outputFields.length === 0) return ""
 
     if (format === "json") {
         return JSON.stringify(
-            records.map((record) => Object.fromEntries(fields.map((field) => [field, record[field]]))),
+            records.map((record) => Object.fromEntries(outputFields.map((field) => [field, readRecordField(record, field)]))),
             null, 2,
         )
     }
 
     const separator = format === "csv" ? "," : format === "tsv" ? "\t" : " - "
-    const lines = records.map((record) => fields.map((field) => {
-        const value = record[field]
+    const lines = records.map((record) => outputFields.map((field) => {
+        const value = readRecordField(record, field)
         const text = value == null ? "" : String(value)
         if (format === "csv") return csvEscape(text)
         if (format === "tsv") return text.replace(/\t/g, " ")
@@ -135,8 +137,8 @@ export function buildBulkCopyText(records: Record<string, unknown>[], tableId: s
 
     if ((format === "csv" || format === "tsv") && headers) {
         const headerLine = format === "csv"
-            ? fields.map(csvEscape).join(",")
-            : fields.join("\t")
+            ? outputFields.map(csvEscape).join(",")
+            : outputFields.join("\t")
         return [headerLine, ...lines].join("\n")
     }
 

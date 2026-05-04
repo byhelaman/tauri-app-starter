@@ -38,6 +38,7 @@ import {
   DataTableToolbarConfig,
   InfiniteScrollConfig,
   DataTableMeta,
+  type DataTableResetContext,
   type DataTableSelectionState,
 } from "./data-table-types"
 import { getColumnSizeStyle, getPinnedColumnStyle } from "./data-table-utils"
@@ -91,6 +92,8 @@ interface DataTableProps<TData, TValue> {
   allowDataExport?: boolean
   /** Desactiva la paginación clásica y muestra todas las filas recibidas. */
   enablePagination?: boolean
+  /** Resetea estado externo que vive fuera de la tabla, como filtros de página. */
+  onResetView?: (context: DataTableResetContext) => void
 }
 
 export function DataTable<TData, TValue>({
@@ -124,6 +127,7 @@ export function DataTable<TData, TValue>({
   estimatedRowHeight = 48,
   allowDataExport = true,
   enablePagination = true,
+  onResetView,
 }: DataTableProps<TData, TValue>) {
   const [internalSorting, setInternalSorting] = useState<SortingState>([])
   const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>([])
@@ -310,6 +314,31 @@ export function DataTable<TData, TValue>({
     // Habilitado siempre pero solo consumido cuando infiniteScroll está activo
   })
 
+  const resetTableView = () => {
+    table.resetColumnFilters()
+    table.resetGlobalFilter()
+    table.resetSorting()
+    table.resetColumnVisibility()
+    table.resetColumnPinning()
+    table.resetRowSelection()
+    table.setPageIndex(0)
+    setColumnPinning({ left: ["select"], right: [] })
+    setIsSidePanelOpen(false)
+
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ top: 0, left: 0 })
+      rowVirtualizer.scrollToIndex(0)
+    })
+
+    onResetView?.({
+      closeSidePanel: () => setIsSidePanelOpen(false),
+      resetScroll: () => {
+        scrollRef.current?.scrollTo({ top: 0, left: 0 })
+        rowVirtualizer.scrollToIndex(0)
+      },
+    })
+  }
+
   // Calcula los spacers para el enfoque spacer-row (compatible con <table> HTML)
   const virtualRows = infiniteScroll ? rowVirtualizer.getVirtualItems() : null
   const totalSize = rowVirtualizer.getTotalSize()
@@ -347,6 +376,7 @@ export function DataTable<TData, TValue>({
         onSidePanelToggle={sidePanel ? () => setIsSidePanelOpen(!isSidePanelOpen) : undefined}
         infiniteScroll={infiniteScroll}
         allowDataExport={allowDataExport}
+        onResetTable={resetTableView}
       />
 
 

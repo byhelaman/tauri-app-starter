@@ -12,6 +12,7 @@ import type {
   ServerExportFormat,
   ServerScopeExportResult,
 } from "@/components/data-table/data-table-types"
+import { expandDataActionFields } from "@/components/data-table/data-action-fields"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -252,7 +253,7 @@ export const exportOrdersByScope = async ({
     ...scopeExportRpcParams(scope, excludedIds),
     p_excluded_scopes: excludedScopesRpcParam(excludedScopes),
     p_format: format,
-    p_fields: fields,
+    p_fields: expandDataActionFields(fields),
     p_headers: headers ?? true,
     p_template: template ?? null,
   })

@@ -1,4 +1,5 @@
 import type { Row, Column, Table } from "@tanstack/react-table"
+import { expandDataActionFields, readRecordField } from "./data-action-fields"
 
 export type ExportFormat = "csv" | "tsv" | "json" | "md"
 export type CopyFormat = ExportFormat
@@ -21,8 +22,19 @@ export function getExportColumns<T>(table: Table<T>): Column<T, unknown>[] {
   return table.getVisibleFlatColumns().filter((c) => c.id !== "select" && c.id !== "actions")
 }
 
-function cellValue<T>(row: Row<T>, column: Column<T, unknown>): string {
-  const v = row.getValue(column.id)
+export function getExportFieldIds<T>(table: Table<T>): string[] {
+  return expandDataActionFields(getExportColumns(table).map((column) => column.id))
+}
+
+function rowRecord<T>(row: Row<T>): Record<string, unknown> {
+  return typeof row.original === "object" && row.original !== null
+    ? row.original as Record<string, unknown>
+    : {}
+}
+
+function cellValue<T>(row: Row<T>, field: string): string {
+  const record = rowRecord(row)
+  const v = readRecordField(record, field)
   return v == null ? "" : String(v)
 }
 
@@ -36,33 +48,33 @@ export function formatRows<T>(
   format: CopyFormat,
   includeHeaders = true,
 ): string {
-  const columns = getExportColumns(table)
-  const headers = columns.map((c) => c.id)
+  const fields = getExportFieldIds(table)
+  const headers = fields
 
   switch (format) {
     case "csv": {
-      const lines = rows.map((r) => columns.map((c) => csvEscape(cellValue(r, c))).join(","))
+      const lines = rows.map((r) => fields.map((field) => csvEscape(cellValue(r, field))).join(","))
       return includeHeaders
         ? [headers.map(csvEscape).join(","), ...lines].join("\n")
         : lines.join("\n")
     }
     case "tsv": {
       const lines = rows.map((r) =>
-        columns.map((c) => cellValue(r, c).replace(/\t/g, " ")).join("\t"),
+        fields.map((field) => cellValue(r, field).replace(/\t/g, " ")).join("\t"),
       )
       return includeHeaders ? [headers.join("\t"), ...lines].join("\n") : lines.join("\n")
     }
     case "json": {
       const data = rows.map((r) => {
         const o: Record<string, unknown> = {}
-        columns.forEach((c) => { o[c.id] = r.getValue(c.id) })
+        fields.forEach((field) => { o[field] = readRecordField(rowRecord(r), field) })
         return o
       })
       return JSON.stringify(data, null, 2)
     }
     case "md": {
       const body = rows.map(
-        (r) => `| ${columns.map((c) => cellValue(r, c).replace(/\|/g, "\\|")).join(" | ")} |`,
+        (r) => `| ${fields.map((field) => cellValue(r, field).replace(/\|/g, "\\|")).join(" | ")} |`,
       )
       if (!includeHeaders) return body.join("\n")
       const head = `| ${headers.join(" | ")} |`
@@ -82,37 +94,37 @@ export function formatRawRows<T>(
   format: CopyFormat,
   includeHeaders = true,
 ): string {
-  const columns = getExportColumns(table)
-  const headers = columns.map((c) => c.id)
+  const fields = getExportFieldIds(table)
+  const headers = fields
   const raw = (record: Record<string, unknown>, colId: string): string => {
-    const v = record[colId]
+    const v = readRecordField(record, colId)
     return v == null ? "" : String(v)
   }
 
   switch (format) {
     case "csv": {
-      const lines = records.map((r) => columns.map((c) => csvEscape(raw(r, c.id))).join(","))
+      const lines = records.map((r) => fields.map((field) => csvEscape(raw(r, field))).join(","))
       return includeHeaders
         ? [headers.map(csvEscape).join(","), ...lines].join("\n")
         : lines.join("\n")
     }
     case "tsv": {
       const lines = records.map((r) =>
-        columns.map((c) => raw(r, c.id).replace(/\t/g, " ")).join("\t"),
+        fields.map((field) => raw(r, field).replace(/\t/g, " ")).join("\t"),
       )
       return includeHeaders ? [headers.join("\t"), ...lines].join("\n") : lines.join("\n")
     }
     case "json": {
       const data = records.map((r) => {
         const o: Record<string, unknown> = {}
-        columns.forEach((c) => { o[c.id] = r[c.id] })
+        fields.forEach((field) => { o[field] = readRecordField(r, field) })
         return o
       })
       return JSON.stringify(data, null, 2)
     }
     case "md": {
       const body = records.map(
-        (r) => `| ${columns.map((c) => raw(r, c.id).replace(/\|/g, "\\|")).join(" | ")} |`,
+        (r) => `| ${fields.map((field) => raw(r, field).replace(/\|/g, "\\|")).join(" | ")} |`,
       )
       if (!includeHeaders) return body.join("\n")
       const head = `| ${headers.join(" | ")} |`

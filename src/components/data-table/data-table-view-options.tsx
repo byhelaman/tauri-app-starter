@@ -28,7 +28,7 @@ import {
   FORMAT_META,
   formatRows,
   formatRawRows,
-  getExportColumns,
+  getExportFieldIds,
   getScopeRows,
   type CopyFormat,
   type ExportFormat,
@@ -50,6 +50,7 @@ interface DataTableViewOptionsProps<TData> {
   /** Permite acciones que extraen datos fuera de la tabla visible */
   allowDataExport?: boolean
   mode?: "full" | "bulk-copy" | "none"
+  onResetTable?: () => void
 }
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
@@ -101,7 +102,7 @@ function formatLimit(limit?: number): string {
   return limit == null ? "the configured limit" : limit.toLocaleString()
 }
 
-export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle, infiniteScroll, isSelectAllByFilter, excludedIds, allowDataExport = true, mode = "full" }: DataTableViewOptionsProps<TData>) {
+export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle, infiniteScroll, isSelectAllByFilter, excludedIds, allowDataExport = true, mode = "full", onResetTable }: DataTableViewOptionsProps<TData>) {
   const [scope, setScope] = useState<Scope>("all")
   const [bulkCopyOpen, setBulkCopyOpen] = useState(false)
 
@@ -109,21 +110,23 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
   const canUseDataActions = allowDataExport && mode === "full"
   const canUseBulkCopy = allowDataExport && (mode === "full" || mode === "bulk-copy")
   const tableMeta = table.options.meta as DataTableMeta | undefined
-  const selectedCount = tableMeta?.selectionState?.mode === "filter"
+  const usesServerScope = tableMeta?.isInfiniteScroll === true
+  const selectedCount = usesServerScope && tableMeta?.selectionState?.mode === "filter"
     ? tableMeta.selectedCount ?? 0
     : isSelectAllByFilter
-    ? (infiniteScroll?.totalRowCount ?? 0) - (excludedIds?.size ?? 0)
-    : tableMeta?.visibleSelectedCount ?? table.getSelectedRowModel().rows.length
+      ? (infiniteScroll?.totalRowCount ?? 0) - (excludedIds?.size ?? 0)
+      : tableMeta?.visibleSelectedCount ?? table.getSelectedRowModel().rows.length
   const selectedIds = tableMeta?.visibleSelectedIds
     ?? Object.keys(table.getState().rowSelection).filter((id) => table.getState().rowSelection[id])
   const filteredCount = table.getFilteredRowModel().rows.length
   const totalCount = table.getCoreRowModel().rows.length
 
-  // En infinite scroll, 'filtered' y 'all' muestran el total real del servidor
-  const serverTotal = infiniteScroll?.totalRowCount
-  const serverUnfilteredTotal = infiniteScroll?.unfilteredTotalRowCount
+  // Solo las tablas con selección server-side usan totales reales del backend.
+  // El modal puede recibir infiniteScroll para render/carga, pero su scope es local.
+  const serverTotal = usesServerScope ? infiniteScroll?.totalRowCount : undefined
+  const serverUnfilteredTotal = usesServerScope ? infiniteScroll?.unfilteredTotalRowCount : undefined
   const effectiveFilteredCount = serverTotal ?? filteredCount
-  const effectiveTotalCount    = serverUnfilteredTotal ?? totalCount
+  const effectiveTotalCount = serverUnfilteredTotal ?? totalCount
 
   const effectiveScope: Scope = scope === "selected" && selectedCount === 0 ? "filtered" : scope
 
@@ -140,6 +143,7 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
 
   /** Devuelve true si el scope necesita datos del servidor (infinite scroll + scope != selected) */
   function getServerFetcher(s: Scope): (() => Promise<Record<string, unknown>[]>) | undefined {
+    if (!usesServerScope) return undefined
     if (s === "all") return infiniteScroll?.fetchAllUnfiltered ?? infiniteScroll?.fetchAllByFilter
     if (s === "filtered") return infiniteScroll?.fetchAllByFilter
     return undefined
@@ -150,7 +154,7 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
   }
 
   function needsSelectedIdsFetch(s: Scope): boolean {
-    return s === "selected" && !!infiniteScroll?.fetchByIds && selectedIds.length > 0
+    return usesServerScope && s === "selected" && !!infiniteScroll?.fetchByIds && selectedIds.length > 0
   }
 
   function serverRowsExceedLimit(count: number): boolean {
@@ -159,33 +163,35 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
 
   function selectedFilterExportRequest(format: ExportFormat) {
     const selection = tableMeta?.selectionState
+    if (!usesServerScope) return null
     if (effectiveScope !== "selected" || selection?.mode !== "filter") return null
     return {
       scope: selection.scope,
       excludedIds: selection.excludedIds,
       excludedScopes: selection.excludedScopes,
       format,
-      fields: getExportColumns(table).map((column) => column.id),
+      fields: getExportFieldIds(table),
     }
   }
 
   function scopeExportRequest(format: ExportFormat) {
+    if (!usesServerScope) return null
     const scope = effectiveScope === "filtered"
       ? infiniteScroll?.currentScope
       : effectiveScope === "all" && infiniteScroll?.currentScope
         ? {
-            ...infiniteScroll.currentScope,
-            search: "",
-            filters: [],
-            date: undefined,
-          }
+          ...infiniteScroll.currentScope,
+          search: "",
+          filters: [],
+          date: undefined,
+        }
         : undefined
     if (!scope) return null
     return {
       scope,
       excludedIds: [],
       format,
-      fields: getExportColumns(table).map((column) => column.id),
+      fields: getExportFieldIds(table),
     }
   }
 
@@ -407,14 +413,12 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
 
           <DropdownMenuItem
             onClick={() => {
-              table.resetColumnFilters()
-              table.resetSorting()
-              table.resetColumnVisibility()
-              table.resetRowSelection()
+              setScope("all")
+              onResetTable?.()
             }}
           >
             <RotateCcwIcon />
-            Reset table
+            Reset Table
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

@@ -38,6 +38,7 @@ interface DataTableToolbarProps<TData> {
   allowDataExport?: boolean
   viewActionsMode?: "full" | "bulk-copy" | "none"
   resultCountMode?: "server" | "client"
+  onResetTable?: () => void
 }
 
 export function DataTableToolbar<TData>({
@@ -55,6 +56,7 @@ export function DataTableToolbar<TData>({
   allowDataExport,
   viewActionsMode = "full",
   resultCountMode = "server",
+  onResetTable,
 }: DataTableToolbarProps<TData>) {
   const currentFilterValue = (table.getState().globalFilter as string) ?? ""
 
@@ -256,6 +258,7 @@ export function DataTableToolbar<TData>({
           infiniteScroll={infiniteScroll}
           allowDataExport={allowDataExport}
           mode={viewActionsMode}
+          onResetTable={onResetTable}
         />
       )}
     </div>

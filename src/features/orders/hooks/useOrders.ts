@@ -10,9 +10,21 @@ import type { DataTableSelectionState } from "@/components/data-table/data-table
 /** Número de filas por chunk en modo infinite scroll */
 const ORDER_CHUNK = 1000
 
-export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, sorting?: SortingState } = {}) {
+export function useOrders({
+  dateFilter,
+  sorting = [],
+  queryScope = "orders",
+  realtime = true,
+  enabled = true,
+}: {
+  dateFilter?: string
+  sorting?: SortingState
+  queryScope?: string
+  realtime?: boolean
+  enabled?: boolean
+} = {}) {
   const queryClient = useQueryClient()
-  useOrdersRealtime()
+  useOrdersRealtime(realtime)
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = useState("")
 
@@ -27,8 +39,8 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
 
   // Clave de query — incluye filtros para que al cambiar se refetche desde chunk 0
   const ordersQueryKey = useMemo(
-    () => ["orders", "infinite", columnFilters, globalFilter, dateFilter, sorting] as const,
-    [columnFilters, globalFilter, dateFilter, sorting]
+    () => ["orders", "infinite", queryScope, columnFilters, globalFilter, dateFilter, sorting] as const,
+    [columnFilters, dateFilter, globalFilter, queryScope, sorting]
   )
 
   const {
@@ -53,7 +65,7 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
       if (lastPage.data.length < ORDER_CHUNK) return undefined
       return allPages.length * ORDER_CHUNK
     },
-    enabled: true,
+    enabled,
   })
 
   // Aplana todas las páginas en un único array para la DataTable
@@ -67,6 +79,7 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
     queryKey: ["orders", "unfiltered-count"],
     queryFn: () => api.fetchOrders({ limit: 1, offset: 0 }),
     staleTime: 60_000,
+    enabled,
   })
 
   // ── Order update mutation con rollback por entidad ────────────────────
@@ -89,6 +102,13 @@ export function useOrders({ dateFilter, sorting = [] }: { dateFilter?: string, s
       return { previous }
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey[0] === "orders" &&
+          query.queryKey[1] === "infinite" &&
+          query.queryKey[2] !== queryScope,
+      })
       queryClient.invalidateQueries({ queryKey: ["orders", "stats"] })
       queryClient.invalidateQueries({ queryKey: ["orders", "history"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard", "history"] })

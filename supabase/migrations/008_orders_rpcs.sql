@@ -573,7 +573,7 @@ AS $$
         WHEN 'customer' THEN p_customer
         WHEN 'product' THEN p_product
         WHEN 'category' THEN p_category
-        WHEN 'time' THEN to_char(p_start_time, 'HH24:MI') || ' - ' || to_char(p_end_time, 'HH24:MI')
+        WHEN 'time' THEN to_char(p_start_time, 'HH24:MI') || ' ' || to_char(p_end_time, 'HH24:MI')
         WHEN 'start_time' THEN to_char(p_start_time, 'HH24:MI')
         WHEN 'end_time' THEN to_char(p_end_time, 'HH24:MI')
         WHEN 'code' THEN p_code
@@ -703,11 +703,26 @@ BEGIN
         RAISE EXCEPTION 'Permission denied: requires orders.export or orders.copy';
     END IF;
 
-    v_fields := COALESCE(p_fields, ARRAY['date','customer','product','category','time','code','status','channel','quantity','amount','region','payment','priority']);
-    SELECT array_agg(field)
+    v_fields := COALESCE(p_fields, ARRAY['date','customer','product','category','start_time','end_time','code','status','channel','quantity','amount','region','payment','priority']);
+    WITH expanded AS (
+        SELECT next_field AS field, input_field.ordinality, next_field_expanded.ordinality AS sub_ordinality
+        FROM unnest(v_fields) WITH ORDINALITY AS input_field(field, ordinality)
+        CROSS JOIN LATERAL unnest(
+            CASE
+                WHEN input_field.field = 'time' THEN ARRAY['start_time','end_time']
+                ELSE ARRAY[input_field.field]
+            END
+        ) WITH ORDINALITY AS next_field_expanded(next_field, ordinality)
+        WHERE next_field = ANY(ARRAY['id','date','customer','product','category','start_time','end_time','code','status','channel','quantity','amount','region','payment','priority','created_at'])
+    ),
+    dedup AS (
+        SELECT DISTINCT ON (field) field, ordinality, sub_ordinality
+        FROM expanded
+        ORDER BY field, ordinality, sub_ordinality
+    )
+    SELECT array_agg(field ORDER BY ordinality, sub_ordinality)
     INTO v_fields
-    FROM unnest(v_fields) field
-    WHERE field = ANY(ARRAY['id','date','customer','product','category','time','start_time','end_time','code','status','channel','quantity','amount','region','payment','priority','created_at']);
+    FROM dedup;
 
     IF array_length(v_fields, 1) IS NULL THEN
         RAISE EXCEPTION 'No exportable fields selected';

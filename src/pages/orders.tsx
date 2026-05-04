@@ -132,6 +132,7 @@ export function OrdersPage() {
   const dateFilter = selectedDate ? format(selectedDate, "yyyy-MM-dd") : undefined
 
   const [sorting, setSorting] = useState<SortingState>([])
+  const [queueSorting, setQueueSorting] = useState<SortingState>([])
 
   const {
     pageData,
@@ -144,6 +145,23 @@ export function OrdersPage() {
     refreshCurrentOrderSort,
     actions
   } = useOrders({ dateFilter, sorting })
+
+  const {
+    pageData: queuePageData,
+    isPageLoading: isQueuePageLoading,
+    infiniteScroll: queueInfiniteScroll,
+    columnFilters: queueColumnFilters,
+    setColumnFilters: setQueueColumnFilters,
+    globalFilter: queueGlobalFilter,
+    setGlobalFilter: setQueueGlobalFilter,
+    refreshCurrentOrderSort: refreshCurrentQueueSort,
+    actions: queueActions,
+  } = useOrders({
+    sorting: queueSorting,
+    queryScope: "orders-queue",
+    realtime: false,
+    enabled: isQueueDialogOpen,
+  })
 
   const { toolbarActions, rowClassName } = useTableHighlights()
 
@@ -163,18 +181,32 @@ export function OrdersPage() {
     [actions.deleteOrder, actions.handleStatusChange, actions.handleCellChange]
   )
   const queueColumns = useMemo(
-    () => createQueueColumns(actions.handleStatusChange),
-    [actions.handleStatusChange]
+    () => createQueueColumns(queueActions.handleStatusChange),
+    [queueActions.handleStatusChange]
   )
 
   const queueRows = useMemo<QueueOrder[]>(
-    () => pageData.map((order) => ({
+    () => queuePageData.map((order) => ({
       ...order,
       time: order.start_time && order.end_time ? `${order.start_time} - ${order.end_time}` : "",
       agent: "",
     })),
-    [pageData]
+    [queuePageData]
   )
+
+  const copyQueueContextValue = useCallback(async (content: string, successMessage: string) => {
+    if (!content) {
+      toast.error("Nothing to copy")
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(content)
+      toast.success(successMessage)
+    } catch {
+      toast.error("Could not copy to clipboard")
+    }
+  }, [])
 
 
   return (
@@ -220,6 +252,7 @@ export function OrdersPage() {
         sorting={sorting}
         onSortingChange={setSorting}
         onSortingRefresh={refreshCurrentOrderSort}
+        onResetView={() => setSelectedDate(undefined)}
         tableId="orders"
         sidePanel={(onClose) => (
           <TableHistoryCard 
@@ -363,9 +396,16 @@ export function OrdersPage() {
             <DataTable
               columns={queueColumns}
               data={queueRows}
-              isLoading={isPageLoading}
-              infiniteScroll={infiniteScroll}
+              isLoading={isQueuePageLoading}
+              infiniteScroll={queueInfiniteScroll}
               allowDataExport={canExportOrders}
+              columnFilters={queueColumnFilters}
+              onColumnFiltersChange={setQueueColumnFilters}
+              globalFilter={queueGlobalFilter}
+              onGlobalFilterChange={setQueueGlobalFilter}
+              sorting={queueSorting}
+              onSortingChange={setQueueSorting}
+              onSortingRefresh={refreshCurrentQueueSort}
               tableId="orders-queue"
               toolbar={{
                 searchable: true,
@@ -406,6 +446,38 @@ export function OrdersPage() {
                   <Copy />
                   Copy
                 </Button>
+              )}
+              rowContextMenu={(order) => (
+                <>
+                  <ContextMenuItem
+                    onSelect={() => void copyQueueContextValue(order.code, "Order code copied")}
+                  >
+                    Copy code
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onSelect={() => void copyQueueContextValue(order.time, "Time copied")}
+                  >
+                    Copy time
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onSelect={() => void copyQueueContextValue(order.customer, "Customer copied")}
+                  >
+                    Copy customer
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem
+                    onSelect={() => {
+                      const content = buildBulkCopyText(
+                        [order as unknown as Record<string, unknown>],
+                        "orders-queue",
+                        QUEUE_COPY_FIELDS
+                      )
+                      void copyQueueContextValue(content, "Row copied")
+                    }}
+                  >
+                    Copy row
+                  </ContextMenuItem>
+                </>
               )}
               getRowId={(row) => row.id}
               layout={{

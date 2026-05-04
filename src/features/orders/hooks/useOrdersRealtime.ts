@@ -22,11 +22,12 @@ type OrderChangeEvent = { actor_id?: string | null }
 /** Prefijo de query key para infinite scroll — coincide con ordersQueryKey en useOrders */
 const ORDERS_KEY = ["orders", "infinite"] as const
 
-export function useOrdersRealtime() {
+export function useOrdersRealtime(enabled = true) {
   const queryClient = useQueryClient()
   const { user } = useAuth()
 
   useEffect(() => {
+    if (!enabled) return
     if (!supabase || !user?.id) return
     let ordersTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -70,5 +71,5 @@ export function useOrdersRealtime() {
       if (ordersTimer) clearTimeout(ordersTimer)
       void supabase!.removeChannel(channel)
     }
-  }, [queryClient, user?.id])
+  }, [enabled, queryClient, user?.id])
 }
