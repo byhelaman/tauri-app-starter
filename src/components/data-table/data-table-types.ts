@@ -139,6 +139,8 @@ export interface DataTableMeta {
   selectedCount?: number
   /** Conteo mostrado cuando el filtro visible es solo una intersección de la selección real. */
   displaySelectedCount?: number
+  /** Total seleccionado dentro del scope/filtro activo de la tabla. */
+  currentScopeSelectedCount?: number
   /** Cantidad total de filas en el filtro actual */
   totalRowCount?: number
   /** Refresca datos cuando el usuario re-aplica el mismo ordenamiento remoto */

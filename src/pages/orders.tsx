@@ -417,29 +417,46 @@ export function OrdersPage() {
                 ],
                 searchDebounceMs: 300,
                 viewActionsMode: "bulk-copy",
-                resultCountMode: "client",
-                selectionMode: "client",
               }}
-              bulkActions={(selectedLoadedRows) => (
+              bulkActions={(selectedLoadedRows, _clearSelection, selectedIds, selection) => (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={async () => {
-                    const content = buildBulkCopyText(
-                      selectedLoadedRows as unknown as Record<string, unknown>[],
-                      "orders-queue",
-                      QUEUE_COPY_FIELDS
-                    )
-                    if (!content) {
-                      toast.error("Nothing to copy")
-                      return
-                    }
-
+                    const toastId = "copy-queue-selection"
+                    toast.loading("Preparing copy...", { id: toastId })
                     try {
+                      const copySettings = resolveBulkCopySettings("orders-queue", QUEUE_COPY_FIELDS)
+                      const rowsToCopy = selection.mode === "filter"
+                        ? null
+                        : selectedIds.length === selectedLoadedRows.length
+                          ? selectedLoadedRows
+                          : await fetchOrdersByIds(selectedIds)
+                      const content = selection.mode === "filter"
+                        ? (await queueInfiniteScroll.exportByScope!({
+                          scope: selection.scope,
+                          excludedIds: selection.excludedIds,
+                          excludedScopes: selection.excludedScopes,
+                          ...copySettings,
+                        })).content
+                        : buildBulkCopyText(rowsToCopy as unknown as Record<string, unknown>[], "orders-queue", QUEUE_COPY_FIELDS)
+                      if (!content) {
+                        toast.error("Nothing to copy", { id: toastId })
+                        return
+                      }
+
                       await navigator.clipboard.writeText(content)
-                      toast.success(`Copied ${selectedLoadedRows.length.toLocaleString()} rows`)
-                    } catch {
-                      toast.error("Could not copy to clipboard")
+                      const copiedCount = selection.mode === "filter"
+                        ? Math.max(
+                            0,
+                            selection.total
+                              - selection.excludedIds.length
+                              - (selection.excludedScopes ?? []).reduce((sum, excluded) => sum + excluded.total, 0)
+                          )
+                        : (rowsToCopy?.length ?? 0)
+                      toast.success(`Copied ${copiedCount.toLocaleString()} rows`, { id: toastId })
+                    } catch (error) {
+                      toast.error(error instanceof Error ? error.message : "Could not copy to clipboard", { id: toastId })
                     }
                   }}
                 >

@@ -47,7 +47,7 @@ describe("useInfiniteSelection", () => {
     rerender({ filters: processingFilter, total: 9, ids: ["b", "c"], rows: undefined })
 
     expect(result.current.selectedCount).toBe(50)
-    expect(result.current.displaySelectedCount).toBe(2)
+    expect(result.current.displaySelectedCount).toBe(9)
     expect(result.current.visibleSelectedIds).toEqual(["b", "c"])
     expect(result.current.rowSelection).toEqual({ b: true, c: true })
 
@@ -66,7 +66,7 @@ describe("useInfiniteSelection", () => {
     })
 
     expect(result.current.selectedCount).toBe(9)
-    expect(result.current.displaySelectedCount).toBe(2)
+    expect(result.current.displaySelectedCount).toBe(9)
     expect(result.current.visibleSelectedIds).toEqual(["b", "c"])
 
     rerender({ filters: emptyFilters, total: 50, ids: ["a", "b", "c", "d"], rows: undefined })

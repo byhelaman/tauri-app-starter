@@ -20,6 +20,7 @@ CREATE OR REPLACE FUNCTION public.get_orders(
     p_search     TEXT     DEFAULT '',
     p_status     TEXT[]   DEFAULT NULL,
     p_channel    TEXT[]   DEFAULT NULL,
+    p_priority   TEXT[]   DEFAULT NULL,
     p_date       DATE     DEFAULT NULL,
     p_start_hour TEXT[]   DEFAULT NULL,
     p_sort_col   TEXT     DEFAULT NULL,
@@ -95,9 +96,10 @@ BEGIN
                 ))
                 AND ($2 IS NULL OR array_length($2, 1) IS NULL OR o.status  = ANY($2))
                 AND ($3 IS NULL OR array_length($3, 1) IS NULL OR o.channel = ANY($3))
-                AND ($4 IS NULL OR o.date = $4)
-                AND ($5 IS NULL OR array_length($5, 1) IS NULL
-                    OR EXTRACT(HOUR FROM o.start_time)::INT = ANY($5))
+                AND ($4 IS NULL OR array_length($4, 1) IS NULL OR o.priority = ANY($4))
+                AND ($5 IS NULL OR o.date = $5)
+                AND ($6 IS NULL OR array_length($6, 1) IS NULL
+                    OR EXTRACT(HOUR FROM o.start_time)::INT = ANY($6))
         )
         SELECT
             (SELECT COUNT(*) FROM filtered),
@@ -124,13 +126,13 @@ BEGIN
                         created_at
                     FROM filtered
                     ORDER BY %I %s NULLS LAST, created_at DESC, id DESC
-                    LIMIT $6 OFFSET $7
+                    LIMIT $7 OFFSET $8
                 ) r
             )
     $query$, v_sort_c, v_sort_d, v_sort_c, v_sort_d);
 
     EXECUTE v_sql
-    USING p_search, p_status, p_channel, p_date, v_hours, v_limit, v_offset
+    USING p_search, p_status, p_channel, p_priority, p_date, v_hours, v_limit, v_offset
     INTO v_total, v_data;
 
     RETURN json_build_object(
@@ -284,6 +286,7 @@ DECLARE
     v_search     TEXT := COALESCE(p_scope ->> 'search', '');
     v_status     TEXT[];
     v_channel    TEXT[];
+    v_priority   TEXT[];
     v_date       DATE;
     v_start_hour INT[];
 BEGIN
@@ -294,6 +297,10 @@ BEGIN
     SELECT array_agg(value)
     INTO v_channel
     FROM jsonb_array_elements_text(COALESCE(p_scope -> 'channel', '[]'::JSONB)) AS value;
+
+    SELECT array_agg(value)
+    INTO v_priority
+    FROM jsonb_array_elements_text(COALESCE(p_scope -> 'priority', '[]'::JSONB)) AS value;
 
     IF NULLIF(p_scope ->> 'date', '') IS NOT NULL THEN
         v_date := (p_scope ->> 'date')::DATE;
@@ -312,6 +319,7 @@ BEGIN
         ))
         AND (v_status IS NULL     OR array_length(v_status, 1) IS NULL     OR p_order.status = ANY(v_status))
         AND (v_channel IS NULL    OR array_length(v_channel, 1) IS NULL    OR p_order.channel = ANY(v_channel))
+        AND (v_priority IS NULL   OR array_length(v_priority, 1) IS NULL   OR p_order.priority = ANY(v_priority))
         AND (v_date IS NULL       OR p_order.date = v_date)
         AND (v_start_hour IS NULL OR array_length(v_start_hour, 1) IS NULL
             OR EXTRACT(HOUR FROM p_order.start_time)::INT = ANY(v_start_hour));
@@ -325,6 +333,7 @@ CREATE OR REPLACE FUNCTION public.get_orders_by_filter(
     p_search       TEXT    DEFAULT '',
     p_status       TEXT[]  DEFAULT NULL,
     p_channel      TEXT[]  DEFAULT NULL,
+    p_priority     TEXT[]  DEFAULT NULL,
     p_date         DATE    DEFAULT NULL,
     p_start_hour   TEXT[]  DEFAULT NULL,
     p_excluded_ids UUID[]  DEFAULT ARRAY[]::UUID[],
@@ -403,13 +412,14 @@ BEGIN
                 ))
                 AND ($2 IS NULL OR array_length($2, 1) IS NULL OR o.status  = ANY($2))
                 AND ($3 IS NULL OR array_length($3, 1) IS NULL OR o.channel = ANY($3))
-                AND ($4 IS NULL OR o.date = $4)
-                AND ($5 IS NULL OR array_length($5, 1) IS NULL
-                    OR EXTRACT(HOUR FROM o.start_time)::INT = ANY($5))
-                AND (array_length($6, 1) IS NULL OR o.id != ALL($6))
+                AND ($4 IS NULL OR array_length($4, 1) IS NULL OR o.priority = ANY($4))
+                AND ($5 IS NULL OR o.date = $5)
+                AND ($6 IS NULL OR array_length($6, 1) IS NULL
+                    OR EXTRACT(HOUR FROM o.start_time)::INT = ANY($6))
+                AND (array_length($7, 1) IS NULL OR o.id != ALL($7))
                 AND NOT EXISTS (
                     SELECT 1
-                    FROM jsonb_array_elements(COALESCE($7, '[]'::JSONB)) AS excluded(scope)
+                    FROM jsonb_array_elements(COALESCE($8, '[]'::JSONB)) AS excluded(scope)
                     WHERE public.order_matches_filter_scope(o, excluded.scope)
                 )
         )
@@ -435,12 +445,12 @@ BEGIN
                 created_at
             FROM filtered
             ORDER BY %I %s NULLS LAST, created_at DESC, id DESC
-            LIMIT $8 OFFSET $9
+            LIMIT $9 OFFSET $10
         ) r
     $query$, v_sort_c, v_sort_d, v_sort_c, v_sort_d);
 
     EXECUTE v_sql
-    USING p_search, p_status, p_channel, p_date, v_hours, p_excluded_ids, p_excluded_scopes, v_limit, v_offset
+    USING p_search, p_status, p_channel, p_priority, p_date, v_hours, p_excluded_ids, p_excluded_scopes, v_limit, v_offset
     INTO v_data;
 
     RETURN v_data;
@@ -454,6 +464,7 @@ CREATE OR REPLACE FUNCTION public.bulk_delete_orders_by_filter(
     p_search       TEXT    DEFAULT '',
     p_status       TEXT[]  DEFAULT NULL,
     p_channel      TEXT[]  DEFAULT NULL,
+    p_priority     TEXT[]  DEFAULT NULL,
     p_date         DATE    DEFAULT NULL,
     p_start_hour   TEXT[]  DEFAULT NULL,
     p_excluded_ids UUID[]  DEFAULT ARRAY[]::UUID[],
@@ -494,6 +505,7 @@ BEGIN
         ))
         AND (p_status IS NULL      OR array_length(p_status, 1) IS NULL      OR o.status = ANY(p_status))
         AND (p_channel IS NULL     OR array_length(p_channel, 1) IS NULL     OR o.channel = ANY(p_channel))
+        AND (p_priority IS NULL    OR array_length(p_priority, 1) IS NULL    OR o.priority = ANY(p_priority))
         AND (p_date IS NULL        OR o.date = p_date)
         AND (v_hours IS NULL       OR array_length(v_hours, 1) IS NULL
             OR EXTRACT(HOUR FROM o.start_time)::INT = ANY(v_hours))
@@ -529,6 +541,7 @@ BEGIN
                 'rowCount', v_count,
                 'search', p_search,
                 'status', p_status,
+                'priority', p_priority,
                 'excludedIds', p_excluded_ids,
                 'excludedScopes', p_excluded_scopes
             )
@@ -670,6 +683,7 @@ CREATE OR REPLACE FUNCTION public.export_orders_by_filter(
     p_search       TEXT    DEFAULT '',
     p_status       TEXT[]  DEFAULT NULL,
     p_channel      TEXT[]  DEFAULT NULL,
+    p_priority     TEXT[]  DEFAULT NULL,
     p_date         DATE    DEFAULT NULL,
     p_start_hour   TEXT[]  DEFAULT NULL,
     p_excluded_ids UUID[]  DEFAULT ARRAY[]::UUID[],
@@ -762,6 +776,7 @@ BEGIN
         ))
         AND (p_status IS NULL OR array_length(p_status, 1) IS NULL OR o.status = ANY(p_status))
         AND (p_channel IS NULL OR array_length(p_channel, 1) IS NULL OR o.channel = ANY(p_channel))
+        AND (p_priority IS NULL OR array_length(p_priority, 1) IS NULL OR o.priority = ANY(p_priority))
         AND (p_date IS NULL OR o.date = p_date)
         AND (v_hours IS NULL OR array_length(v_hours, 1) IS NULL OR EXTRACT(HOUR FROM o.start_time)::INT = ANY(v_hours))
         AND (array_length(p_excluded_ids, 1) IS NULL OR o.id != ALL(p_excluded_ids))
@@ -788,12 +803,13 @@ BEGIN
                 ))
                 AND ($2 IS NULL OR array_length($2, 1) IS NULL OR o.status = ANY($2))
                 AND ($3 IS NULL OR array_length($3, 1) IS NULL OR o.channel = ANY($3))
-                AND ($4 IS NULL OR o.date = $4)
-                AND ($5 IS NULL OR array_length($5, 1) IS NULL OR EXTRACT(HOUR FROM o.start_time)::INT = ANY($5))
-                AND (array_length($6, 1) IS NULL OR o.id != ALL($6))
+                AND ($4 IS NULL OR array_length($4, 1) IS NULL OR o.priority = ANY($4))
+                AND ($5 IS NULL OR o.date = $5)
+                AND ($6 IS NULL OR array_length($6, 1) IS NULL OR EXTRACT(HOUR FROM o.start_time)::INT = ANY($6))
+                AND (array_length($7, 1) IS NULL OR o.id != ALL($7))
                 AND NOT EXISTS (
                     SELECT 1
-                    FROM jsonb_array_elements(COALESCE($7, '[]'::JSONB)) AS excluded(scope)
+                    FROM jsonb_array_elements(COALESCE($8, '[]'::JSONB)) AS excluded(scope)
                     WHERE public.order_matches_filter_scope(o, excluded.scope)
                 )
         ),
@@ -810,14 +826,14 @@ BEGIN
                    o.id,
                    string_agg(
                        CASE
-                           WHEN $10 = 'custom' THEN public.render_order_template($12, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority, o.created_at)
-                           WHEN $10 = 'csv' THEN public.text_csv_escape(public.order_export_value(f.field, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority, o.created_at))
+                           WHEN $11 = 'custom' THEN public.render_order_template($13, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority, o.created_at)
+                           WHEN $11 = 'csv' THEN public.text_csv_escape(public.order_export_value(f.field, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority, o.created_at))
                            ELSE COALESCE(replace(public.order_export_value(f.field, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority, o.created_at), E'\t', ' '), '')
                        END,
-                       $9 ORDER BY f.ordinality
+                       $10 ORDER BY f.ordinality
                    ) AS line
             FROM ordered o
-            CROSS JOIN unnest(CASE WHEN $10 = 'custom' THEN ARRAY['id'] ELSE $8 END::text[]) WITH ORDINALITY AS f(field, ordinality)
+            CROSS JOIN unnest(CASE WHEN $11 = 'custom' THEN ARRAY['id'] ELSE $9 END::text[]) WITH ORDINALITY AS f(field, ordinality)
             GROUP BY o.rn, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time,
                      o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment,
                      o.priority, o.created_at
@@ -825,35 +841,35 @@ BEGIN
         SELECT
             (SELECT COUNT(*) FROM ordered),
             CASE
-                WHEN $10 = 'json' THEN (
+                WHEN $11 = 'json' THEN (
                     SELECT COALESCE(jsonb_agg(obj ORDER BY rn)::text, '[]')
                     FROM (
                         SELECT o.rn,
                                jsonb_object_agg(f.field, public.order_export_value(f.field, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority, o.created_at) ORDER BY f.ordinality) AS obj
                         FROM ordered o
-                        CROSS JOIN unnest($8::text[]) WITH ORDINALITY AS f(field, ordinality)
+                        CROSS JOIN unnest($9::text[]) WITH ORDINALITY AS f(field, ordinality)
                         GROUP BY o.rn, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time,
                                  o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment,
                                  o.priority, o.created_at
                     ) j
                 )
-                WHEN $10 = 'md' THEN (
-                    '| ' || array_to_string($8, ' | ') || ' |' || E'\n' ||
-                    '| ' || array_to_string(ARRAY(SELECT '---' FROM unnest($8)), ' | ') || ' |' || E'\n' ||
-                    COALESCE((SELECT string_agg('| ' || replace(line, $9, ' | ') || ' |', E'\n' ORDER BY rn) FROM row_lines), '')
+                WHEN $11 = 'md' THEN (
+                    '| ' || array_to_string($9, ' | ') || ' |' || E'\n' ||
+                    '| ' || array_to_string(ARRAY(SELECT '---' FROM unnest($9)), ' | ') || ' |' || E'\n' ||
+                    COALESCE((SELECT string_agg('| ' || replace(line, $10, ' | ') || ' |', E'\n' ORDER BY rn) FROM row_lines), '')
                 )
-                WHEN $10 = 'custom' THEN (
+                WHEN $11 = 'custom' THEN (
                     COALESCE((SELECT string_agg(line, E'\n' ORDER BY rn) FROM row_lines), '')
                 )
                 ELSE (
-                    CASE WHEN $10 IN ('csv','tsv') AND $11 THEN array_to_string($8, $9) || E'\n' ELSE '' END ||
+                    CASE WHEN $11 IN ('csv','tsv') AND $12 THEN array_to_string($9, $10) || E'\n' ELSE '' END ||
                     COALESCE((SELECT string_agg(line, E'\n' ORDER BY rn) FROM row_lines), '')
                 )
             END
     $query$, v_sort_c, v_sort_d);
 
     EXECUTE v_sql
-    USING p_search, p_status, p_channel, p_date, v_hours, p_excluded_ids, p_excluded_scopes, v_fields, v_delim, v_format, p_headers, p_template
+    USING p_search, p_status, p_channel, p_priority, p_date, v_hours, p_excluded_ids, p_excluded_scopes, v_fields, v_delim, v_format, p_headers, p_template
     INTO v_count, v_content;
 
     RETURN json_build_object('content', COALESCE(v_content, ''), 'row_count', COALESCE(v_count, 0));
@@ -961,14 +977,14 @@ $$;
 -- 2. GRANTS
 -- ============================================================
 
-GRANT EXECUTE ON FUNCTION public.get_orders(INT,INT,TEXT,TEXT[],TEXT[],DATE,TEXT[],TEXT,TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_orders(INT,INT,TEXT,TEXT[],TEXT[],TEXT[],DATE,TEXT[],TEXT,TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_stats()                         TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_order_history(INT,INT)                 TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_start_hours()                   TO authenticated;
 REVOKE ALL ON FUNCTION public.record_order_history(TEXT,TEXT,UUID,JSONB) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.order_matches_filter_scope(public.orders,JSONB) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.get_orders_by_filter(TEXT,TEXT[],TEXT[],DATE,TEXT[],UUID[],JSONB,TEXT,TEXT,INT,INT) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.export_orders_by_filter(TEXT,TEXT[],TEXT[],DATE,TEXT[],UUID[],JSONB,TEXT,TEXT,TEXT,TEXT[],BOOLEAN,TEXT) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_filter(TEXT,TEXT[],TEXT[],DATE,TEXT[],UUID[],JSONB,INT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_orders_by_filter(TEXT,TEXT[],TEXT[],TEXT[],DATE,TEXT[],UUID[],JSONB,TEXT,TEXT,INT,INT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.export_orders_by_filter(TEXT,TEXT[],TEXT[],TEXT[],DATE,TEXT[],UUID[],JSONB,TEXT,TEXT,TEXT,TEXT[],BOOLEAN,TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_filter(TEXT,TEXT[],TEXT[],TEXT[],DATE,TEXT[],UUID[],JSONB,INT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_by_ids(UUID[])                  TO authenticated;
 GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_ids(UUID[])          TO authenticated;

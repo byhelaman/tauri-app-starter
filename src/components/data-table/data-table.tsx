@@ -174,6 +174,7 @@ export function DataTable<TData, TValue>({
     selectionState,
     selectedCount,
     displaySelectedCount,
+    currentScopeSelectedCount,
     selectAll,
     deselectAll,
     isSelectingAll,
@@ -282,6 +283,7 @@ export function DataTable<TData, TValue>({
     meta.selectionState = selectionState
     meta.selectedCount = selectedCount
     meta.displaySelectedCount = displaySelectedCount
+    meta.currentScopeSelectedCount = currentScopeSelectedCount
     meta.totalRowCount = totalRows
     meta.refreshSorting = onSortingRefresh
     meta.selectAll = selectAll
@@ -522,10 +524,13 @@ export function DataTable<TData, TValue>({
           <div className="flex items-center gap-3 rounded-lg border bg-background p-2 shadow-lg">
             {(() => {
               const selectedLoadedRows = table.getFilteredSelectedRowModel().rows
-              const displayCount = selectedCount.toLocaleString()
+              const displayCount = displaySelectedCount.toLocaleString()
+              const selectedLabel = displaySelectedCount !== selectedCount
+                ? `${displayCount} of ${selectedCount.toLocaleString()} selected`
+                : `${displayCount} selected`
               return (
                 <>
-                  <span className="pl-2 text-sm">{displayCount} selected</span>
+                  <span className="pl-2 text-sm">{selectedLabel}</span>
                   {bulkActions && (
                     <>
                       <div className="h-4 w-px bg-border" />

@@ -30,6 +30,14 @@ function scopeKey(scope: DataTableSelectionScope): string {
   })
 }
 
+function scopeMembershipKey(scope: DataTableSelectionScope): string {
+  return JSON.stringify({
+    search: scope.search || "",
+    filters: normalizeFilters(scope.filters),
+    date: scope.date ?? null,
+  })
+}
+
 function scopeHasConstraints(scope: DataTableSelectionScope): boolean {
   return Boolean(scope.search?.trim() || scope.date || normalizeFilters(scope.filters).length > 0)
 }
@@ -48,7 +56,7 @@ function uniqueScopes(scopes: DataTableExcludedSelectionScope[]): DataTableExclu
   const seen = new Set<string>()
   const result: DataTableExcludedSelectionScope[] = []
   for (const excluded of scopes) {
-    const key = scopeKey(excluded.scope)
+    const key = scopeMembershipKey(excluded.scope)
     if (seen.has(key)) continue
     seen.add(key)
     result.push(excluded)
@@ -57,8 +65,33 @@ function uniqueScopes(scopes: DataTableExcludedSelectionScope[]): DataTableExclu
 }
 
 function scopeIsExcluded(scope: DataTableSelectionScope, excludedScopes: DataTableExcludedSelectionScope[] = []): boolean {
-  const key = scopeKey(scope)
-  return excludedScopes.some((excluded) => scopeKey(excluded.scope) === key)
+  return excludedScopes.some((excluded) => scopeCoversScope(excluded.scope, scope))
+}
+
+function scopeCoversScope(baseScope: DataTableSelectionScope, targetScope: DataTableSelectionScope): boolean {
+  if (baseScope.search?.trim()) {
+    if ((baseScope.search || "").trim() !== (targetScope.search || "").trim()) return false
+  }
+
+  if (baseScope.date && baseScope.date !== targetScope.date) return false
+
+  const targetFilters = new Map(
+    normalizeFilters(targetScope.filters).map((filter) => [
+      filter.id,
+      Array.isArray(filter.value) ? filter.value.map(String) : [],
+    ])
+  )
+
+  for (const filter of normalizeFilters(baseScope.filters)) {
+    const baseValues = Array.isArray(filter.value) ? filter.value.map(String) : []
+    if (baseValues.length === 0) continue
+
+    const targetValues = targetFilters.get(filter.id)
+    if (!targetValues || targetValues.length === 0) return false
+    if (targetValues.some((value) => !baseValues.includes(value))) return false
+  }
+
+  return true
 }
 
 function rowMatchesScope(row: Record<string, unknown> | undefined, scope: DataTableSelectionScope): boolean {
@@ -121,7 +154,7 @@ export function useInfiniteSelection({
 
   const filterScopeIsCurrent = selectionState.mode === "filter" && scopeKey(selectionState.scope) === currentScopeKey
   const filterScopeCoversCurrentRows = selectionState.mode === "filter" && (
-    filterScopeIsCurrent || !scopeHasConstraints(selectionState.scope)
+    filterScopeIsCurrent || scopeCoversScope(selectionState.scope, currentScope)
   )
   const currentScopeIsExcluded = selectionState.mode === "filter" && scopeIsExcluded(currentScope, selectionState.excludedScopes)
   const currentScopeIsConstrained = scopeHasConstraints(currentScope)
@@ -254,9 +287,30 @@ export function useInfiniteSelection({
   }, [currentScopeIsExcluded, filterScopeCoversCurrentRows, loadedRowIds, loadedRowsById, materializedSelectedIds, selectionState])
 
   const totalSelectedCount = selectedCount(selectionState)
-  const displaySelectedCount = selectionState.mode === "filter" && currentScopeIsConstrained
-    ? visibleSelectedIds.length
-    : totalSelectedCount
+  const currentScopeSelectedCount = useMemo(() => {
+    if (selectionState.mode === "ids") {
+      const selected = new Set(selectionState.ids)
+      return loadedRowIds.filter((id) => selected.has(id)).length
+    }
+    if (currentScopeIsExcluded) return 0
+
+    const selectedScopeCoversCurrent = scopeCoversScope(selectionState.scope, currentScope)
+    const currentScopeCoversSelected = scopeCoversScope(currentScope, selectionState.scope)
+
+    if (selectedScopeCoversCurrent) {
+      const excludedIdsInCurrentScope = selectionState.excludedIds.filter((id) => rowMatchesScope(loadedRowsById[id], currentScope)).length
+      const excludedScopesInCurrentScope = (selectionState.excludedScopes ?? [])
+        .filter((excluded) => scopeCoversScope(currentScope, excluded.scope))
+        .reduce((sum, excluded) => sum + excluded.total, 0)
+      return Math.max(0, totalRowCount - excludedIdsInCurrentScope - excludedScopesInCurrentScope)
+    }
+
+    if (currentScopeCoversSelected) return totalSelectedCount
+
+    return visibleSelectedIds.length
+  }, [currentScope, currentScopeIsExcluded, loadedRowIds, loadedRowsById, selectionState, totalRowCount, totalSelectedCount, visibleSelectedIds.length])
+
+  const displaySelectedCount = currentScopeIsConstrained ? currentScopeSelectedCount : totalSelectedCount
 
   return {
     rowSelection,
@@ -266,6 +320,7 @@ export function useInfiniteSelection({
     selectionState,
     selectedCount: totalSelectedCount,
     displaySelectedCount,
+    currentScopeSelectedCount,
     visibleSelectedIds,
     selectAll,
     deselectAll,
