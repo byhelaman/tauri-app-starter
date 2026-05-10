@@ -240,7 +240,7 @@ export function DataTable<TData, TValue>({
     autoResetPageIndex: false,
     autoResetAll: false,
     manualPagination,
-    manualFiltering: !!manualPagination,
+    manualFiltering: !!infiniteScroll || !!manualPagination,
     manualSorting: !!infiniteScroll,
     pageCount,
     rowCount,

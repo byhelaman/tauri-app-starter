@@ -10,6 +10,11 @@ const processingOnlineFilter: ColumnFiltersState = [
   { id: "status", value: ["processing"] },
   { id: "channel", value: ["Online"] },
 ]
+const processingOnlineHourFilter: ColumnFiltersState = [
+  { id: "status", value: ["processing"] },
+  { id: "channel", value: ["Online"] },
+  { id: "time", value: ["10"] },
+]
 
 function renderSelection({
   filters = emptyFilters,
@@ -444,5 +449,48 @@ describe("useInfiniteSelection", () => {
       mode: "filter",
       excludedIds: ["c"],
     })
+  })
+
+  it("allows deselect-all on a narrower interval scope after excluding status and re-including channel", async () => {
+    const rows = {
+      a: { id: "a", status: "pending", channel: "Retail", start_time: "09:00" },
+      b: { id: "b", status: "processing", channel: "Retail", start_time: "10:00" },
+      c: { id: "c", status: "processing", channel: "Online", start_time: "10:30" },
+      d: { id: "d", status: "processing", channel: "Online", start_time: "11:00" },
+    }
+    const { result, rerender } = renderSelection({ total: 50, ids: ["a", "b", "c", "d"], rows })
+
+    await act(async () => {
+      await result.current.selectAll()
+    })
+
+    rerender({ filters: processingFilter, total: 9, ids: ["b", "c", "d"], rows })
+
+    await act(async () => {
+      await result.current.deselectAll()
+    })
+
+    rerender({ filters: processingOnlineFilter, total: 4, ids: ["c", "d"], rows })
+
+    await act(async () => {
+      await result.current.selectAll()
+    })
+
+    expect(result.current.selectedCount).toBe(45)
+    expect(result.current.rowSelection).toEqual({ c: true, d: true })
+
+    rerender({ filters: processingOnlineHourFilter, total: 1, ids: ["c"], rows })
+
+    expect(result.current.displaySelectedCount).toBe(1)
+    expect(result.current.rowSelection).toEqual({ c: true })
+
+    await act(async () => {
+      await result.current.deselectAll()
+    })
+
+    expect(result.current.selectedCount).toBe(44)
+    expect(result.current.displaySelectedCount).toBe(0)
+    expect(result.current.rowSelection).toEqual({})
+    expect(result.current.visibleSelectedIds).toEqual([])
   })
 })

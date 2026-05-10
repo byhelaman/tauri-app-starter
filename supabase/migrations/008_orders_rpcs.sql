@@ -326,6 +326,61 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.order_filter_scope_covers(
+    p_base JSONB,
+    p_target JSONB
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+STABLE
+SET search_path = ''
+AS $$
+DECLARE
+    v_base_values   TEXT[];
+    v_target_values TEXT[];
+    v_field         TEXT;
+BEGIN
+    IF COALESCE(p_base ->> 'search', '') <> ''
+       AND COALESCE(p_base ->> 'search', '') <> COALESCE(p_target ->> 'search', '') THEN
+        RETURN false;
+    END IF;
+
+    IF NULLIF(p_base ->> 'date', '') IS NOT NULL
+       AND COALESCE(p_base ->> 'date', '') <> COALESCE(p_target ->> 'date', '') THEN
+        RETURN false;
+    END IF;
+
+    FOREACH v_field IN ARRAY ARRAY['status', 'channel', 'priority', 'start_hour']
+    LOOP
+        SELECT array_agg(value)
+        INTO v_base_values
+        FROM jsonb_array_elements_text(COALESCE(p_base -> v_field, '[]'::JSONB)) AS value;
+
+        IF v_base_values IS NULL OR array_length(v_base_values, 1) IS NULL THEN
+            CONTINUE;
+        END IF;
+
+        SELECT array_agg(value)
+        INTO v_target_values
+        FROM jsonb_array_elements_text(COALESCE(p_target -> v_field, '[]'::JSONB)) AS value;
+
+        IF v_target_values IS NULL OR array_length(v_target_values, 1) IS NULL THEN
+            RETURN false;
+        END IF;
+
+        IF EXISTS (
+            SELECT 1
+            FROM unnest(v_target_values) AS target_value
+            WHERE target_value <> ALL(v_base_values)
+        ) THEN
+            RETURN false;
+        END IF;
+    END LOOP;
+
+    RETURN true;
+END;
+$$;
+
 -- ──────────────────────────────────────────────────────────────
 
 -- get_orders_by_filter
@@ -431,15 +486,16 @@ BEGIN
                 AND (array_length($8, 1) IS NULL OR o.id != ALL($8))
                 AND (
                     (array_length($7, 1) IS NOT NULL AND o.id = ANY($7))
-                    OR EXISTS (
-                        SELECT 1
-                        FROM jsonb_array_elements(COALESCE($9, '[]'::JSONB)) AS included(scope)
-                        WHERE public.order_matches_filter_scope(o, included.scope)
-                    )
                     OR NOT EXISTS (
                         SELECT 1
                         FROM jsonb_array_elements(COALESCE($10, '[]'::JSONB)) AS excluded(scope)
                         WHERE public.order_matches_filter_scope(o, excluded.scope)
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM jsonb_array_elements(COALESCE($9, '[]'::JSONB)) AS included(scope)
+                              WHERE public.order_matches_filter_scope(o, included.scope)
+                                AND public.order_filter_scope_covers(excluded.scope, included.scope)
+                          )
                     )
                 )
         )
@@ -544,15 +600,16 @@ BEGIN
         AND (array_length(p_excluded_ids, 1) IS NULL OR o.id != ALL(p_excluded_ids))
         AND (
             (array_length(p_included_ids, 1) IS NOT NULL AND o.id = ANY(p_included_ids))
-            OR EXISTS (
-                SELECT 1
-                FROM jsonb_array_elements(COALESCE(p_included_scopes, '[]'::JSONB)) AS included(scope)
-                WHERE public.order_matches_filter_scope(o, included.scope)
-            )
             OR NOT EXISTS (
                 SELECT 1
                 FROM jsonb_array_elements(COALESCE(p_excluded_scopes, '[]'::JSONB)) AS excluded(scope)
                 WHERE public.order_matches_filter_scope(o, excluded.scope)
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM jsonb_array_elements(COALESCE(p_included_scopes, '[]'::JSONB)) AS included(scope)
+                      WHERE public.order_matches_filter_scope(o, included.scope)
+                        AND public.order_filter_scope_covers(excluded.scope, included.scope)
+                  )
             )
         );
 
@@ -836,15 +893,16 @@ BEGIN
         AND (array_length(p_excluded_ids, 1) IS NULL OR o.id != ALL(p_excluded_ids))
         AND (
             (array_length(p_included_ids, 1) IS NOT NULL AND o.id = ANY(p_included_ids))
-            OR EXISTS (
-                SELECT 1
-                FROM jsonb_array_elements(COALESCE(p_included_scopes, '[]'::JSONB)) AS included(scope)
-                WHERE public.order_matches_filter_scope(o, included.scope)
-            )
             OR NOT EXISTS (
                 SELECT 1
                 FROM jsonb_array_elements(COALESCE(p_excluded_scopes, '[]'::JSONB)) AS excluded(scope)
                 WHERE public.order_matches_filter_scope(o, excluded.scope)
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM jsonb_array_elements(COALESCE(p_included_scopes, '[]'::JSONB)) AS included(scope)
+                      WHERE public.order_matches_filter_scope(o, included.scope)
+                        AND public.order_filter_scope_covers(excluded.scope, included.scope)
+                  )
             )
         );
 
@@ -881,15 +939,16 @@ BEGIN
                 AND (array_length($8, 1) IS NULL OR o.id != ALL($8))
                 AND (
                     (array_length($7, 1) IS NOT NULL AND o.id = ANY($7))
-                    OR EXISTS (
-                        SELECT 1
-                        FROM jsonb_array_elements(COALESCE($9, '[]'::JSONB)) AS included(scope)
-                        WHERE public.order_matches_filter_scope(o, included.scope)
-                    )
                     OR NOT EXISTS (
                         SELECT 1
                         FROM jsonb_array_elements(COALESCE($10, '[]'::JSONB)) AS excluded(scope)
                         WHERE public.order_matches_filter_scope(o, excluded.scope)
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM jsonb_array_elements(COALESCE($9, '[]'::JSONB)) AS included(scope)
+                              WHERE public.order_matches_filter_scope(o, included.scope)
+                                AND public.order_filter_scope_covers(excluded.scope, included.scope)
+                          )
                     )
                 )
         ),
@@ -1063,6 +1122,7 @@ GRANT EXECUTE ON FUNCTION public.get_order_history(INT,INT)                 TO a
 GRANT EXECUTE ON FUNCTION public.get_orders_start_hours()                   TO authenticated;
 REVOKE ALL ON FUNCTION public.record_order_history(TEXT,TEXT,UUID,JSONB) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.order_matches_filter_scope(public.orders,JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.order_filter_scope_covers(JSONB,JSONB) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_by_filter(TEXT,TEXT[],TEXT[],TEXT[],DATE,TEXT[],UUID[],UUID[],JSONB,JSONB,TEXT,TEXT,INT,INT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.export_orders_by_filter(TEXT,TEXT[],TEXT[],TEXT[],DATE,TEXT[],UUID[],UUID[],JSONB,JSONB,TEXT,TEXT,TEXT,TEXT[],BOOLEAN,TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_filter(TEXT,TEXT[],TEXT[],TEXT[],DATE,TEXT[],UUID[],UUID[],JSONB,JSONB,INT) TO authenticated;

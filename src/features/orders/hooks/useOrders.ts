@@ -10,6 +10,52 @@ import type { DataTableSelectionState } from "@/components/data-table/data-table
 /** Número de filas por chunk en modo infinite scroll */
 const ORDER_CHUNK = 1000
 
+function pickFilterValues(filters: ColumnFiltersState, id: string): string[] {
+  const value = filters.find((filter) => filter.id === id)?.value
+  if (Array.isArray(value)) return value.map(String)
+  if (typeof value === "string" && value) return [value]
+  return []
+}
+
+function orderMatchesActiveQuery(order: Order, {
+  filters,
+  search,
+  date,
+}: {
+  filters: ColumnFiltersState
+  search?: string
+  date?: string
+}) {
+  if (date && order.date !== date) return false
+
+  const status = pickFilterValues(filters, "status")
+  if (status.length > 0 && !status.includes(order.status)) return false
+
+  const channel = pickFilterValues(filters, "channel")
+  if (channel.length > 0 && !channel.includes(order.channel)) return false
+
+  const priority = pickFilterValues(filters, "priority")
+  if (priority.length > 0 && !priority.includes(order.priority)) return false
+
+  const hours = pickFilterValues(filters, "time")
+  if (hours.length > 0) {
+    const startHour = String(order.start_time ?? "").split(":")[0]
+    if (!hours.includes(startHour)) return false
+  }
+
+  const query = (search ?? "").trim().toLowerCase()
+  if (query) {
+    const haystack = [order.customer, order.code, order.product]
+      .filter(Boolean)
+      .map(String)
+      .join(" ")
+      .toLowerCase()
+    if (!haystack.includes(query)) return false
+  }
+
+  return true
+}
+
 export function useOrders({
   dateFilter,
   sorting = [],
@@ -68,10 +114,11 @@ export function useOrders({
     enabled,
   })
 
-  // Aplana todas las páginas en un único array para la DataTable
-  const pageData = infiniteData?.pages.flatMap(p => p.data) ?? []
-  // Usa el total de la última página cargada — es el más reciente del servidor
-  const cachedRowCount = infiniteData?.pages[infiniteData.pages.length - 1]?.total ?? 0
+  const pages = infiniteData?.pages
+  // Aplana todas las páginas solo cuando cambia la data del infinite query.
+  const pageData = useMemo(() => pages?.flatMap(p => p.data) ?? [], [pages])
+  // Usa el total de la última página cargada — es el más reciente del servidor.
+  const cachedRowCount = useMemo(() => pages?.[pages.length - 1]?.total ?? 0, [pages])
 
   // TODO: Activar suscripción realtime de órdenes cuando las tablas de Supabase estén listas
 
@@ -91,12 +138,30 @@ export function useOrders({
       // Parche optimista: actualiza la entidad en todas las páginas
       queryClient.setQueryData<InfiniteData<{ data: Order[]; total: number }>>(ordersQueryKey, (old) => {
         if (!old) return old
+        let removedFromResult = false
+        const pages = old.pages.map(page => {
+          const data = page.data.flatMap((order) => {
+            if (order.id !== delta.id) return [order]
+            const nextOrder = { ...order, ...delta }
+            if (orderMatchesActiveQuery(nextOrder, {
+              filters: columnFilters,
+              search: globalFilter,
+              date: dateFilter,
+            })) {
+              return [nextOrder]
+            }
+            removedFromResult = true
+            return []
+          })
+
+          return { ...page, data }
+        })
+
         return {
           ...old,
-          pages: old.pages.map(page => ({
-            ...page,
-            data: page.data.map(o => o.id === delta.id ? { ...o, ...delta } : o)
-          }))
+          pages: removedFromResult
+            ? pages.map(page => ({ ...page, total: Math.max(0, page.total - 1) }))
+            : pages,
         }
       })
       return { previous }
@@ -106,16 +171,16 @@ export function useOrders({
         predicate: (query) =>
           Array.isArray(query.queryKey) &&
           query.queryKey[0] === "orders" &&
-          query.queryKey[1] === "infinite" &&
-          query.queryKey[2] !== queryScope,
+          query.queryKey[1] === "infinite",
       })
       queryClient.invalidateQueries({ queryKey: ["orders", "stats"] })
       queryClient.invalidateQueries({ queryKey: ["orders", "history"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard", "history"] })
     },
-    onError: (_err, _delta, context) => {
+    onError: (error, _delta, context) => {
       if (context?.previous) queryClient.setQueryData(ordersQueryKey, context.previous)
-      toast.error("Failed to update order")
+      console.error("[Orders] Failed to update order", error)
+      toast.error(error instanceof Error ? error.message : "Failed to update order")
     },
   })
 
