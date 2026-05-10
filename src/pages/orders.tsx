@@ -325,6 +325,7 @@ export function OrdersPage() {
                     const exportResult = selection.mode === "filter"
                         ? await infiniteScroll.exportByScope!({
                           scope: selection.scope,
+                          includedIds: selection.includedIds,
                           includedScopes: selection.includedScopes,
                           excludedIds: selection.excludedIds,
                           excludedScopes: selection.excludedScopes,
@@ -434,6 +435,7 @@ export function OrdersPage() {
                       const exportResult = selection.mode === "filter"
                         ? await queueInfiniteScroll.exportByScope!({
                           scope: selection.scope,
+                          includedIds: selection.includedIds,
                           includedScopes: selection.includedScopes,
                           excludedIds: selection.excludedIds,
                           excludedScopes: selection.excludedScopes,

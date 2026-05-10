@@ -69,6 +69,7 @@ export type DataTableSelectionState =
       mode: "filter"
       scope: DataTableSelectionScope
       total: number
+      includedIds?: string[]
       includedScopes?: DataTableIncludedSelectionScope[]
       excludedIds: string[]
       excludedScopes?: DataTableExcludedSelectionScope[]
@@ -78,6 +79,7 @@ export type ServerExportFormat = "csv" | "tsv" | "json" | "md" | "lines" | "cust
 
 export interface ServerScopeExportRequest {
   scope: DataTableSelectionScope
+  includedIds?: string[]
   includedScopes?: DataTableIncludedSelectionScope[]
   excludedIds?: string[]
   excludedScopes?: DataTableExcludedSelectionScope[]

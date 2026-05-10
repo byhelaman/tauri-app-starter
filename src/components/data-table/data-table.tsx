@@ -521,16 +521,19 @@ export function DataTable<TData, TValue>({
 
       {selectedCount > 0 && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">
-          <div className="flex items-center gap-3 rounded-lg border bg-background p-2 shadow-lg">
-            {(() => {
-              const selectedLoadedRows = table.getFilteredSelectedRowModel().rows
-              const currentScopeTotal = infiniteScroll?.totalRowCount ?? table.getFilteredRowModel().rows.length
-              const selectedLabel = displaySelectedCount !== selectedCount
-                ? `${selectedCount.toLocaleString()} selected · ${displaySelectedCount.toLocaleString()} of ${currentScopeTotal.toLocaleString()} in view`
-                : `${selectedCount.toLocaleString()} of ${currentScopeTotal.toLocaleString()} selected`
-              return (
-                <>
-                  <span className="pl-2 text-sm">{selectedLabel}</span>
+          {(() => {
+            const selectedLoadedRows = table.getFilteredSelectedRowModel().rows
+            const currentScopeTotal = infiniteScroll?.totalRowCount ?? table.getFilteredRowModel().rows.length
+            const hasViewSelectionContext = displaySelectedCount !== selectedCount
+            return (
+              <div className="relative">
+                {hasViewSelectionContext && (
+                  <div className="absolute bottom-full left-0 mb-1 rounded-lg border bg-background px-4 py-2 text-sm shadow-lg">
+                    {displaySelectedCount.toLocaleString()} of {currentScopeTotal.toLocaleString()} in view
+                  </div>
+                )}
+                <div className="flex items-center gap-3 rounded-lg border bg-background p-2 shadow-lg">
+                  <span className="pl-2 text-sm">{selectedCount.toLocaleString()} selected</span>
                   {bulkActions && (
                     <>
                       <div className="h-4 w-px bg-border" />
@@ -539,10 +542,10 @@ export function DataTable<TData, TValue>({
                   )}
                   <div className="h-4 w-px bg-border" />
                   <Button variant="ghost" size="icon-sm" onClick={clearSelection}><X /></Button>
-                </>
-              )
-            })()}
-          </div>
+                </div>
+              </div>
+            )
+          })()}
         </div>
       )}
     </div>

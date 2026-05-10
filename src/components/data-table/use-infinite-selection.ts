@@ -48,9 +48,10 @@ function idsToRowSelection(ids: string[]): RowSelectionState {
 
 function selectedCount(selection: DataTableSelectionState): number {
   if (selection.mode === "ids") return selection.ids.length
+  const includedIdTotal = selection.includedIds?.length ?? 0
   const includedScopeTotal = (selection.includedScopes ?? []).reduce((sum, included) => sum + included.total, 0)
   const excludedScopeTotal = (selection.excludedScopes ?? []).reduce((sum, excluded) => sum + excluded.total, 0)
-  return Math.max(0, selection.total + includedScopeTotal - excludedScopeTotal - selection.excludedIds.length)
+  return Math.max(0, selection.total + includedIdTotal + includedScopeTotal - excludedScopeTotal - selection.excludedIds.length)
 }
 
 function uniqueScopes<TScope extends DataTableExcludedSelectionScope | DataTableIncludedSelectionScope>(scopes: TScope[]): TScope[] {
@@ -139,6 +140,14 @@ function rowMatchesIncludedScopes(row: Record<string, unknown> | undefined, incl
   return includedScopes.some((included) => rowMatchesScope(row, included.scope))
 }
 
+function idsIncludedByExplicitSelection(
+  ids: string[],
+  included: Set<string>,
+  excluded: Set<string>
+): RowSelectionState {
+  return Object.fromEntries(ids.filter((id) => included.has(id) && !excluded.has(id)).map((id) => [id, true]))
+}
+
 export function useInfiniteSelection({
   enabled,
   globalFilter,
@@ -167,6 +176,7 @@ export function useInfiniteSelection({
   )
   const includedScopeCoversCurrentRows = selectionState.mode === "filter" && scopeIsIncluded(currentScope, selectionState.includedScopes)
   const currentScopeIsExcluded = selectionState.mode === "filter" && scopeIsExcluded(currentScope, selectionState.excludedScopes)
+  const currentScopeIsOnlyExcluded = currentScopeIsExcluded && !includedScopeCoversCurrentRows
   const currentScopeIsConstrained = scopeHasConstraints(currentScope)
 
   useEffect(() => {
@@ -193,13 +203,15 @@ export function useInfiniteSelection({
     }
 
     const excluded = new Set(selectionState.excludedIds)
-    if (currentScopeIsExcluded) return {}
+    const included = new Set(selectionState.includedIds ?? [])
+    if (currentScopeIsOnlyExcluded) return idsIncludedByExplicitSelection(loadedRowIds, included, excluded)
 
     if (!filterScopeCoversCurrentRows && !includedScopeCoversCurrentRows) {
       return Object.fromEntries(
         loadedRowIds
-          .filter((id) => materializedSelectedIds.includes(id) && !excluded.has(id))
-          .filter((id) => !loadedRowsById[id] || rowMatchesScope(loadedRowsById[id], selectionState.scope) || rowMatchesIncludedScopes(loadedRowsById[id], selectionState.includedScopes))
+          .filter((id) => !excluded.has(id))
+          .filter((id) => included.has(id) || materializedSelectedIds.includes(id))
+          .filter((id) => included.has(id) || !loadedRowsById[id] || rowMatchesScope(loadedRowsById[id], selectionState.scope) || rowMatchesIncludedScopes(loadedRowsById[id], selectionState.includedScopes))
           .filter((id) => !rowMatchesExcludedScopes(loadedRowsById[id], selectionState.excludedScopes))
           .map((id) => [id, true])
       )
@@ -208,10 +220,10 @@ export function useInfiniteSelection({
     return Object.fromEntries(
       loadedRowIds
         .filter((id) => !excluded.has(id))
-        .filter((id) => !rowMatchesExcludedScopes(loadedRowsById[id], selectionState.excludedScopes))
+        .filter((id) => included.has(id) || rowMatchesIncludedScopes(loadedRowsById[id], selectionState.includedScopes) || !rowMatchesExcludedScopes(loadedRowsById[id], selectionState.excludedScopes))
         .map((id) => [id, true])
     )
-  }, [currentScopeIsExcluded, enabled, filterScopeCoversCurrentRows, includedScopeCoversCurrentRows, loadedRowIds, loadedRowsById, materializedSelectedIds, selectionState])
+  }, [currentScopeIsOnlyExcluded, enabled, filterScopeCoversCurrentRows, includedScopeCoversCurrentRows, loadedRowIds, loadedRowsById, materializedSelectedIds, selectionState])
 
   const clearSelection = useCallback(() => {
     setMaterializedSelectedIds([])
@@ -227,6 +239,7 @@ export function useInfiniteSelection({
           mode: "filter",
           scope: currentScope,
           total: totalRowCount,
+          includedIds: previous.ids.filter((id) => !loadedRowIds.includes(id)),
           excludedIds: [],
           excludedScopes: [],
         }
@@ -238,6 +251,9 @@ export function useInfiniteSelection({
           scope: currentScope,
           total: totalRowCount,
           includedScopes: (previous.includedScopes ?? []).filter((included) => !scopeCoversScope(currentScope, included.scope)),
+          includedIds: scopeHasConstraints(currentScope)
+            ? (previous.includedIds ?? []).filter((id) => !loadedRowIds.includes(id))
+            : [],
           excludedIds: scopeHasConstraints(currentScope)
             ? previous.excludedIds.filter((id) => !loadedRowIds.includes(id))
             : [],
@@ -246,15 +262,27 @@ export function useInfiniteSelection({
       }
 
       if (scopeCoversScope(previous.scope, currentScope) || scopeIsIncluded(currentScope, previous.includedScopes)) {
+        const currentCoversExcludedScope = (previous.excludedScopes ?? []).some((excluded) => scopeCoversScope(currentScope, excluded.scope))
+        const shouldIncludeCurrentScope = scopeIsExcluded(currentScope, previous.excludedScopes) && !currentCoversExcludedScope
         return {
           ...previous,
+          includedScopes: shouldIncludeCurrentScope
+            ? uniqueScopes([
+              ...(previous.includedScopes ?? []).filter((included) => !scopeCoversScope(currentScope, included.scope)),
+              { scope: currentScope, total: totalRowCount },
+            ])
+            : previous.includedScopes,
+          includedIds: (previous.includedIds ?? []).filter((id) => !loadedRowIds.includes(id)),
           excludedIds: previous.excludedIds.filter((id) => !loadedRowIds.includes(id)),
-          excludedScopes: (previous.excludedScopes ?? []).filter((excluded) => !scopeCoversScope(currentScope, excluded.scope)),
+          excludedScopes: shouldIncludeCurrentScope
+            ? previous.excludedScopes
+            : (previous.excludedScopes ?? []).filter((excluded) => !scopeCoversScope(currentScope, excluded.scope)),
         }
       }
 
       return {
         ...previous,
+        includedIds: (previous.includedIds ?? []).filter((id) => !loadedRowIds.includes(id)),
         includedScopes: uniqueScopes([
           ...(previous.includedScopes ?? []).filter((included) => !scopeCoversScope(currentScope, included.scope)),
           { scope: currentScope, total: totalRowCount },
@@ -275,16 +303,20 @@ export function useInfiniteSelection({
         return { mode: "ids", ids: [] }
       }
 
+      const remainingExcludedScopes = (previous.excludedScopes ?? []).filter((excluded) => !scopeCoversScope(currentScope, excluded.scope))
+      const shouldAddExcludedScope = !scopeIsExcluded(currentScope, remainingExcludedScopes)
+
       return {
         ...previous,
-        excludedScopes: uniqueScopes([
-          ...(previous.excludedScopes ?? []),
-          { scope: currentScope, total: totalRowCount },
-        ]),
+        includedIds: (previous.includedIds ?? []).filter((id) => !loadedRowIds.includes(id)),
+        includedScopes: (previous.includedScopes ?? []).filter((included) => !scopeCoversScope(currentScope, included.scope)),
+        excludedScopes: shouldAddExcludedScope
+          ? uniqueScopes([...remainingExcludedScopes, { scope: currentScope, total: totalRowCount }])
+          : remainingExcludedScopes,
       }
     })
     setIsSelectingAll(false)
-  }, [currentScope, enabled, totalRowCount])
+  }, [currentScope, enabled, loadedRowIds, totalRowCount])
 
   const setRowSelection = useCallback((updater: Updater<RowSelectionState>) => {
     setSelectionState((previous) => {
@@ -292,12 +324,19 @@ export function useInfiniteSelection({
         scopeKey(previous.scope) === currentScopeKey || !scopeHasConstraints(previous.scope)
       )
       const previousIncludedScopeCoversCurrentRows = previous.mode === "filter" && scopeIsIncluded(currentScope, previous.includedScopes)
+      const previousIncludedIds = previous.mode === "filter" ? new Set(previous.includedIds ?? []) : new Set<string>()
+      const previousExcludedIds = previous.mode === "filter" ? new Set(previous.excludedIds) : new Set<string>()
       const previousRows = previous.mode === "filter" && (previousScopeCoversCurrentRows || previousIncludedScopeCoversCurrentRows)
-        ? Object.fromEntries(loadedRowIds.filter((id) => !previous.excludedIds.includes(id)).map((id) => [id, true]))
+        ? Object.fromEntries(loadedRowIds
+          .filter((id) => !previousExcludedIds.has(id))
+          .filter((id) => previousIncludedIds.has(id) || rowMatchesIncludedScopes(loadedRowsById[id], previous.includedScopes) || !rowMatchesExcludedScopes(loadedRowsById[id], previous.excludedScopes))
+          .map((id) => [id, true]))
         : previous.mode === "filter"
           ? Object.fromEntries(loadedRowIds
-            .filter((id) => materializedSelectedIds.includes(id) && !previous.excludedIds.includes(id))
-            .filter((id) => !loadedRowsById[id] || rowMatchesScope(loadedRowsById[id], previous.scope) || rowMatchesIncludedScopes(loadedRowsById[id], previous.includedScopes))
+            .filter((id) => !previousExcludedIds.has(id))
+            .filter((id) => previousIncludedIds.has(id) || (materializedSelectedIds.includes(id)))
+            .filter((id) => previousIncludedIds.has(id) || !loadedRowsById[id] || rowMatchesScope(loadedRowsById[id], previous.scope) || rowMatchesIncludedScopes(loadedRowsById[id], previous.includedScopes))
+            .filter((id) => previousIncludedIds.has(id) || !rowMatchesExcludedScopes(loadedRowsById[id], previous.excludedScopes))
             .map((id) => [id, true]))
         : previous.mode === "ids"
           ? idsToRowSelection(previous.ids)
@@ -306,13 +345,24 @@ export function useInfiniteSelection({
 
       if (previous.mode === "filter") {
         const excluded = new Set(previous.excludedIds)
+        const included = new Set(previous.includedIds ?? [])
         for (const id of loadedRowIds) {
           const wasSelected = !!previousRows[id]
           const isSelected = !!nextRows[id]
-          if (wasSelected && !isSelected) excluded.add(id)
-          if (!wasSelected && isSelected) excluded.delete(id)
+          const row = loadedRowsById[id]
+          const isCoveredBySelectedScope = !row || rowMatchesScope(row, previous.scope) || rowMatchesIncludedScopes(row, previous.includedScopes)
+          const isBlockedByExcludedScope = rowMatchesExcludedScopes(row, previous.excludedScopes)
+          if (wasSelected && !isSelected) {
+            const wasExplicitlyIncluded = included.has(id)
+            if (wasExplicitlyIncluded) included.delete(id)
+            if (isCoveredBySelectedScope && !(wasExplicitlyIncluded && isBlockedByExcludedScope)) excluded.add(id)
+          }
+          if (!wasSelected && isSelected) {
+            if (!isCoveredBySelectedScope || isBlockedByExcludedScope) included.add(id)
+          }
+          if (isSelected) excluded.delete(id)
         }
-        return { ...previous, excludedIds: Array.from(excluded) }
+        return { ...previous, includedIds: Array.from(included), excludedIds: Array.from(excluded) }
       }
 
       return {
@@ -324,17 +374,19 @@ export function useInfiniteSelection({
 
   const visibleSelectedIds = useMemo(() => {
     if (selectionState.mode === "ids") return selectionState.ids
-    if (currentScopeIsExcluded) return []
     const excluded = new Set(selectionState.excludedIds)
+    const included = new Set(selectionState.includedIds ?? [])
+    if (currentScopeIsOnlyExcluded) return loadedRowIds.filter((id) => included.has(id) && !excluded.has(id))
     if (!filterScopeCoversCurrentRows && !includedScopeCoversCurrentRows) {
-      return loadedRowIds.filter((id) => materializedSelectedIds.includes(id) && !excluded.has(id))
-        .filter((id) => !loadedRowsById[id] || rowMatchesScope(loadedRowsById[id], selectionState.scope) || rowMatchesIncludedScopes(loadedRowsById[id], selectionState.includedScopes))
+      return loadedRowIds.filter((id) => !excluded.has(id))
+        .filter((id) => included.has(id) || materializedSelectedIds.includes(id))
+        .filter((id) => included.has(id) || !loadedRowsById[id] || rowMatchesScope(loadedRowsById[id], selectionState.scope) || rowMatchesIncludedScopes(loadedRowsById[id], selectionState.includedScopes))
         .filter((id) => !rowMatchesExcludedScopes(loadedRowsById[id], selectionState.excludedScopes))
     }
     return loadedRowIds
-      .filter((id) => !excluded.has(id))
-      .filter((id) => !rowMatchesExcludedScopes(loadedRowsById[id], selectionState.excludedScopes))
-  }, [currentScopeIsExcluded, filterScopeCoversCurrentRows, includedScopeCoversCurrentRows, loadedRowIds, loadedRowsById, materializedSelectedIds, selectionState])
+      .filter((id) => included.has(id) || !excluded.has(id))
+      .filter((id) => included.has(id) || rowMatchesIncludedScopes(loadedRowsById[id], selectionState.includedScopes) || !rowMatchesExcludedScopes(loadedRowsById[id], selectionState.excludedScopes))
+  }, [currentScopeIsOnlyExcluded, filterScopeCoversCurrentRows, includedScopeCoversCurrentRows, loadedRowIds, loadedRowsById, materializedSelectedIds, selectionState])
 
   const totalSelectedCount = selectedCount(selectionState)
   const currentScopeSelectedCount = useMemo(() => {
@@ -342,7 +394,11 @@ export function useInfiniteSelection({
       const selected = new Set(selectionState.ids)
       return loadedRowIds.filter((id) => selected.has(id)).length
     }
-    if (currentScopeIsExcluded) return 0
+    if (currentScopeIsOnlyExcluded) {
+      const included = new Set(selectionState.includedIds ?? [])
+      const excluded = new Set(selectionState.excludedIds)
+      return loadedRowIds.filter((id) => included.has(id) && !excluded.has(id)).length
+    }
 
     const selectedScopeCoversCurrent = scopeCoversScope(selectionState.scope, currentScope)
     const includedScopeCoversCurrent = scopeIsIncluded(currentScope, selectionState.includedScopes)
@@ -359,7 +415,7 @@ export function useInfiniteSelection({
     if (currentScopeCoversSelected) return totalSelectedCount
 
     return visibleSelectedIds.length
-  }, [currentScope, currentScopeIsExcluded, loadedRowIds, loadedRowsById, selectionState, totalRowCount, totalSelectedCount, visibleSelectedIds.length])
+  }, [currentScope, currentScopeIsOnlyExcluded, loadedRowIds, loadedRowsById, selectionState, totalRowCount, totalSelectedCount, visibleSelectedIds.length])
 
   const displaySelectedCount = currentScopeIsConstrained ? currentScopeSelectedCount : totalSelectedCount
 

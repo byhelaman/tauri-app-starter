@@ -189,7 +189,7 @@ export const bulkDeleteOrders = async (ids: string[]) => {
   if (error) throw new Error(error.message)
 }
 
-function scopeRpcParams(scope: DataTableSelectionScope, excludedIds: string[] = []) {
+function scopeRpcParams(scope: DataTableSelectionScope, excludedIds: string[] = [], includedIds: string[] = []) {
   return {
     p_search:       scope.search || "",
     p_status:       pickFilter(scope.filters, "status"),
@@ -197,6 +197,7 @@ function scopeRpcParams(scope: DataTableSelectionScope, excludedIds: string[] = 
     p_priority:     pickFilter(scope.filters, "priority"),
     p_date:         scope.date ?? null,
     p_start_hour:   pickHourFilter(scope.filters),
+    p_included_ids: includedIds.length > 0 ? includedIds : [],
     p_excluded_ids: excludedIds.length > 0 ? excludedIds : [],
   }
 }
@@ -223,9 +224,9 @@ function includedScopesRpcParam(includedScopes: DataTableIncludedSelectionScope[
   }))
 }
 
-function scopeExportRpcParams(scope: DataTableSelectionScope, excludedIds: string[] = []) {
+function scopeExportRpcParams(scope: DataTableSelectionScope, excludedIds: string[] = [], includedIds: string[] = []) {
   return {
-    ...scopeRpcParams(scope, excludedIds),
+    ...scopeRpcParams(scope, excludedIds, includedIds),
     p_sort_col:     scope.sorting?.[0]?.id ?? null,
     p_sort_dir:     scope.sorting?.[0]?.desc ? "desc" : (scope.sorting?.[0] ? "asc" : null),
   }
@@ -235,14 +236,15 @@ export const bulkDeleteOrdersBySelection = async (selection: DataTableSelectionS
   if (selection.mode === "ids") {
     return bulkDeleteOrders(selection.ids)
   }
+  const includedIdTotal = selection.includedIds?.length ?? 0
   const includedScopeTotal = (selection.includedScopes ?? []).reduce((sum, included) => sum + included.total, 0)
   const excludedScopeTotal = (selection.excludedScopes ?? []).reduce((sum, excluded) => sum + excluded.total, 0)
   const db = assertSupabase()
   const { data, error } = await db.rpc("bulk_delete_orders_by_filter", {
-    ...scopeRpcParams(selection.scope, selection.excludedIds),
+    ...scopeRpcParams(selection.scope, selection.excludedIds, selection.includedIds),
     p_included_scopes: includedScopesRpcParam(selection.includedScopes),
     p_excluded_scopes: excludedScopesRpcParam(selection.excludedScopes),
-    p_expected_count: Math.max(0, selection.total + includedScopeTotal - selection.excludedIds.length - excludedScopeTotal),
+    p_expected_count: Math.max(0, selection.total + includedIdTotal + includedScopeTotal - selection.excludedIds.length - excludedScopeTotal),
   })
   if (error) throw new Error(error.message)
   return (data as number) ?? 0
@@ -250,6 +252,7 @@ export const bulkDeleteOrdersBySelection = async (selection: DataTableSelectionS
 
 export const exportOrdersByScope = async ({
   scope,
+  includedIds = [],
   includedScopes = [],
   excludedIds = [],
   excludedScopes = [],
@@ -259,6 +262,7 @@ export const exportOrdersByScope = async ({
   template,
 }: {
   scope: DataTableSelectionScope
+  includedIds?: string[]
   includedScopes?: DataTableIncludedSelectionScope[]
   excludedIds?: string[]
   excludedScopes?: DataTableExcludedSelectionScope[]
@@ -269,7 +273,7 @@ export const exportOrdersByScope = async ({
 }): Promise<ServerScopeExportResult> => {
   const db = assertSupabase()
   const { data, error } = await db.rpc("export_orders_by_filter", {
-    ...scopeExportRpcParams(scope, excludedIds),
+    ...scopeExportRpcParams(scope, excludedIds, includedIds),
     p_included_scopes: includedScopesRpcParam(includedScopes),
     p_excluded_scopes: excludedScopesRpcParam(excludedScopes),
     p_format: format,
