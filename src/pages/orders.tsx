@@ -322,24 +322,22 @@ export function OrdersPage() {
                         ? selectedLoadedRows
                         : await fetchOrdersByIds(selectedIds)
 
-                    const content = selection.mode === "filter"
-                        ? (await infiniteScroll.exportByScope!({
+                    const exportResult = selection.mode === "filter"
+                        ? await infiniteScroll.exportByScope!({
                           scope: selection.scope,
+                          includedScopes: selection.includedScopes,
                           excludedIds: selection.excludedIds,
                           excludedScopes: selection.excludedScopes,
                           ...copySettings,
-                        })).content
-                      : buildBulkCopyText(rowsToCopy as unknown as Record<string, unknown>[], "orders", ORDER_COPY_FIELDS)
+                        })
+                      : null
+                    const content = exportResult?.content
+                      ?? buildBulkCopyText(rowsToCopy as unknown as Record<string, unknown>[], "orders", ORDER_COPY_FIELDS)
                     if (!content) { toast.error("Nothing to copy", { id: toastId }); return }
                     
                     await navigator.clipboard.writeText(content)
                     const copiedCount = selection.mode === "filter"
-                      ? Math.max(
-                          0,
-                          selection.total
-                            - selection.excludedIds.length
-                            - (selection.excludedScopes ?? []).reduce((sum, excluded) => sum + excluded.total, 0)
-                        )
+                      ? exportResult?.rowCount ?? 0
                       : (rowsToCopy?.length ?? 0)
                     toast.success(`Copied ${copiedCount.toLocaleString()} rows`, { id: toastId })
                   } catch (error) {
@@ -362,6 +360,7 @@ export function OrdersPage() {
                       ? Math.max(
                           0,
                           selection.total
+                            + (selection.includedScopes ?? []).reduce((sum, included) => sum + included.total, 0)
                             - selection.excludedIds.length
                             - (selection.excludedScopes ?? []).reduce((sum, excluded) => sum + excluded.total, 0)
                         )
@@ -432,14 +431,17 @@ export function OrdersPage() {
                         : selectedIds.length === selectedLoadedRows.length
                           ? selectedLoadedRows
                           : await fetchOrdersByIds(selectedIds)
-                      const content = selection.mode === "filter"
-                        ? (await queueInfiniteScroll.exportByScope!({
+                      const exportResult = selection.mode === "filter"
+                        ? await queueInfiniteScroll.exportByScope!({
                           scope: selection.scope,
+                          includedScopes: selection.includedScopes,
                           excludedIds: selection.excludedIds,
                           excludedScopes: selection.excludedScopes,
                           ...copySettings,
-                        })).content
-                        : buildBulkCopyText(rowsToCopy as unknown as Record<string, unknown>[], "orders-queue", QUEUE_COPY_FIELDS)
+                        })
+                        : null
+                      const content = exportResult?.content
+                        ?? buildBulkCopyText(rowsToCopy as unknown as Record<string, unknown>[], "orders-queue", QUEUE_COPY_FIELDS)
                       if (!content) {
                         toast.error("Nothing to copy", { id: toastId })
                         return
@@ -447,12 +449,7 @@ export function OrdersPage() {
 
                       await navigator.clipboard.writeText(content)
                       const copiedCount = selection.mode === "filter"
-                        ? Math.max(
-                            0,
-                            selection.total
-                              - selection.excludedIds.length
-                              - (selection.excludedScopes ?? []).reduce((sum, excluded) => sum + excluded.total, 0)
-                          )
+                        ? exportResult?.rowCount ?? 0
                         : (rowsToCopy?.length ?? 0)
                       toast.success(`Copied ${copiedCount.toLocaleString()} rows`, { id: toastId })
                     } catch (error) {

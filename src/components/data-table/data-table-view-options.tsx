@@ -167,6 +167,7 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
     if (effectiveScope !== "selected" || selection?.mode !== "filter") return null
     return {
       scope: selection.scope,
+      includedScopes: selection.includedScopes,
       excludedIds: selection.excludedIds,
       excludedScopes: selection.excludedScopes,
       format,

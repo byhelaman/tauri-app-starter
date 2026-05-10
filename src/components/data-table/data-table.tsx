@@ -524,10 +524,10 @@ export function DataTable<TData, TValue>({
           <div className="flex items-center gap-3 rounded-lg border bg-background p-2 shadow-lg">
             {(() => {
               const selectedLoadedRows = table.getFilteredSelectedRowModel().rows
-              const displayCount = displaySelectedCount.toLocaleString()
+              const currentScopeTotal = infiniteScroll?.totalRowCount ?? table.getFilteredRowModel().rows.length
               const selectedLabel = displaySelectedCount !== selectedCount
-                ? `${displayCount} of ${selectedCount.toLocaleString()} selected`
-                : `${displayCount} selected`
+                ? `${selectedCount.toLocaleString()} selected · ${displaySelectedCount.toLocaleString()} of ${currentScopeTotal.toLocaleString()} in view`
+                : `${selectedCount.toLocaleString()} of ${currentScopeTotal.toLocaleString()} selected`
               return (
                 <>
                   <span className="pl-2 text-sm">{selectedLabel}</span>

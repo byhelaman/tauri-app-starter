@@ -58,12 +58,18 @@ export interface DataTableExcludedSelectionScope {
   total: number
 }
 
+export interface DataTableIncludedSelectionScope {
+  scope: DataTableSelectionScope
+  total: number
+}
+
 export type DataTableSelectionState =
   | { mode: "ids"; ids: string[] }
   | {
       mode: "filter"
       scope: DataTableSelectionScope
       total: number
+      includedScopes?: DataTableIncludedSelectionScope[]
       excludedIds: string[]
       excludedScopes?: DataTableExcludedSelectionScope[]
     }
@@ -72,6 +78,7 @@ export type ServerExportFormat = "csv" | "tsv" | "json" | "md" | "lines" | "cust
 
 export interface ServerScopeExportRequest {
   scope: DataTableSelectionScope
+  includedScopes?: DataTableIncludedSelectionScope[]
   excludedIds?: string[]
   excludedScopes?: DataTableExcludedSelectionScope[]
   format: ServerExportFormat

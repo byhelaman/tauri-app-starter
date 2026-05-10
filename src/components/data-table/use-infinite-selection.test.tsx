@@ -5,6 +5,7 @@ import { useInfiniteSelection } from "./use-infinite-selection"
 
 const emptyFilters: ColumnFiltersState = []
 const processingFilter: ColumnFiltersState = [{ id: "status", value: ["processing"] }]
+const onlineFilter: ColumnFiltersState = [{ id: "channel", value: ["Online"] }]
 
 function renderSelection({
   filters = emptyFilters,
@@ -109,5 +110,89 @@ describe("useInfiniteSelection", () => {
     expect(result.current.selectedCount).toBe(41)
     expect(result.current.visibleSelectedIds).toEqual(["a"])
     expect(result.current.rowSelection).toEqual({ a: true })
+  })
+
+  it("re-includes an excluded filtered scope without losing the original selection", async () => {
+    const rows = {
+      a: { id: "a", status: "pending" },
+      b: { id: "b", status: "processing" },
+      c: { id: "c", status: "processing" },
+    }
+    const { result, rerender } = renderSelection({ total: 50, ids: ["a", "b", "c"], rows })
+
+    await act(async () => {
+      await result.current.selectAll()
+    })
+
+    rerender({ filters: processingFilter, total: 9, ids: ["b", "c"], rows })
+
+    await act(async () => {
+      await result.current.deselectAll()
+    })
+
+    expect(result.current.selectedCount).toBe(41)
+    expect(result.current.displaySelectedCount).toBe(0)
+
+    await act(async () => {
+      await result.current.selectAll()
+    })
+
+    expect(result.current.selectedCount).toBe(50)
+    expect(result.current.displaySelectedCount).toBe(9)
+    expect(result.current.rowSelection).toEqual({ b: true, c: true })
+  })
+
+  it("accumulates select-all across different filtered scopes", async () => {
+    const rows = {
+      b: { id: "b", status: "processing" },
+      c: { id: "c", status: "processing" },
+      d: { id: "d", channel: "Online" },
+    }
+    const { result, rerender } = renderSelection({ filters: processingFilter, total: 9, ids: ["b", "c"], rows })
+
+    await act(async () => {
+      await result.current.selectAll()
+    })
+
+    rerender({ filters: onlineFilter, total: 7, ids: ["d"], rows })
+
+    await act(async () => {
+      await result.current.selectAll()
+    })
+
+    expect(result.current.selectedCount).toBe(16)
+    expect(result.current.displaySelectedCount).toBe(7)
+    expect(result.current.rowSelection).toEqual({ d: true })
+    expect(result.current.selectionState).toMatchObject({
+      mode: "filter",
+      total: 9,
+      includedScopes: [{ total: 7 }],
+    })
+  })
+
+  it("normalizes a broader select-all instead of double counting a previous filtered scope", async () => {
+    const { result, rerender } = renderSelection({ filters: processingFilter, total: 9, ids: ["b", "c"] })
+
+    await act(async () => {
+      await result.current.selectAll()
+    })
+
+    expect(result.current.selectedCount).toBe(9)
+
+    rerender({ filters: emptyFilters, total: 50, ids: ["a", "b", "c", "d"], rows: undefined })
+
+    await act(async () => {
+      await result.current.selectAll()
+    })
+
+    expect(result.current.selectedCount).toBe(50)
+    expect(result.current.displaySelectedCount).toBe(50)
+    expect(result.current.selectionState).toMatchObject({
+      mode: "filter",
+      total: 50,
+      includedScopes: [],
+      excludedIds: [],
+      excludedScopes: [],
+    })
   })
 })

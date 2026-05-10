@@ -7,6 +7,7 @@ import type {
 } from "@tanstack/react-table"
 import type {
   DataTableExcludedSelectionScope,
+  DataTableIncludedSelectionScope,
   DataTableSelectionScope,
   DataTableSelectionState,
   ServerExportFormat,
@@ -211,6 +212,17 @@ function excludedScopesRpcParam(excludedScopes: DataTableExcludedSelectionScope[
   }))
 }
 
+function includedScopesRpcParam(includedScopes: DataTableIncludedSelectionScope[] = []) {
+  return includedScopes.map((included) => ({
+    search: included.scope.search || "",
+    status: pickFilter(included.scope.filters, "status"),
+    channel: pickFilter(included.scope.filters, "channel"),
+    priority: pickFilter(included.scope.filters, "priority"),
+    date: included.scope.date ?? null,
+    start_hour: pickHourFilter(included.scope.filters),
+  }))
+}
+
 function scopeExportRpcParams(scope: DataTableSelectionScope, excludedIds: string[] = []) {
   return {
     ...scopeRpcParams(scope, excludedIds),
@@ -223,12 +235,14 @@ export const bulkDeleteOrdersBySelection = async (selection: DataTableSelectionS
   if (selection.mode === "ids") {
     return bulkDeleteOrders(selection.ids)
   }
+  const includedScopeTotal = (selection.includedScopes ?? []).reduce((sum, included) => sum + included.total, 0)
   const excludedScopeTotal = (selection.excludedScopes ?? []).reduce((sum, excluded) => sum + excluded.total, 0)
   const db = assertSupabase()
   const { data, error } = await db.rpc("bulk_delete_orders_by_filter", {
     ...scopeRpcParams(selection.scope, selection.excludedIds),
+    p_included_scopes: includedScopesRpcParam(selection.includedScopes),
     p_excluded_scopes: excludedScopesRpcParam(selection.excludedScopes),
-    p_expected_count: Math.max(0, selection.total - selection.excludedIds.length - excludedScopeTotal),
+    p_expected_count: Math.max(0, selection.total + includedScopeTotal - selection.excludedIds.length - excludedScopeTotal),
   })
   if (error) throw new Error(error.message)
   return (data as number) ?? 0
@@ -236,6 +250,7 @@ export const bulkDeleteOrdersBySelection = async (selection: DataTableSelectionS
 
 export const exportOrdersByScope = async ({
   scope,
+  includedScopes = [],
   excludedIds = [],
   excludedScopes = [],
   format,
@@ -244,6 +259,7 @@ export const exportOrdersByScope = async ({
   template,
 }: {
   scope: DataTableSelectionScope
+  includedScopes?: DataTableIncludedSelectionScope[]
   excludedIds?: string[]
   excludedScopes?: DataTableExcludedSelectionScope[]
   format: ServerExportFormat
@@ -254,6 +270,7 @@ export const exportOrdersByScope = async ({
   const db = assertSupabase()
   const { data, error } = await db.rpc("export_orders_by_filter", {
     ...scopeExportRpcParams(scope, excludedIds),
+    p_included_scopes: includedScopesRpcParam(includedScopes),
     p_excluded_scopes: excludedScopesRpcParam(excludedScopes),
     p_format: format,
     p_fields: expandDataActionFields(fields),
