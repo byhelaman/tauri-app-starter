@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { useForm, Controller } from "react-hook-form"
+import { useForm, Controller, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useQuery } from "@tanstack/react-query"
 import { z } from "zod"
@@ -63,11 +63,11 @@ interface ChatSettingsFormProps {
 }
 
 export function ChatSettingsForm({ view, currentApiKey, currentModel, onSave, onReset }: ChatSettingsFormProps) {
-    const { control, handleSubmit, register, setError, watch, formState: { errors } } = useForm<SettingsValues>({
+    const { control, handleSubmit, register, setError, formState: { errors } } = useForm<SettingsValues>({
         resolver: zodResolver(settingsSchema),
         defaultValues: { apiKey: "", model: currentModel },
     })
-    const watchedKey = watch("apiKey")
+    const watchedKey = useWatch({ control, name: "apiKey" }) ?? ""
     
     // Debounce simple para la API Key
     const [debouncedKey, setDebouncedKey] = useState(currentApiKey)

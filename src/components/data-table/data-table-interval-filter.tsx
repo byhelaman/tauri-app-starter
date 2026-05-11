@@ -9,28 +9,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
+import { getAvailableHours } from "./data-table-interval-filter-utils"
 
 interface DataTableIntervalFilterProps<TData, TValue> {
   column?: Column<TData, TValue>
   title?: string
   /** Horas disponibles desde el servidor (e.g. ["06", "08", "14", "21"]) */
   hours?: string[]
-}
-
-/**
- * Retorna las horas disponibles para el filtro.
- * - Si se pasan `hours` desde el servidor: úsalas directamente.
- * - Fallback: rango completo 00-23 (todos los valores posibles de TIME).
- *
- * No usamos getFacetedUniqueValues() porque con paginación server-side
- * solo contiene las filas de la página actual, no el total de la BD.
- */
-export function getAvailableHours<TData, TValue>(
-  _column: Column<TData, TValue>,
-  hours?: string[]
-): string[] {
-  if (hours && hours.length > 0) return hours
-  return Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"))
 }
 
 export function DataTableIntervalFilter<TData, TValue>({

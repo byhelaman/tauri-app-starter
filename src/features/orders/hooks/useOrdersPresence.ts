@@ -38,7 +38,7 @@
 
 // import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 // import { supabase } from "@/lib/supabase"
-// import { useAuth } from "@/contexts/auth-context"
+// import { useAuth } from "@/contexts/use-auth"
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

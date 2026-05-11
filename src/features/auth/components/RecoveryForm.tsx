@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { toast } from "sonner"
 import { useNavigate } from "react-router-dom"
-import { Controller, useForm } from "react-hook-form"
+import { Controller, useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { supabase } from "@/lib/supabase"
@@ -66,7 +66,7 @@ export function RecoveryForm({
     defaultValues: { password: "" },
   })
 
-  const emailValue = step1.watch("email")
+  const emailValue = useWatch({ control: step1.control, name: "email" }) ?? ""
 
   const handleSendCode = async () => {
     if (!supabase) return

@@ -2,7 +2,7 @@ import { useTheme } from "next-themes"
 import { toast } from "sonner"
 import { FileText, HelpCircle, KeyboardIcon, LogOutIcon, MonitorIcon, MoonIcon, Palette, SettingsIcon, ShieldIcon, SunIcon, User } from "lucide-react"
 import { getInitials } from "@/lib/utils"
-import { useAuth } from "@/contexts/auth-context"
+import { useAuth } from "@/contexts/use-auth"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {

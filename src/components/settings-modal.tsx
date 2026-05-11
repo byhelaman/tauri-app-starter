@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { getVersion, getTauriVersion } from "@tauri-apps/api/app"
-import { useUpdaterContext } from "@/components/updater-context"
+import { useUpdaterContext } from "@/components/use-updater-context"
 import { STORAGE_KEY_URL, STORAGE_KEY_ANON } from "@/lib/supabase"
 import type { AppSettings } from "@/lib/settings"
 import {

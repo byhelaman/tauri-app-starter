@@ -1,8 +1,5 @@
-import { useState, useRef, startTransition } from "react"
-import type { ColumnDef, FilterFn } from "@tanstack/react-table"
-import type { DataTableMeta } from "./data-table-types"
+import { startTransition, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Autocomplete } from "@/components/ui/autocomplete"
 import {
@@ -16,7 +13,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
-
 export interface InlineEditableCellOptions {
   className?: string
   enableEditing?: boolean
@@ -25,13 +21,6 @@ export interface InlineEditableCellOptions {
   onCommit?: (value: string, isValid: boolean) => void
   autocompleteOptions?: { label: string; value: string }[]
   restrictive?: boolean
-}
-
-function normalizeCellOptions(classNameOrOptions?: string | InlineEditableCellOptions): InlineEditableCellOptions {
-  if (typeof classNameOrOptions === "string") {
-    return { className: classNameOrOptions }
-  }
-  return classNameOrOptions ?? {}
 }
 
 function moveFocus(element: HTMLElement, direction: "up" | "down" | "left" | "right") {
@@ -51,13 +40,11 @@ function moveFocus(element: HTMLElement, direction: "up" | "down" | "left" | "ri
     targetTd = td.nextElementSibling
   }
 
-  if (targetTd) {
-    const focusable = targetTd.querySelector<HTMLElement>('[tabindex="0"], input, button')
-    focusable?.focus()
-  }
+  const focusable = targetTd?.querySelector<HTMLElement>('[tabindex="0"], input, button')
+  focusable?.focus()
 }
 
-function InlineEditableCell({
+export function InlineEditableCell({
   value,
   className,
   enableEditing = false,
@@ -80,9 +67,8 @@ function InlineEditableCell({
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const editContainerRef = useRef<HTMLDivElement>(null)
-  
   const [initialEditValue, setInitialEditValue] = useState<string | null>(null)
-  
+
   function scheduleFocus(action: "current" | "up" | "down" | "left" | "right") {
     requestAnimationFrame(() => {
       if (!containerRef.current) return
@@ -93,7 +79,7 @@ function InlineEditableCell({
       }
     })
   }
-  
+
   function handleCommit(currentValue: string, focusAction?: "current" | "up" | "down" | "left" | "right") {
     if (!enableEditing) {
       setIsEditing(false)
@@ -102,11 +88,9 @@ function InlineEditableCell({
     }
 
     const isValid = validate ? validate(currentValue) : true
-    
-    if (!isValid) {
 
+    if (!isValid) {
       setShowErrorDialog(true)
-      // No cerramos la edicin ni enviamos nada al padre
       return
     }
 
@@ -124,8 +108,6 @@ function InlineEditableCell({
 
   const handleRetry = () => {
     setShowErrorDialog(false)
-    // El input ya tiene el valor invlido, as que solo cerramos el dilogo
-    // y dejamos que el usuario siga editando.
   }
 
   const handleCancelEdit = () => {
@@ -149,7 +131,6 @@ function InlineEditableCell({
     }
 
     if (enableEditing && (e.ctrlKey || e.metaKey) && e.key === "v") {
-      // Dejamos que el evento 'onPaste' del div maneje esto para evitar avisos de seguridad
       return
     }
 
@@ -171,7 +152,6 @@ function InlineEditableCell({
       e.preventDefault()
       setInitialEditValue(e.key)
       setIsEditing(true)
-      return
     }
   }
 
@@ -234,7 +214,6 @@ function InlineEditableCell({
 
   return (
     <div ref={editContainerRef} className="relative flex w-full min-w-0">
-      {/* Marcador de posición invisible que mantiene el ancho exacto de la celda del modo vista */}
       <div className={cn(
         "flex h-8 w-full min-w-0 items-center border border-transparent px-2.5 py-1 text-base md:text-sm opacity-0 pointer-events-none",
         className
@@ -251,9 +230,6 @@ function InlineEditableCell({
           }}
           onBlur={(committedValue) => {
             if (committedValue !== undefined) {
-              // Si acabamos de entrar con Backspace/Delete (initialEditValue === ""), 
-              // solo validamos si el usuario realmente interactu con el input (committedValue no est vaco)
-              // o si el blur es intencional después de un tiempo.
               if (initialEditValue === "" && committedValue === "") {
                 setIsEditing(false)
               } else {
@@ -266,10 +242,7 @@ function InlineEditableCell({
           onKeyDown={handleInputKeyDown}
           autoFocus
           wrapperClassName="absolute inset-0"
-          className={cn(
-            "h-full w-full bg-background shadow-sm",
-            className
-          )}
+          className={cn("h-full w-full bg-background shadow-sm", className)}
         />
       ) : (
         <Input
@@ -286,10 +259,7 @@ function InlineEditableCell({
           }}
           onKeyDown={handleInputKeyDown}
           aria-invalid={(wasBlurred && hasError) || undefined}
-          className={cn(
-            "absolute inset-0 h-8 w-full bg-background shadow-sm",
-            className
-          )}
+          className={cn("absolute inset-0 h-8 w-full bg-background shadow-sm", className)}
         />
       )}
 
@@ -298,7 +268,7 @@ function InlineEditableCell({
           onCloseAutoFocus={(e) => {
             if (isEditing) {
               e.preventDefault()
-              const input = editContainerRef.current?.querySelector('input')
+              const input = editContainerRef.current?.querySelector("input")
               input?.focus()
             }
           }}
@@ -317,76 +287,4 @@ function InlineEditableCell({
       </AlertDialog>
     </div>
   )
-}
-
-export function renderCell(value: string | number, classNameOrOptions?: string | InlineEditableCellOptions) {
-  const options = normalizeCellOptions(classNameOrOptions)
-  return <InlineEditableCell value={value} {...options} />
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const multiValueFilter: FilterFn<any> = (row, columnId, filterValue) => {
-  if (!Array.isArray(filterValue) || filterValue.length === 0) return true
-  return filterValue.includes(row.getValue(columnId))
-}
-
-export function createSelectColumn<TData>(): ColumnDef<TData> {
-  return {
-    id: "select",
-    minSize: 36,
-    maxSize: 36,
-    header: ({ table }) => {
-      const meta = table.options.meta as DataTableMeta | undefined
-      
-      // Si está cargando la selección masiva, mostramos el checkbox en su estado optimista
-      if (meta?.isSelectingAll) {
-        return (
-          <Checkbox 
-            checked={meta.isSelectingAll === "selectAll"} 
-            disabled 
-            className="opacity-50 cursor-wait" 
-            aria-label="Processing selection..." 
-          />
-        )
-      }
-
-      // If we are in infinite scroll, we need to know the state of VISIBLE selection
-      const selectedCount = meta?.displaySelectedCount ?? meta?.selectedCount ?? meta?.visibleSelectedCount ?? 0
-      const isAllVisibleSelected = meta?.isInfiniteScroll && meta?.totalRowCount !== undefined && meta.totalRowCount > 0
-        ? selectedCount === meta.totalRowCount
-        : table.getIsAllPageRowsSelected()
-
-      const isSomeVisibleSelected = meta?.isInfiniteScroll
-        ? selectedCount > 0 && !isAllVisibleSelected
-        : table.getIsSomePageRowsSelected()
-
-      return (
-        <Checkbox
-          checked={isAllVisibleSelected || (isSomeVisibleSelected && "indeterminate")}
-          onCheckedChange={(value) => {
-            if (value && meta?.isInfiniteScroll && meta?.selectAll) {
-              meta.selectAll()
-            } else if (!value && meta?.isInfiniteScroll && meta?.deselectAll) {
-              meta.deselectAll()
-            } else {
-              table.toggleAllPageRowsSelected(!!value)
-            }
-          }}
-          aria-label="Select all"
-        />
-      )
-    },
-    cell: ({ row }) => {
-      return (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
-        />
-      )
-    },
-    enableSorting: false,
-    enableHiding: false,
-    enablePinning: false,
-  }
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { LayoutDashboard, FolderKanban, Settings, Bell, User, LogOut, KeyboardIcon, ShieldIcon, ShoppingCart, SearchIcon } from "lucide-react"
 import { useNavigate } from "react-router-dom"
-import { useAuth } from "@/contexts/auth-context"
+import { useAuth } from "@/contexts/use-auth"
 import { Button } from "@/components/ui/button"
 import {
   Command,

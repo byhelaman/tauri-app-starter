@@ -14,7 +14,7 @@
 import { useEffect } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { supabase } from "@/lib/supabase"
-import { useAuth } from "@/contexts/auth-context"
+import { useAuth } from "@/contexts/use-auth"
 
 const REALTIME_INVALIDATION_DEBOUNCE_MS = 750
 type OrderChangeEvent = { actor_id?: string | null }

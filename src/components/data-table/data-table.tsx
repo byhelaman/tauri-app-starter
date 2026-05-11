@@ -268,14 +268,15 @@ export function DataTable<TData, TValue>({
     meta: {} satisfies DataTableMeta,
   })
 
+  const tablePageCount = table.getPageCount()
+  const tablePageIndex = table.getState().pagination.pageIndex
+
   // Ensure page index doesn't go out of bounds when data shrinks (e.g. bulk deleting items on the last page)
   useEffect(() => {
-    const pageCount = table.getPageCount()
-    const pageIndex = table.getState().pagination.pageIndex
-    if (pageCount > 0 && pageIndex >= pageCount) {
-      table.setPageIndex(pageCount - 1)
+    if (tablePageCount > 0 && tablePageIndex >= tablePageCount) {
+      table.setPageIndex(tablePageCount - 1)
     }
-  }, [table, table.getState().pagination.pageIndex, table.getPageCount()])
+  }, [table, tablePageCount, tablePageIndex])
 
   const totalRows = infiniteScroll?.totalRowCount ?? rowCount ?? 0
 

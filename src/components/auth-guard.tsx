@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom"
-import { useAuth } from "@/contexts/auth-context"
+import { useAuth } from "@/contexts/use-auth"
 import { Spinner } from "@/components/ui/spinner"
 
 export function AuthGuard() {

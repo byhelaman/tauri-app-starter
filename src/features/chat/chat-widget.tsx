@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils"
 import { useChat } from "@/features/chat/use-chat"
 import { ChatSettingsForm, DEFAULT_MODEL } from "@/features/chat/chat-settings-form"
 import { apiKeyStorageKey, modelStorageKey } from "@/features/chat/chat-storage"
-import { useAuth } from "@/contexts/auth-context"
+import { useAuth } from "@/contexts/use-auth"
 
 type WidgetView = "chat" | "setup" | "settings"
 

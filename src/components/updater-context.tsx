@@ -1,9 +1,6 @@
-import { createContext, useContext, type ReactNode } from "react"
+import type { ReactNode } from "react"
 import { useUpdater } from "@/hooks/use-updater"
-
-type UpdaterContextValue = ReturnType<typeof useUpdater>
-
-const UpdaterContext = createContext<UpdaterContextValue | null>(null)
+import { UpdaterContext } from "./updater-context-value"
 
 export function UpdaterProvider({ children }: { children: ReactNode }) {
   const updater = useUpdater()
@@ -14,8 +11,3 @@ export function UpdaterProvider({ children }: { children: ReactNode }) {
   )
 }
 
-export function useUpdaterContext(): UpdaterContextValue {
-  const ctx = useContext(UpdaterContext)
-  if (!ctx) throw new Error("useUpdaterContext must be used within <UpdaterProvider>")
-  return ctx
-}

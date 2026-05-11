@@ -63,7 +63,7 @@ import { TableHistoryCard } from "@/components/data-table/table-history-card"
 import { OrderDialog } from "@/features/orders/order-dialog"
 import { MAX_BULK_ORDER_ROWS, fetchOrderHistory, fetchOrdersStartHours } from "@/features/orders/api"
 import { useQuery } from "@tanstack/react-query"
-import { useAuth } from "@/contexts/auth-context"
+import { useAuth } from "@/contexts/use-auth"
 
 const STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
   { label: "Pending", value: "pending", icon: Clock },

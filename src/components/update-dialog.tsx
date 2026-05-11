@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Download } from "lucide-react"
-import { useUpdaterContext } from "@/components/updater-context"
+import { useUpdaterContext } from "@/components/use-updater-context"
 import {
   AlertDialog,
   AlertDialogAction,

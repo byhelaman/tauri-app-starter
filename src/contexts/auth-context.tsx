@@ -1,21 +1,9 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
-import type { Session, User } from "@supabase/supabase-js"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import type { Session } from "@supabase/supabase-js"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 import { chatHistoryKey } from "@/features/chat/use-chat"
-import { type AuthClaims, parseClaims } from "@/lib/auth-utils"
-
-
-type AuthContextType = {
-  session: Session | null
-  user: User | null
-  claims: AuthClaims
-  loading: boolean
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>
-  signOut: () => Promise<void>
-  hasPermission: (permission: string) => boolean
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+import { parseClaims } from "@/lib/auth-utils"
+import { AuthContext } from "./auth-context-value"
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
@@ -169,10 +157,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 }
 
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
-  return context
-}

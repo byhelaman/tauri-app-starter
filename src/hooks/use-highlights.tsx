@@ -1,9 +1,6 @@
 import { useState } from "react"
-import {
-  TOGGLE_THEMES,
-  ToggleActionButtons,
-  type ToggleThemeKey,
-} from "@/components/toggle-action-buttons"
+import { ToggleActionButtons } from "@/components/toggle-action-buttons"
+import { TOGGLE_THEMES, type ToggleThemeKey } from "@/components/toggle-action-themes"
 
 export type HighlightConfig<TData> = {
   id: string

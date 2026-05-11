@@ -19,7 +19,8 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group"
 import { DataTableFacetedFilter } from "./data-table-faceted-filter"
-import { DataTableIntervalFilter, getAvailableHours } from "./data-table-interval-filter"
+import { DataTableIntervalFilter } from "./data-table-interval-filter"
+import { getAvailableHours } from "./data-table-interval-filter-utils"
 import { DataTableViewOptions } from "./data-table-view-options"
 import type { FacetedFilterConfig, IntervalFilterConfig, InfiniteScrollConfig } from "./data-table-types"
 
