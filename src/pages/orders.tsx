@@ -316,34 +316,25 @@ export function OrdersPage() {
                   toast.loading(`Preparing copy...`, { id: toastId })
                   try {
                     const copySettings = resolveBulkCopySettings("orders", ORDER_COPY_FIELDS)
-                    const rowsToCopy = selection.mode !== "ids"
+                    const rowsToCopy = selection.mode === "operations"
                       ? null
                       : selectedIds.length === selectedLoadedRows.length
                         ? selectedLoadedRows
                         : await fetchOrdersByIds(selectedIds)
 
                     const exportResult = selection.mode === "operations"
-                        ? await infiniteScroll.exportByScope!({
-                          scope: infiniteScroll.currentScope ?? { search: "", filters: [] },
-                          operations: selection.operations,
-                          ...copySettings,
-                        })
-                      : selection.mode === "filter"
-                        ? await infiniteScroll.exportByScope!({
-                          scope: selection.scope,
-                          includedIds: selection.includedIds,
-                          includedScopes: selection.includedScopes,
-                          excludedIds: selection.excludedIds,
-                          excludedScopes: selection.excludedScopes,
-                          ...copySettings,
-                        })
+                      ? await infiniteScroll.exportByScope!({
+                        scope: infiniteScroll.currentScope ?? { search: "", filters: [] },
+                        operations: selection.operations,
+                        ...copySettings,
+                      })
                       : null
                     const content = exportResult?.content
                       ?? buildBulkCopyText(rowsToCopy as unknown as Record<string, unknown>[], "orders", ORDER_COPY_FIELDS)
                     if (!content) { toast.error("Nothing to copy", { id: toastId }); return }
                     
                     await navigator.clipboard.writeText(content)
-                    const copiedCount = selection.mode !== "ids"
+                    const copiedCount = selection.mode === "operations"
                       ? exportResult?.rowCount ?? 0
                       : (rowsToCopy?.length ?? 0)
                     toast.success(`Copied ${copiedCount.toLocaleString()} rows`, { id: toastId })
@@ -363,17 +354,7 @@ export function OrdersPage() {
                 aria-label="Delete"
                 onClick={() => {
                   setBulkDeleteOp({
-                    count: selection.mode === "operations"
-                      ? selection.selectedCount
-                      : selection.mode === "filter"
-                      ? Math.max(
-                          0,
-                          selection.total
-                            + (selection.includedScopes ?? []).reduce((sum, included) => sum + included.total, 0)
-                            - selection.excludedIds.length
-                            - (selection.excludedScopes ?? []).reduce((sum, excluded) => sum + excluded.total, 0)
-                        )
-                      : selectedIds.length,
+                    count: selection.mode === "operations" ? selection.selectedCount : selectedIds.length,
                     selection,
                     clearSelection
                   })
@@ -435,7 +416,7 @@ export function OrdersPage() {
                     toast.loading("Preparing copy...", { id: toastId })
                     try {
                       const copySettings = resolveBulkCopySettings("orders-queue", QUEUE_COPY_FIELDS)
-                      const rowsToCopy = selection.mode !== "ids"
+                      const rowsToCopy = selection.mode === "operations"
                         ? null
                         : selectedIds.length === selectedLoadedRows.length
                           ? selectedLoadedRows
@@ -444,15 +425,6 @@ export function OrdersPage() {
                         ? await queueInfiniteScroll.exportByScope!({
                           scope: queueInfiniteScroll.currentScope ?? { search: "", filters: [] },
                           operations: selection.operations,
-                          ...copySettings,
-                        })
-                        : selection.mode === "filter"
-                        ? await queueInfiniteScroll.exportByScope!({
-                          scope: selection.scope,
-                          includedIds: selection.includedIds,
-                          includedScopes: selection.includedScopes,
-                          excludedIds: selection.excludedIds,
-                          excludedScopes: selection.excludedScopes,
                           ...copySettings,
                         })
                         : null
@@ -464,7 +436,7 @@ export function OrdersPage() {
                       }
 
                       await navigator.clipboard.writeText(content)
-                      const copiedCount = selection.mode !== "ids"
+                      const copiedCount = selection.mode === "operations"
                         ? exportResult?.rowCount ?? 0
                         : (rowsToCopy?.length ?? 0)
                       toast.success(`Copied ${copiedCount.toLocaleString()} rows`, { id: toastId })

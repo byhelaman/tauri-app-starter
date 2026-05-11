@@ -142,7 +142,6 @@ function rowIsSelectedByOperations(
 
 function fallbackSelectedCount(selection: DataTableSelectionState, loadedRowIds: string[], loadedRowsById: Record<string, Record<string, unknown>>): number {
   if (selection.mode === "ids") return selection.ids.length
-  if (selection.mode !== "operations") return Math.max(0, selection.total - selection.excludedIds.length)
   return loadedRowIds.filter((id) => rowIsSelectedByOperations(id, loadedRowsById[id], selection.operations)).length
 }
 
@@ -185,7 +184,7 @@ export function useInfiniteSelection({
     if (selectionState.mode === "operations") {
       return loadedRowIds.filter((id) => rowIsSelectedByOperations(id, loadedRowsById[id], selectionState.operations))
     }
-    return loadedRowIds.filter((id) => rowMatchesScope(loadedRowsById[id], selectionState.scope) && !selectionState.excludedIds.includes(id))
+    return []
   }, [loadedRowIds, loadedRowsById, selectionState])
 
   const rowSelection = useMemo<RowSelectionState>(() => {

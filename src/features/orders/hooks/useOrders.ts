@@ -238,9 +238,7 @@ export function useOrders({
         if (!old) return old
         const deletedCount = selection.mode === "ids"
           ? selection.ids.length
-          : selection.mode === "operations"
-            ? selection.selectedCount
-            : Math.max(0, selection.total - selection.excludedIds.length)
+          : selection.selectedCount
         return {
           ...old,
           pages: old.pages.map(page => {
@@ -341,24 +339,6 @@ export function useOrders({
       },
       exportByScope: api.exportOrdersByScope,
       countBySelection: api.countOrdersBySelection,
-      // Obtiene filas completas del servidor vía RPC dedicada, con límite backend.
-      fetchAllByFilter: async (): Promise<Record<string, unknown>[]> => {
-        // Si el total aún no está disponible (primera carga no completada), no hay filas que retornar
-        if (!cachedRowCount) return []
-        const rows = await api.fetchAllOrdersByFilter({
-          search:     globalFilter,
-          filters:    columnFilters,
-          date:       dateFilter,
-        })
-        return rows as unknown as Record<string, unknown>[]
-      },
-      fetchAllUnfiltered: async (): Promise<Record<string, unknown>[]> => {
-        const rows = await api.fetchAllOrdersByFilter({
-          date:    undefined,
-          sorting,
-        })
-        return rows as unknown as Record<string, unknown>[]
-      },
       fetchByIds: async (ids: string[]): Promise<Record<string, unknown>[]> => {
         const rows = await api.fetchOrdersByIds(ids)
         return rows as unknown as Record<string, unknown>[]

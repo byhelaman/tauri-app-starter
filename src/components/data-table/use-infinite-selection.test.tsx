@@ -51,7 +51,6 @@ function selectedIdsForOperations(operations: DataTableSelectionOperation[]): st
 
 async function countBySelection(selection: DataTableSelectionState, scope?: { filters: ColumnFiltersState }): Promise<number> {
   if (selection.mode === "ids") return selection.ids.length
-  if (selection.mode === "filter") return 0
   return selectedIdsForOperations(selection.operations)
     .filter((id) => !scope || rowMatches(rows[id], scope.filters))
     .length

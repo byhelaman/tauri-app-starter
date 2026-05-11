@@ -6,8 +6,6 @@ import type {
   SortingState,
 } from "@tanstack/react-table"
 import type {
-  DataTableExcludedSelectionScope,
-  DataTableIncludedSelectionScope,
   DataTableSelectionOperation,
   DataTableSelectionScope,
   DataTableSelectionState,
@@ -20,7 +18,6 @@ import { pickNormalizedFilter, pickNormalizedHourFilter } from "@/lib/table-filt
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 export const MAX_BULK_ORDER_ROWS = 10_000
-export const DEFAULT_EXPORT_ORDER_ROWS = MAX_BULK_ORDER_ROWS
 
 function assertSupabase(): NonNullable<typeof supabase> {
   if (!supabase) throw new Error("Supabase client not configured")
@@ -109,7 +106,6 @@ function normalizeHistorySummary(value: unknown): HistoryEntry["summary"] {
     rowCount:      typeof value.rowCount === "number" ? value.rowCount : undefined,
     search:        typeof value.search === "string" ? value.search : null,
     status:        Array.isArray(value.status) ? value.status.map(String) : null,
-    excludedIds:   Array.isArray(value.excludedIds) ? value.excludedIds.map(String) : null,
   }
 }
 
@@ -180,41 +176,6 @@ export const bulkDeleteOrders = async (ids: string[]) => {
   if (error) throw new Error(error.message)
 }
 
-function scopeRpcParams(scope: DataTableSelectionScope, excludedIds: string[] = [], includedIds: string[] = []) {
-  return {
-    p_search:       scope.search || "",
-    p_status:       pickFilter(scope.filters, "status"),
-    p_channel:      pickFilter(scope.filters, "channel"),
-    p_priority:     pickFilter(scope.filters, "priority"),
-    p_date:         scope.date ?? null,
-    p_start_hour:   pickHourFilter(scope.filters),
-    p_included_ids: includedIds.length > 0 ? includedIds : [],
-    p_excluded_ids: excludedIds.length > 0 ? excludedIds : [],
-  }
-}
-
-function excludedScopesRpcParam(excludedScopes: DataTableExcludedSelectionScope[] = []) {
-  return excludedScopes.map((excluded) => ({
-    search: excluded.scope.search || "",
-    status: pickFilter(excluded.scope.filters, "status"),
-    channel: pickFilter(excluded.scope.filters, "channel"),
-    priority: pickFilter(excluded.scope.filters, "priority"),
-    date: excluded.scope.date ?? null,
-    start_hour: pickHourFilter(excluded.scope.filters),
-  }))
-}
-
-function includedScopesRpcParam(includedScopes: DataTableIncludedSelectionScope[] = []) {
-  return includedScopes.map((included) => ({
-    search: included.scope.search || "",
-    status: pickFilter(included.scope.filters, "status"),
-    channel: pickFilter(included.scope.filters, "channel"),
-    priority: pickFilter(included.scope.filters, "priority"),
-    date: included.scope.date ?? null,
-    start_hour: pickHourFilter(included.scope.filters),
-  }))
-}
-
 function scopeJson(scope: DataTableSelectionScope) {
   return {
     search: scope.search || "",
@@ -235,36 +196,14 @@ function operationsRpcParam(operations: DataTableSelectionOperation[] = []) {
   })
 }
 
-function scopeExportRpcParams(scope: DataTableSelectionScope, excludedIds: string[] = [], includedIds: string[] = []) {
-  return {
-    ...scopeRpcParams(scope, excludedIds, includedIds),
-    p_sort_col:     scope.sorting?.[0]?.id ?? null,
-    p_sort_dir:     scope.sorting?.[0]?.desc ? "desc" : (scope.sorting?.[0] ? "asc" : null),
-  }
-}
-
 export const bulkDeleteOrdersBySelection = async (selection: DataTableSelectionState) => {
   if (selection.mode === "ids") {
     return bulkDeleteOrders(selection.ids)
   }
-  if (selection.mode === "operations") {
-    const db = assertSupabase()
-    const { data, error } = await db.rpc("bulk_delete_orders_by_selection", {
-      p_operations: operationsRpcParam(selection.operations),
-      p_expected_count: selection.selectedCount,
-    })
-    if (error) throw new Error(error.message)
-    return (data as number) ?? 0
-  }
-  const includedIdTotal = selection.includedIds?.length ?? 0
-  const includedScopeTotal = (selection.includedScopes ?? []).reduce((sum, included) => sum + included.total, 0)
-  const excludedScopeTotal = (selection.excludedScopes ?? []).reduce((sum, excluded) => sum + excluded.total, 0)
   const db = assertSupabase()
-  const { data, error } = await db.rpc("bulk_delete_orders_by_filter", {
-    ...scopeRpcParams(selection.scope, selection.excludedIds, selection.includedIds),
-    p_included_scopes: includedScopesRpcParam(selection.includedScopes),
-    p_excluded_scopes: excludedScopesRpcParam(selection.excludedScopes),
-    p_expected_count: Math.max(0, selection.total + includedIdTotal + includedScopeTotal - selection.excludedIds.length - excludedScopeTotal),
+  const { data, error } = await db.rpc("bulk_delete_orders_by_selection", {
+    p_operations: operationsRpcParam(selection.operations),
+    p_expected_count: selection.selectedCount,
   })
   if (error) throw new Error(error.message)
   return (data as number) ?? 0
@@ -273,10 +212,6 @@ export const bulkDeleteOrdersBySelection = async (selection: DataTableSelectionS
 export const exportOrdersByScope = async ({
   scope,
   operations,
-  includedIds = [],
-  includedScopes = [],
-  excludedIds = [],
-  excludedScopes = [],
   format,
   fields,
   headers,
@@ -284,10 +219,6 @@ export const exportOrdersByScope = async ({
 }: {
   scope: DataTableSelectionScope
   operations?: DataTableSelectionOperation[]
-  includedIds?: string[]
-  includedScopes?: DataTableIncludedSelectionScope[]
-  excludedIds?: string[]
-  excludedScopes?: DataTableExcludedSelectionScope[]
   format: ServerExportFormat
   fields: string[]
   headers?: boolean
@@ -311,10 +242,10 @@ export const exportOrdersByScope = async ({
       rowCount: result?.row_count ?? 0,
     }
   }
-  const { data, error } = await db.rpc("export_orders_by_filter", {
-    ...scopeExportRpcParams(scope, excludedIds, includedIds),
-    p_included_scopes: includedScopesRpcParam(includedScopes),
-    p_excluded_scopes: excludedScopesRpcParam(excludedScopes),
+  const { data, error } = await db.rpc("export_orders_by_selection", {
+    p_operations: operationsRpcParam([{ type: "select", scope, total: 0 }]),
+    p_sort_col: scope.sorting?.[0]?.id ?? null,
+    p_sort_dir: scope.sorting?.[0]?.desc ? "desc" : (scope.sorting?.[0] ? "asc" : null),
     p_format: format,
     p_fields: expandDataActionFields(fields),
     p_headers: headers ?? true,
@@ -330,12 +261,6 @@ export const exportOrdersByScope = async ({
 
 export const countOrdersBySelection = async (selection: DataTableSelectionState, scope?: DataTableSelectionScope): Promise<number> => {
   if (selection.mode === "ids") return selection.ids.length
-  if (selection.mode === "filter") {
-    const includedIdTotal = selection.includedIds?.length ?? 0
-    const includedScopeTotal = (selection.includedScopes ?? []).reduce((sum, included) => sum + included.total, 0)
-    const excludedScopeTotal = (selection.excludedScopes ?? []).reduce((sum, excluded) => sum + excluded.total, 0)
-    return Math.max(0, selection.total + includedIdTotal + includedScopeTotal - selection.excludedIds.length - excludedScopeTotal)
-  }
   const db = assertSupabase()
   const { data, error } = await db.rpc("count_orders_by_selection", {
     p_operations: operationsRpcParam(selection.operations),
@@ -343,46 +268,6 @@ export const countOrdersBySelection = async (selection: DataTableSelectionState,
   })
   if (error) throw new Error(error.message)
   return (data as number) ?? 0
-}
-
-/** Obtiene las órdenes que coinciden con los filtros activos, hasta el límite máximo permitido.
- *  Usado para Export/Copy masivo — no almacena en React Query cache. */
-export const fetchAllOrdersByFilter = async ({
-  search = "",
-  filters = [] as ColumnFiltersState,
-  date,
-  excludedIds = [],
-  sorting = [],
-  limit = DEFAULT_EXPORT_ORDER_ROWS,
-  offset = 0,
-}: {
-  search?: string
-  filters?: ColumnFiltersState
-  date?: string
-  excludedIds?: string[]
-  sorting?: SortingState
-  limit?: number
-  offset?: number
-} = {}): Promise<Order[]> => {
-  if (limit > MAX_BULK_ORDER_ROWS) {
-    throw new Error(`Export is limited to ${MAX_BULK_ORDER_ROWS.toLocaleString()} orders at a time`)
-  }
-  const db = assertSupabase()
-  const { data, error } = await db.rpc("get_orders_by_filter", {
-    p_search:       search || "",
-    p_status:       pickFilter(filters, "status"),
-    p_channel:      pickFilter(filters, "channel"),
-    p_priority:     pickFilter(filters, "priority"),
-    p_date:         date ?? null,
-    p_start_hour:   pickHourFilter(filters),
-    p_excluded_ids: excludedIds.length > 0 ? excludedIds : [],
-    p_sort_col:     sorting[0]?.id ?? null,
-    p_sort_dir:     sorting[0]?.desc ? "desc" : (sorting[0] ? "asc" : null),
-    p_limit:        limit,
-    p_offset:       offset,
-  })
-  if (error) throw new Error(error.message)
-  return (data as Order[]) ?? []
 }
 
 /** Obtiene órdenes completas dado un arreglo de IDs exactos. Usado para Export/Copy. */

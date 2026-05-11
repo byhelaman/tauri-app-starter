@@ -43,10 +43,6 @@ interface DataTableViewOptionsProps<TData> {
   onSidePanelToggle?: () => void
   /** Contexto de infinite scroll para mostrar totales reales y fetch server-side */
   infiniteScroll?: InfiniteScrollConfig
-  /** Cuando true, 'Selected' muestra el total del servidor en vez del conteo local */
-  isSelectAllByFilter?: boolean
-  /** IDs excluidos manualmente en modo select-all-by-filter */
-  excludedIds?: Set<string>
   /** Permite acciones que extraen datos fuera de la tabla visible */
   allowDataExport?: boolean
   mode?: "full" | "bulk-copy" | "none"
@@ -102,7 +98,7 @@ function formatLimit(limit?: number): string {
   return limit == null ? "the configured limit" : limit.toLocaleString()
 }
 
-export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle, infiniteScroll, isSelectAllByFilter, excludedIds, allowDataExport = true, mode = "full", onResetTable }: DataTableViewOptionsProps<TData>) {
+export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle, infiniteScroll, allowDataExport = true, mode = "full", onResetTable }: DataTableViewOptionsProps<TData>) {
   const [scope, setScope] = useState<Scope>("all")
   const [bulkCopyOpen, setBulkCopyOpen] = useState(false)
 
@@ -113,11 +109,7 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
   const usesServerScope = tableMeta?.isInfiniteScroll === true
   const selectedCount = usesServerScope && tableMeta?.selectionState?.mode === "operations"
     ? tableMeta.selectedCount ?? 0
-    : usesServerScope && tableMeta?.selectionState?.mode === "filter"
-      ? tableMeta.selectedCount ?? 0
-    : isSelectAllByFilter
-      ? (infiniteScroll?.totalRowCount ?? 0) - (excludedIds?.size ?? 0)
-      : tableMeta?.visibleSelectedCount ?? table.getSelectedRowModel().rows.length
+    : tableMeta?.visibleSelectedCount ?? table.getSelectedRowModel().rows.length
   const selectedIds = tableMeta?.visibleSelectedIds
     ?? Object.keys(table.getState().rowSelection).filter((id) => table.getState().rowSelection[id])
   const filteredCount = table.getFilteredRowModel().rows.length
@@ -143,18 +135,6 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
     effectiveScope === "selected" && bulkActionLimit != null && selectedIds.length > bulkActionLimit
   const scopeExceedsLimit = selectedScopeExceedsLimit
 
-  /** Devuelve true si el scope necesita datos del servidor (infinite scroll + scope != selected) */
-  function getServerFetcher(s: Scope): (() => Promise<Record<string, unknown>[]>) | undefined {
-    if (!usesServerScope) return undefined
-    if (s === "all") return infiniteScroll?.fetchAllUnfiltered ?? infiniteScroll?.fetchAllByFilter
-    if (s === "filtered") return infiniteScroll?.fetchAllByFilter
-    return undefined
-  }
-
-  function needsServerFetch(s: Scope): boolean {
-    return !!getServerFetcher(s)
-  }
-
   function needsSelectedIdsFetch(s: Scope): boolean {
     return usesServerScope && s === "selected" && !!infiniteScroll?.fetchByIds && selectedIds.length > 0
   }
@@ -175,15 +155,7 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
         fields: getExportFieldIds(table),
       }
     }
-    return {
-      scope: selection.scope,
-      includedIds: selection.includedIds,
-      includedScopes: selection.includedScopes,
-      excludedIds: selection.excludedIds,
-      excludedScopes: selection.excludedScopes,
-      format,
-      fields: getExportFieldIds(table),
-    }
+    return null
   }
 
   function scopeExportRequest(format: ExportFormat) {
@@ -201,7 +173,6 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
     if (!scope) return null
     return {
       scope,
-      excludedIds: [],
       format,
       fields: getExportFieldIds(table),
     }
@@ -241,22 +212,6 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
       }
       return
     }
-    if (needsServerFetch(effectiveScope)) {
-      const fetchRows = getServerFetcher(effectiveScope)
-      if (!fetchRows) return
-      const toastId = "export-fetch"
-      toast.loading(`Fetching all ${scopeCounts[effectiveScope].toLocaleString()} rows...`, { id: toastId })
-      try {
-        const records = await fetchRows()
-        const content = formatRawRows(table, records, format, true)
-        const ok = await saveFile(content, `${tableId}-${effectiveScope}.${meta.ext}`, meta.mime, meta.ext)
-        if (ok) toast.success(`Exported ${records.length.toLocaleString()} rows as ${meta.label}`, { id: toastId })
-        else toast.dismiss(toastId)
-      } catch {
-        toast.error("Failed to fetch rows from server", { id: toastId })
-      }
-      return
-    }
     const rows = getScopeRows(table, effectiveScope)
     const content = formatRows(table, rows, format, true)
     const ok = await saveFile(content, `${tableId}-${effectiveScope}.${meta.ext}`, meta.mime, meta.ext)
@@ -291,21 +246,6 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
         toast.success(`Copied ${records.length.toLocaleString()} rows as ${FORMAT_META[format].label}`, { id: toastId })
       } catch {
         toast.error("Failed to fetch selected rows from server", { id: toastId })
-      }
-      return
-    }
-    if (needsServerFetch(effectiveScope)) {
-      const fetchRows = getServerFetcher(effectiveScope)
-      if (!fetchRows) return
-      const toastId = "copy-fetch"
-      toast.loading(`Fetching all ${scopeCounts[effectiveScope].toLocaleString()} rows...`, { id: toastId })
-      try {
-        const records = await fetchRows()
-        const content = formatRawRows(table, records, format, false)
-        await navigator.clipboard.writeText(content)
-        toast.success(`Copied ${records.length.toLocaleString()} rows as ${FORMAT_META[format].label}`, { id: toastId })
-      } catch {
-        toast.error("Failed to fetch rows from server", { id: toastId })
       }
       return
     }

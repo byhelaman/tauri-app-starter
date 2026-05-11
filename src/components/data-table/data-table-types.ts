@@ -53,16 +53,6 @@ export interface DataTableSelectionScope {
   sorting?: SortingState
 }
 
-export interface DataTableExcludedSelectionScope {
-  scope: DataTableSelectionScope
-  total: number
-}
-
-export interface DataTableIncludedSelectionScope {
-  scope: DataTableSelectionScope
-  total: number
-}
-
 export type DataTableSelectionOperation =
   | { type: "select"; scope: DataTableSelectionScope; total: number }
   | { type: "deselect"; scope: DataTableSelectionScope; total: number }
@@ -76,25 +66,12 @@ export type DataTableSelectionState =
       operations: DataTableSelectionOperation[]
       selectedCount: number
     }
-  | {
-      mode: "filter"
-      scope: DataTableSelectionScope
-      total: number
-      includedIds?: string[]
-      includedScopes?: DataTableIncludedSelectionScope[]
-      excludedIds: string[]
-      excludedScopes?: DataTableExcludedSelectionScope[]
-    }
 
 export type ServerExportFormat = "csv" | "tsv" | "json" | "md" | "lines" | "custom"
 
 export interface ServerScopeExportRequest {
   scope: DataTableSelectionScope
   operations?: DataTableSelectionOperation[]
-  includedIds?: string[]
-  includedScopes?: DataTableIncludedSelectionScope[]
-  excludedIds?: string[]
-  excludedScopes?: DataTableExcludedSelectionScope[]
   format: ServerExportFormat
   fields: string[]
   headers?: boolean
@@ -122,13 +99,6 @@ export interface InfiniteScrollConfig {
   unfilteredTotalRowCount?: number
   /** Máximo de filas permitido para acciones masivas que cargan datos completos en el cliente */
   bulkActionRowLimit?: number
-  /**
-   * Obtiene filas completas que coinciden con los filtros actuales desde el servidor.
-   * El backend puede aplicar bulkActionRowLimit; no debe usarse para scopes mayores a ese límite.
-   */
-  fetchAllByFilter?: () => Promise<Record<string, unknown>[]>
-  /** Obtiene filas completas sin filtros de tabla activos. Usado por scope "All" en infinite scroll. */
-  fetchAllUnfiltered?: () => Promise<Record<string, unknown>[]>
   /** Obtiene filas completas por IDs exactos. Usado cuando la selección incluye filas no cargadas. */
   fetchByIds?: (ids: string[]) => Promise<Record<string, unknown>[]>
   /** Scope actual de servidor usado cuando el usuario hace select-all. */
@@ -146,7 +116,7 @@ export interface InfiniteScrollConfig {
 export interface DataTableMeta {
   /** Indica si la tabla está funcionando en modo infinite scroll */
   isInfiniteScroll?: boolean
-  /** Ejecuta el fetch de IDs y selecciona todas las filas filtradas globalmente */
+  /** Selecciona todas las filas del scope/filtro actual sin descargar IDs. */
   selectAll?: () => Promise<void>
   /** Deselecciona todas las filas filtradas globalmente */
   deselectAll?: () => Promise<void>
@@ -156,9 +126,9 @@ export interface DataTableMeta {
   visibleSelectedCount?: number
   /** IDs seleccionados que coinciden con el filtro actual */
   visibleSelectedIds?: string[]
-  /** Selección completa: IDs exactos o scope/filtro + exclusiones. */
+  /** Selección completa: IDs exactos u operaciones ordenadas por scope. */
   selectionState?: DataTableSelectionState
-  /** Total seleccionado real: ids.length o scope.total - excludedIds.length. */
+  /** Total seleccionado real: ids.length o conteo/evaluación de operaciones. */
   selectedCount?: number
   /** Conteo mostrado cuando el filtro visible es solo una intersección de la selección real. */
   displaySelectedCount?: number
@@ -182,7 +152,6 @@ export interface HistorySummary {
   rowCount?: number
   search?: string | null
   status?: string[] | null
-  excludedIds?: string[] | null
 }
 
 export interface HistoryEntry {
