@@ -67,7 +67,7 @@ script.
 | `004`     | Trigger `on_auth_user_email_updated` (sincroniza `profiles.email`), `admin_audit_email_change`, `log_audit_event_as_admin`                                                                                                                                                                                                                                     |
 | `005`     | Permiso `ai.chat`, RPC `get_ai_schema` con allowlist y `execute_ai_query` deshabilitada                                                                                                                                                                                                                                                                        |
 | `006`     | Infraestructura de `rate_limits`, `check_rate_limit`, `check_ai_chat_rate_limit`, throttle de `verify_user_password`                                                                                                                                                                                                                                           |
-| `007`     | `orders`, `order_history`, `order_change_events`, índices, triggers, RLS granular, realtime agregado y seed |
+| `007`     | `orders`, `orders_deleted`, `order_history`, `order_change_events`, índices, triggers, RLS granular, realtime agregado y seed |
 | `008`     | RPCs de orders para scroll por chunks, filtros, historial, conteo de selección y acciones server-side por operaciones de selección |
 
 ---
@@ -260,7 +260,7 @@ Las acciones masivas operan en backend:
 
 - `count_orders_by_selection`: calcula contadores globales y por vista.
 - `export_orders_by_selection`: copy/export server-side por operaciones.
-- `bulk_delete_orders_by_selection`: soft delete server-side con conteo esperado.
+- `bulk_delete_orders_by_selection`: mueve registros a `orders_deleted` con conteo esperado.
 - `bulk_delete_orders_by_ids`: ruta para selección manual pequeña.
 
 Permisos:

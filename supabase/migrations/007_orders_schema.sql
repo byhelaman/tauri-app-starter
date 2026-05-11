@@ -6,7 +6,7 @@
 --
 -- Qué configura:
 --   1. Permisos RBAC para orders (granulares: view/create/update/delete/bulk_delete/export/copy)
---   2. Tablas: orders, order_history
+--   2. Tablas: orders, orders_deleted, order_history
 --   3. Triggers: updated_at, set_updated_by (para realtime skip-own)
 --   4. RLS granular basada en has_current_permission()
 --   5. Grants internos + realtime
@@ -65,26 +65,48 @@ CREATE TABLE public.orders (
                             CHECK (priority IN ('High','Medium','Low')),
     updated_by  UUID        REFERENCES auth.users(id) ON DELETE SET NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    deleted_at  TIMESTAMPTZ DEFAULT NULL
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_orders_active_created_at ON public.orders(created_at DESC, id DESC)
-    WHERE deleted_at IS NULL;
-CREATE INDEX idx_orders_active_date_created_at ON public.orders(date DESC, created_at DESC, id DESC)
-    WHERE deleted_at IS NULL;
-CREATE INDEX idx_orders_active_status_created_at ON public.orders(status, created_at DESC, id DESC)
-    WHERE deleted_at IS NULL;
-CREATE INDEX idx_orders_active_channel_created_at ON public.orders(channel, created_at DESC, id DESC)
-    WHERE deleted_at IS NULL;
-CREATE INDEX idx_orders_active_start_hour_created_at
-    ON public.orders ((EXTRACT(HOUR FROM start_time)::INT), created_at DESC, id DESC)
-    WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX orders_code_active_key ON public.orders(code) WHERE deleted_at IS NULL;
+CREATE INDEX idx_orders_created_at ON public.orders(created_at DESC, id DESC);
+CREATE INDEX idx_orders_date_created_at ON public.orders(date DESC, created_at DESC, id DESC);
+CREATE INDEX idx_orders_status_created_at ON public.orders(status, created_at DESC, id DESC);
+CREATE INDEX idx_orders_channel_created_at ON public.orders(channel, created_at DESC, id DESC);
+CREATE INDEX idx_orders_start_hour_created_at
+    ON public.orders ((EXTRACT(HOUR FROM start_time)::INT), created_at DESC, id DESC);
+ALTER TABLE public.orders ADD CONSTRAINT orders_code_key UNIQUE (code);
 CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions;
-CREATE INDEX idx_orders_customer_trgm ON public.orders USING gin (customer extensions.gin_trgm_ops) WHERE deleted_at IS NULL;
-CREATE INDEX idx_orders_code_trgm     ON public.orders USING gin (code extensions.gin_trgm_ops)     WHERE deleted_at IS NULL;
-CREATE INDEX idx_orders_product_trgm  ON public.orders USING gin (product extensions.gin_trgm_ops)  WHERE deleted_at IS NULL;
+CREATE INDEX idx_orders_customer_trgm ON public.orders USING gin (customer extensions.gin_trgm_ops);
+CREATE INDEX idx_orders_code_trgm     ON public.orders USING gin (code extensions.gin_trgm_ops);
+CREATE INDEX idx_orders_product_trgm  ON public.orders USING gin (product extensions.gin_trgm_ops);
+
+CREATE TABLE public.orders_deleted (
+    id          UUID        PRIMARY KEY,
+    date        DATE        NOT NULL,
+    customer    TEXT        NOT NULL,
+    product     TEXT        NOT NULL,
+    category    TEXT        NOT NULL,
+    start_time  TIME        NOT NULL,
+    end_time    TIME        NOT NULL,
+    code        TEXT        NOT NULL,
+    status      TEXT        NOT NULL,
+    channel     TEXT        NOT NULL,
+    quantity    INTEGER     NOT NULL,
+    amount      NUMERIC(10,2) NOT NULL,
+    region      TEXT        NOT NULL,
+    payment     TEXT        NOT NULL,
+    priority    TEXT        NOT NULL,
+    updated_by  UUID        REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_at  TIMESTAMPTZ NOT NULL,
+    updated_at  TIMESTAMPTZ NOT NULL,
+    deleted_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    deleted_by  UUID        REFERENCES auth.users(id) ON DELETE SET NULL,
+    delete_mode TEXT        NOT NULL DEFAULT 'manual_ids'
+                            CHECK (delete_mode IN ('manual_ids','selection'))
+);
+
+CREATE INDEX idx_orders_deleted_deleted_at ON public.orders_deleted(deleted_at DESC, id DESC);
+CREATE INDEX idx_orders_deleted_code ON public.orders_deleted(code);
 
 CREATE TABLE public.order_history (
     id          BIGSERIAL   PRIMARY KEY,
@@ -168,7 +190,6 @@ DECLARE
     v_email TEXT;
     v_details JSONB := '[]'::jsonb;
     v_col TEXT;
-    v_is_soft_delete BOOLEAN := false;
     v_order_id UUID;
     v_record_id UUID;
     v_record_code TEXT;
@@ -191,40 +212,24 @@ BEGIN
         v_desc     := 'Order updated';
         v_order_id := NEW.id;
         
-        -- Detectar si es un soft delete (deleted_at pasó de NULL a algo)
-        IF OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL THEN
-            v_action := 'delete';
-            v_desc   := 'Order sent to trash';
-            v_is_soft_delete := true;
-            v_details := jsonb_build_array(jsonb_build_object(
-                'recordId', v_record_id,
-                'recordCode', v_record_code,
-                'field', 'deleted_at',
-                'oldValue', OLD.deleted_at,
-                'newValue', NEW.deleted_at
-            ));
-        END IF;
+        FOR v_col IN SELECT * FROM jsonb_object_keys(to_jsonb(NEW))
+        LOOP
+            IF v_col IN ('updated_at', 'updated_by') THEN
+                CONTINUE;
+            END IF;
 
-        IF NOT v_is_soft_delete THEN
-            FOR v_col IN SELECT * FROM jsonb_object_keys(to_jsonb(NEW))
-            LOOP
-                IF v_col IN ('updated_at', 'updated_by') THEN
-                    CONTINUE;
-                END IF;
-
-                IF to_jsonb(OLD)->>v_col IS DISTINCT FROM to_jsonb(NEW)->>v_col THEN
-                    v_details := v_details || jsonb_build_array(jsonb_build_object(
-                        'recordId', v_record_id,
-                        'recordCode', v_record_code,
-                        'field', v_col,
-                        'oldValue', to_jsonb(OLD)->v_col,
-                        'newValue', to_jsonb(NEW)->v_col
-                    ));
-                END IF;
-            END LOOP;
-        END IF;
+            IF to_jsonb(OLD)->>v_col IS DISTINCT FROM to_jsonb(NEW)->>v_col THEN
+                v_details := v_details || jsonb_build_array(jsonb_build_object(
+                    'recordId', v_record_id,
+                    'recordCode', v_record_code,
+                    'field', v_col,
+                    'oldValue', to_jsonb(OLD)->v_col,
+                    'newValue', to_jsonb(NEW)->v_col
+                ));
+            END IF;
+        END LOOP;
         
-        IF v_details = '[]'::jsonb AND NOT v_is_soft_delete THEN
+        IF v_details = '[]'::jsonb THEN
             RETURN NEW;
         END IF;
 
@@ -233,7 +238,7 @@ BEGIN
         v_record_id   := OLD.id;
         v_record_code := OLD.code;
         v_action      := 'delete';
-        v_desc        := 'Deleted order ' || OLD.code;
+        v_desc        := 'Deleted order';
         v_order_id    := NULL;
         v_details := jsonb_build_array(jsonb_build_object(
             'recordId', v_record_id,
@@ -366,14 +371,15 @@ CREATE TRIGGER orders_delete_realtime_event
 -- 4. RLS
 -- ============================================================
 
-ALTER TABLE public.orders       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orders        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orders_deleted ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.order_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.order_change_events ENABLE ROW LEVEL SECURITY;
 
 -- orders: ver
 CREATE POLICY "orders_select" ON public.orders
     FOR SELECT TO authenticated
-    USING ((SELECT public.has_current_permission('orders.view')) AND deleted_at IS NULL);
+    USING ((SELECT public.has_current_permission('orders.view')));
 
 -- orders: crear
 CREATE POLICY "orders_insert" ON public.orders
@@ -383,11 +389,11 @@ CREATE POLICY "orders_insert" ON public.orders
 -- orders: editar
 CREATE POLICY "orders_update" ON public.orders
     FOR UPDATE TO authenticated
-    USING  ((SELECT public.has_current_permission('orders.update')) AND deleted_at IS NULL)
-    WITH CHECK ((SELECT public.has_current_permission('orders.update')) AND deleted_at IS NULL);
+    USING  ((SELECT public.has_current_permission('orders.update')))
+    WITH CHECK ((SELECT public.has_current_permission('orders.update')));
 
 -- No hay DELETE directo: las operaciones destructivas deben pasar por RPCs
--- que aplican soft delete, permisos específicos y auditoría.
+-- que mueven registros a orders_deleted, aplican permisos específicos y auditan.
 
 -- order_history: solo lectura para manage; escribir vía SECURITY DEFINER RPCs
 CREATE POLICY "order_history_select" ON public.order_history
@@ -415,6 +421,7 @@ CREATE POLICY "order_change_events_insert_deny" ON public.order_change_events
 -- ============================================================
 
 GRANT SELECT ON public.order_change_events TO authenticated;
+REVOKE ALL ON public.orders_deleted FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.record_orders_insert_event() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.record_orders_update_event() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.record_orders_delete_event() FROM PUBLIC, anon, authenticated;
@@ -478,7 +485,7 @@ BEGIN
             payments  [1 + (random() * (array_length(payments,  1)-1))::INT],
             priorities[1 + (random() * (array_length(priorities,1)-1))::INT]
         )
-        ON CONFLICT (code) WHERE deleted_at IS NULL DO NOTHING;
+        ON CONFLICT (code) DO NOTHING;
     END LOOP;
 END;
 $$;

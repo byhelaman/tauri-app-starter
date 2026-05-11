@@ -88,8 +88,7 @@ BEGIN
         WITH filtered AS (
             SELECT o.*
             FROM public.orders o
-            WHERE o.deleted_at IS NULL
-                AND ($1 = '' OR $1 IS NULL OR (
+            WHERE ($1 = '' OR $1 IS NULL OR (
                     o.customer ILIKE '%%' || $1 || '%%' OR
                     o.code     ILIKE '%%' || $1 || '%%' OR
                     o.product  ILIKE '%%' || $1 || '%%'
@@ -160,7 +159,6 @@ BEGIN
     RETURN ARRAY(
         SELECT DISTINCT to_char(start_time, 'HH24')
         FROM public.orders
-        WHERE deleted_at IS NULL
         ORDER BY 1
     );
 END;
@@ -188,14 +186,13 @@ BEGIN
 
     SELECT COUNT(*), COALESCE(SUM(amount), 0)
     INTO v_total, v_revenue
-    FROM public.orders
-    WHERE deleted_at IS NULL;
+    FROM public.orders;
 
     SELECT json_object_agg(status, cnt) INTO v_by_status
-    FROM (SELECT status, COUNT(*) AS cnt FROM public.orders WHERE deleted_at IS NULL GROUP BY status) s;
+    FROM (SELECT status, COUNT(*) AS cnt FROM public.orders GROUP BY status) s;
 
     SELECT json_object_agg(channel, cnt) INTO v_by_channel
-    FROM (SELECT channel, COUNT(*) AS cnt FROM public.orders WHERE deleted_at IS NULL GROUP BY channel) c;
+    FROM (SELECT channel, COUNT(*) AS cnt FROM public.orders GROUP BY channel) c;
 
     RETURN json_build_object(
         'total',      v_total,
@@ -385,8 +382,7 @@ BEGIN
     SELECT COUNT(*)::INT
     INTO v_count
     FROM public.orders o
-    WHERE o.deleted_at IS NULL
-      AND public.order_is_selected_by_operations(o, p_operations)
+    WHERE public.order_is_selected_by_operations(o, p_operations)
       AND (p_scope IS NULL OR public.order_matches_filter_scope(o, p_scope));
 
     RETURN v_count;
@@ -416,8 +412,7 @@ BEGIN
     SELECT COALESCE(array_agg(o.id ORDER BY o.created_at DESC, o.id DESC), ARRAY[]::UUID[])
     INTO v_target_ids
     FROM public.orders o
-    WHERE o.deleted_at IS NULL
-      AND public.order_is_selected_by_operations(o, p_operations);
+    WHERE public.order_is_selected_by_operations(o, p_operations);
 
     v_count := COALESCE(array_length(v_target_ids, 1), 0);
 
@@ -427,10 +422,20 @@ BEGIN
 
     PERFORM set_config('app.bulk_op', 'true', true);
 
-    UPDATE public.orders o
-    SET deleted_at = NOW()
-    WHERE o.id = ANY(v_target_ids)
-      AND o.deleted_at IS NULL;
+    INSERT INTO public.orders_deleted (
+        id, date, customer, product, category, start_time, end_time, code,
+        status, channel, quantity, amount, region, payment, priority,
+        updated_by, created_at, updated_at, deleted_at, deleted_by, delete_mode
+    )
+    SELECT
+        o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code,
+        o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority,
+        o.updated_by, o.created_at, o.updated_at, NOW(), auth.uid(), 'selection'
+    FROM public.orders o
+    WHERE o.id = ANY(v_target_ids);
+
+    DELETE FROM public.orders o
+    WHERE o.id = ANY(v_target_ids);
 
     GET DIAGNOSTICS v_count = ROW_COUNT;
 
@@ -438,9 +443,15 @@ BEGIN
         INSERT INTO public.order_history (action, description, actor_email, details)
         VALUES (
             'delete',
-            'Bulk deleted ' || v_count::TEXT || ' orders via selection',
+            CASE
+                WHEN v_count = 1 THEN 'Deleted 1 order'
+                ELSE 'Deleted ' || v_count::TEXT || ' orders'
+            END,
             COALESCE(auth.jwt() ->> 'email', 'system'),
-            jsonb_build_object('rowCount', v_count)
+            jsonb_build_object(
+                'rowCount', v_count,
+                'deleteMode', 'selection'
+            )
         );
     END IF;
 
@@ -667,8 +678,7 @@ BEGIN
         WITH selected AS (
             SELECT o.*
             FROM public.orders o
-            WHERE o.deleted_at IS NULL
-              AND public.order_is_selected_by_operations(o, $1)
+            WHERE public.order_is_selected_by_operations(o, $1)
         ),
         ordered AS (
             SELECT row_number() OVER () AS rn, ordered_rows.*
@@ -745,6 +755,8 @@ AS $$
 DECLARE
     v_count INT;
     v_requested_count INT := COALESCE(array_length(p_ids, 1), 0);
+    v_single_id UUID;
+    v_single_code TEXT;
 BEGIN
     IF v_requested_count = 1 THEN
         IF NOT (SELECT public.has_current_permission('orders.delete'))
@@ -761,17 +773,59 @@ BEGIN
 
     PERFORM set_config('app.bulk_op', 'true', true);
 
-    UPDATE public.orders SET deleted_at = NOW() WHERE id = ANY(p_ids) AND deleted_at IS NULL;
+    IF v_requested_count = 1 THEN
+        SELECT id, code
+        INTO v_single_id, v_single_code
+        FROM public.orders
+        WHERE id = p_ids[1];
+    END IF;
+
+    INSERT INTO public.orders_deleted (
+        id, date, customer, product, category, start_time, end_time, code,
+        status, channel, quantity, amount, region, payment, priority,
+        updated_by, created_at, updated_at, deleted_at, deleted_by, delete_mode
+    )
+    SELECT
+        o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code,
+        o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority,
+        o.updated_by, o.created_at, o.updated_at, NOW(), auth.uid(), 'manual_ids'
+    FROM public.orders o
+    WHERE o.id = ANY(p_ids);
+
+    DELETE FROM public.orders WHERE id = ANY(p_ids);
     GET DIAGNOSTICS v_count = ROW_COUNT;
 
     IF v_count > 0 THEN
-        INSERT INTO public.order_history (action, description, actor_email, details)
-        VALUES (
-            'delete',
-            'Bulk deleted ' || v_count::TEXT || ' orders manually',
-            COALESCE(auth.jwt() ->> 'email', 'system'),
-            jsonb_build_object('rowCount', v_count)
-        );
+        IF v_requested_count = 1 AND v_single_id IS NOT NULL THEN
+            INSERT INTO public.order_history (action, description, actor_email, order_id, details)
+            VALUES (
+                'delete',
+                'Deleted order',
+                COALESCE(auth.jwt() ->> 'email', 'system'),
+                NULL,
+                jsonb_build_array(jsonb_build_object(
+                    'recordId', v_single_id,
+                    'recordCode', v_single_code,
+                    'field', 'record',
+                    'oldValue', 'active',
+                    'newValue', 'deleted'
+                ))
+            );
+        ELSE
+            INSERT INTO public.order_history (action, description, actor_email, details)
+            VALUES (
+                'delete',
+                CASE
+                    WHEN v_count = 1 THEN 'Deleted 1 order'
+                    ELSE 'Deleted ' || v_count::TEXT || ' orders'
+                END,
+                COALESCE(auth.jwt() ->> 'email', 'system'),
+                jsonb_build_object(
+                    'rowCount', v_count,
+                    'deleteMode', 'manual_ids'
+                )
+            );
+        END IF;
     END IF;
 
     PERFORM set_config('app.bulk_op', 'false', true);

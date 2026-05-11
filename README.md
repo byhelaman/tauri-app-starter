@@ -225,7 +225,7 @@ supabase/
     ├── 004_admin_sync_email.sql         # Trigger sync email + helpers admin de auditoría
     ├── 005_ai_chat.sql                  # permiso ai.chat + schema allowlist
     ├── 006_rate_limiting.sql            # rate limit genérico + gates en RPCs sensibles
-    ├── 007_orders_schema.sql            # orders, queue, historial, triggers, RLS y seed
+    ├── 007_orders_schema.sql            # orders, orders_deleted, historial, triggers, RLS y seed
     └── 008_orders_rpcs.sql              # RPCs de orders y acciones server-side
 ```
 
