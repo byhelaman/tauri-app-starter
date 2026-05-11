@@ -224,6 +224,13 @@ export const emptyOrdersTrash = async () => {
   return (data as number) ?? 0
 }
 
+export const removeDeletedOrder = async (id: string) => {
+  const db = assertSupabase()
+  const { data, error } = await db.rpc("remove_deleted_order", { p_id: id })
+  if (error) throw new Error(error.message)
+  return (data as number) ?? 0
+}
+
 export const bulkDeleteOrders = async (ids: string[]) => {
   if (ids.length === 0) return
   if (ids.length > MAX_BULK_ORDER_ROWS) {

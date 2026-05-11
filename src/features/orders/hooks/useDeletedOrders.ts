@@ -79,6 +79,21 @@ export function useDeletedOrders({
     },
   })
 
+  const removeDeletedOrderMutation = useMutation({
+    mutationFn: api.removeDeletedOrder,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["orders", "trash"] })
+      queryClient.invalidateQueries({ queryKey: ["orders", "trash", "unfiltered-count"] })
+      queryClient.invalidateQueries({ queryKey: ["orders", "history"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard", "history"] })
+      queryClient.invalidateQueries({ queryKey: ["orders", "deleted", "startHours"] })
+      toast.success("Order removed from trash")
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Could not remove order")
+    },
+  })
+
   const refreshCurrentOrderSort = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: deletedOrdersQueryKey })
   }, [deletedOrdersQueryKey, queryClient])
@@ -106,7 +121,8 @@ export function useDeletedOrders({
     refreshCurrentOrderSort,
     actions: {
       emptyTrash: emptyTrashMutation.mutateAsync,
+      removeDeletedOrder: removeDeletedOrderMutation.mutateAsync,
     },
-    isPending: emptyTrashMutation.isPending,
+    isPending: emptyTrashMutation.isPending || removeDeletedOrderMutation.isPending,
   }
 }

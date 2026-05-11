@@ -995,6 +995,52 @@ $$;
 
 -- ──────────────────────────────────────────────────────────────
 
+-- remove_deleted_order — elimina definitivamente un registro específico de la papelera.
+CREATE OR REPLACE FUNCTION public.remove_deleted_order(p_id UUID)
+RETURNS INT
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_count INT;
+    v_code TEXT;
+BEGIN
+    IF NOT (SELECT public.has_current_permission('orders.trash.empty')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.trash.empty';
+    END IF;
+
+    SELECT code INTO v_code
+    FROM public.orders_deleted
+    WHERE id = p_id;
+
+    DELETE FROM public.orders_deleted
+    WHERE id = p_id;
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+
+    IF v_count > 0 THEN
+        INSERT INTO public.order_history (action, description, actor_email, details)
+        VALUES (
+            'delete',
+            'Removed order from trash',
+            COALESCE(auth.jwt() ->> 'email', 'system'),
+            jsonb_build_array(jsonb_build_object(
+                'recordId', p_id,
+                'recordCode', v_code,
+                'field', 'record',
+                'oldValue', 'trash',
+                'newValue', 'removed'
+            ))
+        );
+    END IF;
+
+    RETURN v_count;
+END;
+$$;
+
+-- ──────────────────────────────────────────────────────────────
+
 -- empty_orders_trash — elimina definitivamente todo el contenido de la papelera.
 CREATE OR REPLACE FUNCTION public.empty_orders_trash()
 RETURNS INT
@@ -1054,6 +1100,7 @@ REVOKE ALL ON FUNCTION public.count_orders_by_selection(JSONB,JSONB) FROM PUBLIC
 REVOKE ALL ON FUNCTION public.export_orders_by_selection(JSONB,TEXT,TEXT,TEXT,TEXT,TEXT[],BOOLEAN,TEXT) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.bulk_delete_orders_by_selection(JSONB,INT) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.bulk_delete_orders_by_ids(UUID[]) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.remove_deleted_order(UUID) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.empty_orders_trash() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_orders(INT,INT,TEXT,TEXT[],TEXT[],TEXT[],DATE,TEXT[],TEXT,TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_deleted_orders(INT,INT,TEXT,TEXT[],TEXT[],TEXT[],DATE,TEXT[],TEXT,TEXT) TO authenticated;
@@ -1065,4 +1112,5 @@ GRANT EXECUTE ON FUNCTION public.count_orders_by_selection(JSONB,JSONB) TO authe
 GRANT EXECUTE ON FUNCTION public.export_orders_by_selection(JSONB,TEXT,TEXT,TEXT,TEXT,TEXT[],BOOLEAN,TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_selection(JSONB,INT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_ids(UUID[])          TO authenticated;
+GRANT EXECUTE ON FUNCTION public.remove_deleted_order(UUID)                 TO authenticated;
 GRANT EXECUTE ON FUNCTION public.empty_orders_trash()                       TO authenticated;

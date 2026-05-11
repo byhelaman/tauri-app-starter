@@ -64,7 +64,7 @@ import {
 } from "@/features/orders/modal-columns"
 import { TableHistoryCard } from "@/components/data-table/table-history-card"
 import { OrderDialog } from "@/features/orders/order-dialog"
-import { MAX_BULK_ORDER_ROWS, fetchDeletedOrdersStartHours, fetchOrderHistory, fetchOrdersStartHours } from "@/features/orders/api"
+import { MAX_BULK_ORDER_ROWS, fetchDeletedOrdersStartHours, fetchOrderHistory, fetchOrdersStartHours, type DeletedOrder } from "@/features/orders/api"
 import { useQuery } from "@tanstack/react-query"
 import { useAuth } from "@/contexts/use-auth"
 
@@ -133,6 +133,7 @@ export function OrdersPage() {
   const [isQueueDialogOpen, setIsQueueDialogOpen] = useState(false)
   const [isTrashDialogOpen, setIsTrashDialogOpen] = useState(false)
   const [isEmptyTrashDialogOpen, setIsEmptyTrashDialogOpen] = useState(false)
+  const [trashOrderToRemove, setTrashOrderToRemove] = useState<DeletedOrder | null>(null)
   const [isAddOrderDialogOpen, setIsAddOrderDialogOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date>()
 
@@ -228,7 +229,7 @@ export function OrdersPage() {
     [queuePageData]
   )
 
-  const copyQueueContextValue = useCallback(async (content: string, successMessage: string) => {
+  const copyContextValue = useCallback(async (content: string, successMessage: string) => {
     if (!content) {
       toast.error("Nothing to copy")
       return
@@ -479,21 +480,10 @@ export function OrdersPage() {
               rowContextMenu={(order) => (
                 <>
                   <ContextMenuItem
-                    onSelect={() => void copyQueueContextValue(order.code, "Order code copied")}
+                    onSelect={() => void copyContextValue(order.code, "Order code copied")}
                   >
                     Copy code
                   </ContextMenuItem>
-                  <ContextMenuItem
-                    onSelect={() => void copyQueueContextValue(order.time, "Time copied")}
-                  >
-                    Copy time
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    onSelect={() => void copyQueueContextValue(order.customer, "Customer copied")}
-                  >
-                    Copy customer
-                  </ContextMenuItem>
-                  <ContextMenuSeparator />
                   <ContextMenuItem
                     onSelect={() => {
                       const content = buildBulkCopyText(
@@ -501,7 +491,7 @@ export function OrdersPage() {
                         "orders-queue",
                         QUEUE_COPY_FIELDS
                       )
-                      void copyQueueContextValue(content, "Row copied")
+                      void copyContextValue(content, "Row copied")
                     }}
                   >
                     Copy row
@@ -554,6 +544,45 @@ export function OrdersPage() {
                 searchDebounceMs: 300,
                 viewActionsMode: "view",
               }}
+              rowContextMenu={(order) => (
+                <>
+                  <ContextMenuItem
+                    onSelect={() => void copyContextValue(order.code, "Order code copied")}
+                  >
+                    Copy code
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onSelect={() => {
+                      const content = [
+                        order.date,
+                        order.customer,
+                        order.product,
+                        order.category,
+                        `${order.start_time} - ${order.end_time}`,
+                        order.code,
+                        order.status,
+                        order.channel,
+                        order.quantity,
+                        order.amount,
+                        order.region,
+                        order.payment,
+                        order.priority,
+                        order.deleted_at,
+                        order.deleted_by_email,
+                      ].join(" - ")
+                      void copyContextValue(content, "Row copied")
+                    }}
+                  >
+                    Copy row
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem
+                    onSelect={() => setTrashOrderToRemove(order)}
+                  >
+                    Remove
+                  </ContextMenuItem>
+                </>
+              )}
               getRowId={(row) => row.id}
               layout={{
                 scrollAreaClassName: "max-h-[min(calc(100svh-22rem),30rem)] [--table-bg:var(--color-popover)]",
@@ -596,6 +625,34 @@ export function OrdersPage() {
               }}
             >
               Empty Trash
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!trashOrderToRemove}
+        onOpenChange={(open) => { if (!open) setTrashOrderToRemove(null) }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove from trash?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove <span className="font-medium text-foreground">{trashOrderToRemove?.code}</span> from trash. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={isTrashPending}
+              onClick={async () => {
+                if (!trashOrderToRemove) return
+                await trashActions.removeDeletedOrder(trashOrderToRemove.id)
+                setTrashOrderToRemove(null)
+              }}
+            >
+              Remove
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

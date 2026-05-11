@@ -227,7 +227,7 @@ export function BulkCopyDialog<TData>({
                 fields: selectedFields,
             }
             localStorage.setItem(bulkCopySettingsKey(tableId), JSON.stringify(payload))
-            toast.success("Bulk copy settings saved")
+            toast.success("Copy format saved")
             handleOpenChange(false)
         } catch {
             toast.error("Could not save settings")
