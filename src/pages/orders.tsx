@@ -61,7 +61,7 @@ import {
 } from "@/features/orders/modal-columns"
 import { TableHistoryCard } from "@/components/data-table/table-history-card"
 import { OrderDialog } from "@/features/orders/order-dialog"
-import { MAX_BULK_ORDER_ROWS, fetchOrderHistory, fetchOrdersStartHours, fetchOrdersByIds } from "@/features/orders/api"
+import { MAX_BULK_ORDER_ROWS, fetchOrderHistory, fetchOrdersStartHours } from "@/features/orders/api"
 import { useQuery } from "@tanstack/react-query"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -115,6 +115,7 @@ const PRIORITY_FILTER_OPTIONS: FacetedFilterOption[] = [
 export function OrdersPage() {
   const { hasPermission } = useAuth()
   const canExportOrders = hasPermission("orders.export")
+  const canCopyOrders = hasPermission("orders.copy")
   const canDeleteOrders = hasPermission("orders.delete")
   const canBulkDeleteOrders = hasPermission("orders.bulk_delete")
   const [bulkDeleteOp, setBulkDeleteOp] = useState<{
@@ -245,6 +246,7 @@ export function OrdersPage() {
         isLoading={isPageLoading}
         infiniteScroll={infiniteScroll}
         allowDataExport={canExportOrders}
+        allowDataCopy={canCopyOrders}
         columnFilters={columnFilters}
         onColumnFiltersChange={setColumnFilters}
         globalFilter={globalFilter}
@@ -305,9 +307,9 @@ export function OrdersPage() {
             </>
           )
         }}
-        bulkActions={(selectedLoadedRows, clearSelection, selectedIds, selection) => (
+        bulkActions={(_selectedLoadedRows, clearSelection, selectedIds, selection) => (
           <>
-            {canExportOrders && (
+            {canCopyOrders && (
               <Button
                 variant="outline"
                 size="sm"
@@ -316,27 +318,19 @@ export function OrdersPage() {
                   toast.loading(`Preparing copy...`, { id: toastId })
                   try {
                     const copySettings = resolveBulkCopySettings("orders", ORDER_COPY_FIELDS)
-                    const rowsToCopy = selection.mode === "operations"
-                      ? null
-                      : selectedIds.length === selectedLoadedRows.length
-                        ? selectedLoadedRows
-                        : await fetchOrdersByIds(selectedIds)
-
-                    const exportResult = selection.mode === "operations"
-                      ? await infiniteScroll.exportByScope!({
+                    const exportResult = await infiniteScroll.exportByScope!({
                         scope: infiniteScroll.currentScope ?? { search: "", filters: [] },
-                        operations: selection.operations,
+                        operations: selection.mode === "operations"
+                          ? selection.operations
+                          : [{ type: "selectIds", ids: selectedIds }],
+                        purpose: "copy",
                         ...copySettings,
                       })
-                      : null
-                    const content = exportResult?.content
-                      ?? buildBulkCopyText(rowsToCopy as unknown as Record<string, unknown>[], "orders", ORDER_COPY_FIELDS)
+                    const content = exportResult.content
                     if (!content) { toast.error("Nothing to copy", { id: toastId }); return }
                     
                     await navigator.clipboard.writeText(content)
-                    const copiedCount = selection.mode === "operations"
-                      ? exportResult?.rowCount ?? 0
-                      : (rowsToCopy?.length ?? 0)
+                    const copiedCount = exportResult.rowCount
                     toast.success(`Copied ${copiedCount.toLocaleString()} rows`, { id: toastId })
                   } catch (error) {
                     toast.error(error instanceof Error ? error.message : "Could not copy to clipboard", { id: toastId })
@@ -388,6 +382,7 @@ export function OrdersPage() {
               isLoading={isQueuePageLoading}
               infiniteScroll={queueInfiniteScroll}
               allowDataExport={canExportOrders}
+              allowDataCopy={canCopyOrders}
               columnFilters={queueColumnFilters}
               onColumnFiltersChange={setQueueColumnFilters}
               globalFilter={queueGlobalFilter}
@@ -407,7 +402,7 @@ export function OrdersPage() {
                 searchDebounceMs: 300,
                 viewActionsMode: "bulk-copy",
               }}
-              bulkActions={(selectedLoadedRows, _clearSelection, selectedIds, selection) => (
+              bulkActions={(_selectedLoadedRows, _clearSelection, selectedIds, selection) => (
                 <Button
                   variant="outline"
                   size="sm"
@@ -416,29 +411,22 @@ export function OrdersPage() {
                     toast.loading("Preparing copy...", { id: toastId })
                     try {
                       const copySettings = resolveBulkCopySettings("orders-queue", QUEUE_COPY_FIELDS)
-                      const rowsToCopy = selection.mode === "operations"
-                        ? null
-                        : selectedIds.length === selectedLoadedRows.length
-                          ? selectedLoadedRows
-                          : await fetchOrdersByIds(selectedIds)
-                      const exportResult = selection.mode === "operations"
-                        ? await queueInfiniteScroll.exportByScope!({
+                      const exportResult = await queueInfiniteScroll.exportByScope!({
                           scope: queueInfiniteScroll.currentScope ?? { search: "", filters: [] },
-                          operations: selection.operations,
+                          operations: selection.mode === "operations"
+                            ? selection.operations
+                            : [{ type: "selectIds", ids: selectedIds }],
+                          purpose: "copy",
                           ...copySettings,
                         })
-                        : null
-                      const content = exportResult?.content
-                        ?? buildBulkCopyText(rowsToCopy as unknown as Record<string, unknown>[], "orders-queue", QUEUE_COPY_FIELDS)
+                      const content = exportResult.content
                       if (!content) {
                         toast.error("Nothing to copy", { id: toastId })
                         return
                       }
 
                       await navigator.clipboard.writeText(content)
-                      const copiedCount = selection.mode === "operations"
-                        ? exportResult?.rowCount ?? 0
-                        : (rowsToCopy?.length ?? 0)
+                      const copiedCount = exportResult.rowCount
                       toast.success(`Copied ${copiedCount.toLocaleString()} rows`, { id: toastId })
                     } catch (error) {
                       toast.error(error instanceof Error ? error.message : "Could not copy to clipboard", { id: toastId })

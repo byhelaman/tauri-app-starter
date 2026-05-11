@@ -59,7 +59,12 @@ Always include a limit. Maximum allowed is 200.`,
     },
 }
 
-const DEFAULT_ALLOWED_TABLES = new Set(["orders", "queue_orders"])
+const ORDER_AI_COLUMNS = new Set([
+    "id", "date", "customer", "product", "category", "start_time", "end_time",
+    "code", "status", "channel", "quantity", "amount", "region", "payment",
+    "priority", "created_at",
+])
+const DEFAULT_ALLOWED_TABLES = new Set(["orders"])
 
 // Allowlist defensiva de tablas para query_table. Si AI_ALLOWED_TABLES no está definido,
 // se usa una allowlist mínima de tablas de negocio. Nunca se ofrece SQL libre.
@@ -210,7 +215,7 @@ Deno.serve(async (req: Request) => {
         global: { headers: { Authorization: `Bearer ${userToken}` } },
     })
 
-    const { data: hasPerm, error: permError } = await supabaseUser.rpc("has_permission_live", {
+    const { data: hasPerm, error: permError } = await supabaseUser.rpc("has_current_permission", {
         required_permission: "ai.chat",
     })
     if (permError || !hasPerm) {
@@ -363,9 +368,27 @@ Deno.serve(async (req: Request) => {
                                     toolResult = { error: "Table not allowed for this assistant." }
                                 } else {
                                     const safeLimit = Math.min(Math.max(1, limit ?? 50), 200)
+                                    const requestedColumns = select === "*"
+                                        ? Array.from(ORDER_AI_COLUMNS)
+                                        : select.split(",").map((column) => column.trim()).filter(Boolean)
+                                    const safeColumns = requestedColumns.filter((column) => ORDER_AI_COLUMNS.has(column))
 
-                                    let q = supabaseUser.from(table).select(select).limit(safeLimit)
+                                    if (safeColumns.length === 0) {
+                                        toolResult = { error: "No allowed columns selected." }
+                                        chatMessages.push({
+                                            role: "tool",
+                                            tool_call_id: tc.id,
+                                            content: JSON.stringify(toolResult),
+                                        })
+                                        continue
+                                    }
+
+                                    let q = supabaseUser.from(table).select(safeColumns.join(",")).limit(safeLimit)
                                     for (const f of filters) {
+                                        if (!ORDER_AI_COLUMNS.has(f.column) || !ALLOWED_FILTER_OPS.has(f.op)) {
+                                            toolResult = { error: "Filter not allowed." }
+                                            break
+                                        }
                                         switch (f.op) {
                                             case "eq":    q = q.eq(f.column, f.value as string); break
                                             case "neq":   q = q.neq(f.column, f.value as string); break
@@ -379,8 +402,25 @@ Deno.serve(async (req: Request) => {
                                             case "is":    q = q.is(f.column, f.value as boolean | null); break
                                         }
                                     }
+                                    if (toolResult && typeof toolResult === "object" && "error" in (toolResult as Record<string, unknown>)) {
+                                        chatMessages.push({
+                                            role: "tool",
+                                            tool_call_id: tc.id,
+                                            content: JSON.stringify(toolResult),
+                                        })
+                                        continue
+                                    }
                                     if (order) {
                                         const [col, dir] = order.split(":")
+                                        if (!ORDER_AI_COLUMNS.has(col)) {
+                                            toolResult = { error: "Order column not allowed." }
+                                            chatMessages.push({
+                                                role: "tool",
+                                                tool_call_id: tc.id,
+                                                content: JSON.stringify(toolResult),
+                                            })
+                                            continue
+                                        }
                                         q = q.order(col, { ascending: dir !== "desc" })
                                     }
                                     const { data, error } = await q

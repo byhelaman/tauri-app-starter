@@ -36,6 +36,7 @@ interface DataTableToolbarProps<TData> {
   onSidePanelToggle?: () => void
   infiniteScroll?: InfiniteScrollConfig
   allowDataExport?: boolean
+  allowDataCopy?: boolean
   viewActionsMode?: "full" | "bulk-copy" | "none"
   resultCountMode?: "server" | "client"
   onResetTable?: () => void
@@ -54,6 +55,7 @@ export function DataTableToolbar<TData>({
   onSidePanelToggle,
   infiniteScroll,
   allowDataExport,
+  allowDataCopy,
   viewActionsMode = "full",
   resultCountMode = "server",
   onResetTable,
@@ -257,6 +259,7 @@ export function DataTableToolbar<TData>({
           onSidePanelToggle={onSidePanelToggle}
           infiniteScroll={infiniteScroll}
           allowDataExport={allowDataExport}
+          allowDataCopy={allowDataCopy}
           mode={viewActionsMode}
           onResetTable={onResetTable}
         />

@@ -212,6 +212,7 @@ export const bulkDeleteOrdersBySelection = async (selection: DataTableSelectionS
 export const exportOrdersByScope = async ({
   scope,
   operations,
+  purpose = "export",
   format,
   fields,
   headers,
@@ -219,6 +220,7 @@ export const exportOrdersByScope = async ({
 }: {
   scope: DataTableSelectionScope
   operations?: DataTableSelectionOperation[]
+  purpose?: "copy" | "export"
   format: ServerExportFormat
   fields: string[]
   headers?: boolean
@@ -228,6 +230,7 @@ export const exportOrdersByScope = async ({
   if (operations && operations.length > 0) {
     const { data, error } = await db.rpc("export_orders_by_selection", {
       p_operations: operationsRpcParam(operations),
+      p_purpose: purpose ?? "export",
       p_sort_col: scope.sorting?.[0]?.id ?? null,
       p_sort_dir: scope.sorting?.[0]?.desc ? "desc" : (scope.sorting?.[0] ? "asc" : null),
       p_format: format,
@@ -244,6 +247,7 @@ export const exportOrdersByScope = async ({
   }
   const { data, error } = await db.rpc("export_orders_by_selection", {
     p_operations: operationsRpcParam([{ type: "select", scope, total: 0 }]),
+    p_purpose: purpose ?? "export",
     p_sort_col: scope.sorting?.[0]?.id ?? null,
     p_sort_dir: scope.sorting?.[0]?.desc ? "desc" : (scope.sorting?.[0] ? "asc" : null),
     p_format: format,
@@ -268,18 +272,6 @@ export const countOrdersBySelection = async (selection: DataTableSelectionState,
   })
   if (error) throw new Error(error.message)
   return (data as number) ?? 0
-}
-
-/** Obtiene órdenes completas dado un arreglo de IDs exactos. Usado para Export/Copy. */
-export const fetchOrdersByIds = async (ids: string[]): Promise<Order[]> => {
-  if (ids.length === 0) return []
-  if (ids.length > MAX_BULK_ORDER_ROWS) {
-    throw new Error(`Copy/export is limited to ${MAX_BULK_ORDER_ROWS.toLocaleString()} orders at a time`)
-  }
-  const db = assertSupabase()
-  const { data, error } = await db.rpc("get_orders_by_ids", { p_ids: ids })
-  if (error) throw new Error(error.message)
-  return (data as Order[]) ?? []
 }
 
 export const updateOrderStatus = async (id: string, status: Status) => {

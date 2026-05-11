@@ -219,6 +219,58 @@ describe("useInfiniteSelection operations model", () => {
     }
   })
 
+  it("accumulates manual rows with later filtered select-all operations", async () => {
+    const all = filters({})
+    const processing = filters({ status: ["processing"] })
+    const { result, rerender } = renderSelection(all)
+
+    await act(() => result.current.setRowSelection({ a: true }))
+    await expectState(result, allIds, ["a"])
+
+    const visible = rerenderScope(rerender, processing)
+    await act(async () => { await result.current.selectAll() })
+    await expectState(result, visible, ["a", "b", "c"])
+
+    rerenderScope(rerender, all)
+    await expectState(result, allIds, ["a", "b", "c"])
+  })
+
+  it("reselecting an individually excluded row after select-all does not exceed the dataset total", async () => {
+    const all = filters({})
+    const { result } = renderSelection(all)
+
+    await act(async () => { await result.current.selectAll() })
+    await act(() => result.current.setRowSelection({ ...result.current.rowSelection, a: false }))
+    await expectState(result, allIds, ["b", "c", "d", "e", "f"])
+
+    await act(() => result.current.setRowSelection({ ...result.current.rowSelection, a: true }))
+    await expectState(result, allIds, allIds)
+  })
+
+  it("keeps counters coherent when clearing one filter from an overlapping all-options scope", async () => {
+    const all = filters({})
+    const processing = filters({ status: ["processing"] })
+    const processingAllChannels = filters({
+      status: ["processing"],
+      channel: ["Online", "Retail", "Partner", "Phone"],
+    })
+    const allChannels = filters({ channel: ["Online", "Retail", "Partner", "Phone"] })
+    const { result, rerender } = renderSelection(all)
+
+    await act(async () => { await result.current.selectAll() })
+    let visible = rerenderScope(rerender, processing)
+    await act(async () => { await result.current.deselectAll() })
+    await expectState(result, visible, ["a", "d", "e", "f"])
+
+    visible = rerenderScope(rerender, processingAllChannels)
+    await act(async () => { await result.current.selectAll() })
+    await expectState(result, visible, allIds)
+
+    visible = rerenderScope(rerender, allChannels)
+    await expectState(result, visible, allIds)
+    expect(result.current.selectedCount).toBe(allIds.length)
+  })
+
   it("marks the current unloaded scope as fully selected immediately after select-all", async () => {
     const all = filters({})
     const loadedIds = allIds.slice(0, 3)

@@ -102,6 +102,7 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION public.get_ai_schema(TEXT[]) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_ai_schema(TEXT[]) TO authenticated;
 
 -- ============================================================

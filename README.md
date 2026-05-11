@@ -47,8 +47,8 @@ Ver la guía completa en [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md).
 Pasos requeridos en orden:
 
 1. Crear proyecto y copiar credenciales al `.env`
-2. Ejecutar las 6 migraciones disponibles en el SQL Editor
-  (`001`, `002`, `003`, `004`, `006`, `009`)
+2. Ejecutar las 8 migraciones disponibles en el SQL Editor
+   (`001` a `008`, en orden)
 3. Activar el Auth Hook (`Authentication → Hooks → custom_access_token_hook`) ⚠️
 4. Desplegar las 4 edge functions (`admin-reset-user-password`,
    `admin-update-user-email`, `admin-invite-user`, `ai-chat`)
@@ -137,21 +137,37 @@ individual y masivo, y descarte.
   reintento rápido
 - Respuestas por streaming SSE con indicadores de estado de herramientas
 - Renderizado Markdown (GFM), copiar mensaje y copiar conversación completa
-- Herramientas de datos: `get_schema`, `query_table` y `execute_query` (solo
-  lectura garantizada en BD)
+- Herramientas de datos: `get_schema` y `query_table` sobre allowlist estricta
+  de tablas/columnas. No hay SQL libre desde el cliente.
 - Control de abuso: rate limit server-side (`ai_chat`: 30 solicitudes por minuto
   por usuario)
 
 ### Seguridad endurecida
 
-- `has_permission` en modo fail-closed (`COALESCE(..., false)`) para evitar
-  bypass por claims faltantes en JWT
+- `has_claimed_permission` lee claims del JWT para UI/caché; las RPCs sensibles
+  usan `has_current_permission`, que lee permisos vivos desde `profiles + roles`
 - Endurecimiento RLS de catálogos RBAC (`roles`, `permissions`,
   `role_permissions`) con patrón fila propia o admin
 - Sanitización de errores de herramientas SQL en `ai-chat` para evitar filtrar
   estructura interna
 - CSP de Tauri alineado con Supabase (`https` y `wss`) y superficie de
   capacidades mínima
+
+### Orders / DataTable
+
+- Scroll infinito real por chunks de 1000 filas; la virtualización renderiza solo
+  filas visibles.
+- La selección no depende de filas cargadas: combina IDs manuales con operaciones
+  server-side ordenadas (`select`, `deselect`, `selectIds`, `deselectIds`).
+- `select all` aplica al scope/filtro activo; si cambian filtros, el scope
+  original se conserva y los contadores se recalculan contra backend.
+- Copy/export/delete usan RPCs server-side por operaciones de selección. No se
+  descargan 20k/50k IDs ni filas completas para representar una selección.
+- Copy requiere `orders.copy`; export requiere `orders.export`; delete masivo
+  requiere `orders.bulk_delete`.
+- Export/copy directo está limitado a 10k filas para evitar respuestas enormes en
+  PostgREST. Para más volumen debe integrarse un job asíncrono con Storage/Edge
+  Function.
 
 ### Actualizaciones automáticas
 

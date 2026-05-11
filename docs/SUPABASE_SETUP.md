@@ -67,8 +67,8 @@ script.
 | `004`     | Trigger `on_auth_user_email_updated` (sincroniza `profiles.email`), `admin_audit_email_change`, `log_audit_event_as_admin`                                                                                                                                                                                                                                     |
 | `005`     | Permiso `ai.chat`, RPC `get_ai_schema` con allowlist y `execute_ai_query` deshabilitada                                                                                                                                                                                                                                                                        |
 | `006`     | Infraestructura de `rate_limits`, `check_rate_limit`, `check_ai_chat_rate_limit`, throttle de `verify_user_password`                                                                                                                                                                                                                                           |
-| `007`     | `orders`, `queue_orders`, `order_history`, `order_change_events`, índices, triggers, RLS granular, realtime y seed                                                                                                                                                                               |
-| `008`     | RPCs de orders para scroll por chunks, filtros, historial, export/copy/delete por scope o IDs y helpers de exportación                                                                                                                                                                           |
+| `007`     | `orders`, `order_history`, `order_change_events`, índices, triggers, RLS granular, realtime agregado y seed |
+| `008`     | RPCs de orders para scroll por chunks, filtros, historial, conteo de selección y acciones server-side por operaciones de selección |
 
 ---
 
@@ -234,10 +234,10 @@ supabase functions deploy ai-chat --no-verify-jwt
 | `admin-reset-user-password` | Resetea la contraseña de un usuario e invalida todas sus sesiones activas             |
 | `admin-update-user-email`   | Cambia el email de un usuario (bloqueado si tiene invite pendiente)                   |
 | `admin-invite-user`         | Invita a un nuevo usuario y le asigna un rol                                          |
-| `ai-chat`                   | Endpoint SSE para chat con herramientas `get_schema`, `query_table` y `execute_query` |
+| `ai-chat`                   | Endpoint SSE para chat con herramientas allowlist `get_schema` y `query_table` |
 
 Las funciones `admin-*` validan jerarquía/permisos (`users.manage`) antes de
-aplicar el cambio. `ai-chat` valida el permiso `ai.chat` antes de ejecutar
+aplicar el cambio. `ai-chat` valida el permiso vivo `ai.chat` antes de ejecutar
 herramientas de consulta.
 
 ### Variables opcionales de Edge Functions
@@ -245,8 +245,35 @@ herramientas de consulta.
 - `CORS_ALLOWED_ORIGINS`: lista CSV para restringir orígenes permitidos en
   funciones (si no se define, usa orígenes locales por defecto)
 - `AI_ALLOWED_TABLES`: lista CSV de tablas permitidas para `query_table` en
-  `ai-chat`; si no se define, habilita modo flexible y también expone
-  `execute_query`
+  `ai-chat`. Si no se define, se usa `orders`. La función nunca expone SQL libre.
+
+### Orders, selección y acciones masivas
+
+La tabla de orders usa scroll infinito por chunks y virtualización. La selección
+se guarda como operaciones ordenadas, no como una lista gigante de IDs:
+
+- `select` / `deselect`: aplican al scope/filtro activo.
+- `selectIds` / `deselectIds`: aplican a filas individuales.
+- La última operación que coincide con una fila decide si está seleccionada.
+
+Las acciones masivas operan en backend:
+
+- `count_orders_by_selection`: calcula contadores globales y por vista.
+- `export_orders_by_selection`: copy/export server-side por operaciones.
+- `bulk_delete_orders_by_selection`: soft delete server-side con conteo esperado.
+- `bulk_delete_orders_by_ids`: ruta para selección manual pequeña.
+
+Permisos:
+
+- `orders.view`: lectura y contadores.
+- `orders.copy`: copiar datos.
+- `orders.export`: exportar datos.
+- `orders.delete`: borrar una fila.
+- `orders.bulk_delete`: borrar masivamente.
+
+`export_orders_by_selection` tiene límite directo de 10k filas. Para datasets
+mayores se debe usar un job asíncrono que genere el archivo en Storage desde una
+Edge Function o worker.
 
 ---
 

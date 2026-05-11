@@ -292,27 +292,6 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
--- Aliases de compatibilidad para instalaciones que aún llamen los nombres antiguos.
-CREATE OR REPLACE FUNCTION public.has_permission(required_permission text)
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-    SELECT public.has_claimed_permission(required_permission);
-$$;
-
-CREATE OR REPLACE FUNCTION public.has_permission_live(required_permission text)
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-    SELECT public.has_current_permission(required_permission);
-$$;
-
 -- Devuelve la jerarquía actual leyendo profiles + roles en vivo.
 -- Usar en decisiones sensibles; los claims JWT pueden quedar obsoletos hasta refresh.
 CREATE OR REPLACE FUNCTION public.get_current_user_level()
@@ -588,8 +567,6 @@ CREATE TRIGGER check_role_update
 -- ============================================================
 GRANT EXECUTE ON FUNCTION public.has_claimed_permission(text)          TO authenticated;
 GRANT EXECUTE ON FUNCTION public.has_current_permission(text)     TO authenticated;
-GRANT EXECUTE ON FUNCTION public.has_permission(text)             TO authenticated;
-GRANT EXECUTE ON FUNCTION public.has_permission_live(text)        TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_current_user_level()      TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_my_profile()              TO authenticated;
 GRANT EXECUTE ON FUNCTION public.check_email_exists(text)      TO authenticated;

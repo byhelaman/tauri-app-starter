@@ -330,7 +330,6 @@ export function useOrders({
       isFetchingNextPage,
       totalRowCount: cachedRowCount,
       unfilteredTotalRowCount: unfilteredCountData?.total ?? cachedRowCount,
-      bulkActionRowLimit: api.MAX_BULK_ORDER_ROWS,
       currentScope: {
         search: globalFilter,
         filters: columnFilters,
@@ -339,10 +338,6 @@ export function useOrders({
       },
       exportByScope: api.exportOrdersByScope,
       countBySelection: api.countOrdersBySelection,
-      fetchByIds: async (ids: string[]): Promise<Record<string, unknown>[]> => {
-        const rows = await api.fetchOrdersByIds(ids)
-        return rows as unknown as Record<string, unknown>[]
-      },
     },
 
     columnFilters,

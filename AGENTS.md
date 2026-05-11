@@ -70,7 +70,7 @@ The foundation migrations (`supabase/migrations/001_foundation.sql` + `supabase/
 
 **Critical**: The `custom_access_token_hook` function must be activated in the Supabase dashboard (Auth → Hooks) for JWT claims (role/permissions) to be injected into tokens. Without this, RBAC won't work. See `docs/SUPABASE_SETUP.md` for the full setup procedure.
 
-Helper RPCs: `has_permission()`, `get_my_profile()`, `get_all_users()`, `update_user_role()`.
+Helper RPCs: `has_claimed_permission()` para UI/JWT cache, `has_current_permission()` para autorización viva, `get_my_profile()`, `get_all_users()`, `update_user_role()`.
 
 Security constraints baked into the RPCs:
 - `check_email_exists` — restricted to `hierarchy_level >= 80` (prevents user enumeration)

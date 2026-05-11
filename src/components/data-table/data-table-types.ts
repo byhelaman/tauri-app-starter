@@ -72,6 +72,7 @@ export type ServerExportFormat = "csv" | "tsv" | "json" | "md" | "lines" | "cust
 export interface ServerScopeExportRequest {
   scope: DataTableSelectionScope
   operations?: DataTableSelectionOperation[]
+  purpose?: "copy" | "export"
   format: ServerExportFormat
   fields: string[]
   headers?: boolean
@@ -97,10 +98,6 @@ export interface InfiniteScrollConfig {
   totalRowCount?: number
   /** Total de filas sin filtros de tabla activos */
   unfilteredTotalRowCount?: number
-  /** Máximo de filas permitido para acciones masivas que cargan datos completos en el cliente */
-  bulkActionRowLimit?: number
-  /** Obtiene filas completas por IDs exactos. Usado cuando la selección incluye filas no cargadas. */
-  fetchByIds?: (ids: string[]) => Promise<Record<string, unknown>[]>
   /** Scope actual de servidor usado cuando el usuario hace select-all. */
   currentScope?: DataTableSelectionScope
   /** Genera contenido server-side para scopes grandes sin cargar registros en memoria del cliente. */

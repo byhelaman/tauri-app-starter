@@ -90,6 +90,8 @@ interface DataTableProps<TData, TValue> {
   estimatedRowHeight?: number
   /** Permite acciones de copia/exportación masiva */
   allowDataExport?: boolean
+  /** Permite acciones de copia masiva */
+  allowDataCopy?: boolean
   /** Desactiva la paginación clásica y muestra todas las filas recibidas. */
   enablePagination?: boolean
   /** Resetea estado externo que vive fuera de la tabla, como filtros de página. */
@@ -126,6 +128,7 @@ export function DataTable<TData, TValue>({
   infiniteScroll,
   estimatedRowHeight = 48,
   allowDataExport = true,
+  allowDataCopy = allowDataExport,
   enablePagination = true,
   onResetView,
 }: DataTableProps<TData, TValue>) {
@@ -379,6 +382,7 @@ export function DataTable<TData, TValue>({
         onSidePanelToggle={sidePanel ? () => setIsSidePanelOpen(!isSidePanelOpen) : undefined}
         infiniteScroll={infiniteScroll}
         allowDataExport={allowDataExport}
+        allowDataCopy={allowDataCopy}
         onResetTable={resetTableView}
       />
 

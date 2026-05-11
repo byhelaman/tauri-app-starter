@@ -577,6 +577,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION public.export_orders_by_selection(
     p_operations JSONB DEFAULT '[]'::JSONB,
+    p_purpose     TEXT    DEFAULT 'export',
     p_sort_col     TEXT    DEFAULT NULL,
     p_sort_dir     TEXT    DEFAULT NULL,
     p_format       TEXT    DEFAULT 'csv',
@@ -600,9 +601,16 @@ DECLARE
     v_max_direct_rows INT := 10000;
     v_delim      TEXT;
     v_format     TEXT := lower(COALESCE(p_format, 'csv'));
+    v_purpose    TEXT := lower(COALESCE(p_purpose, 'export'));
 BEGIN
-    IF NOT (SELECT public.has_current_permission('orders.export')) AND NOT (SELECT public.has_current_permission('orders.copy')) THEN
-        RAISE EXCEPTION 'Permission denied: requires orders.export or orders.copy';
+    IF v_purpose NOT IN ('copy', 'export') THEN
+        RAISE EXCEPTION 'Invalid export purpose: %', p_purpose;
+    END IF;
+
+    IF v_purpose = 'copy' AND NOT (SELECT public.has_current_permission('orders.copy')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.copy';
+    ELSIF v_purpose = 'export' AND NOT (SELECT public.has_current_permission('orders.export')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.export';
     END IF;
 
     v_count := public.count_orders_by_selection(p_operations);
@@ -725,56 +733,6 @@ BEGIN
 END;
 $$;
 
--- get_orders_by_ids
--- Obtiene un array de órdenes completo a partir de sus IDs, sorteando los límites de longitud de URL del frontend
-CREATE OR REPLACE FUNCTION public.get_orders_by_ids(p_ids UUID[])
-RETURNS JSON
-LANGUAGE plpgsql
-STABLE
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-DECLARE
-    v_data JSON;
-BEGIN
-    IF NOT (SELECT public.has_current_permission('orders.export')) THEN
-        RAISE EXCEPTION 'Permission denied: requires orders.export';
-    END IF;
-
-    IF COALESCE(array_length(p_ids, 1), 0) > 10000 THEN
-        RAISE EXCEPTION 'Too many orders requested at once';
-    END IF;
-
-    SELECT COALESCE(json_agg(row_to_json(r)), '[]'::json) INTO v_data
-    FROM (
-        SELECT
-            id,
-            date::TEXT,
-            customer,
-            product,
-            category,
-            to_char(start_time, 'HH24:MI') AS start_time,
-            to_char(end_time,   'HH24:MI') AS end_time,
-            code,
-            status,
-            channel,
-            quantity,
-            amount,
-            region,
-            payment,
-            priority,
-            created_at
-        FROM public.orders
-        WHERE id = ANY(p_ids) AND deleted_at IS NULL
-        ORDER BY array_position(p_ids, id)
-    ) r;
-
-    RETURN v_data;
-END;
-$$;
-
--- ──────────────────────────────────────────────────────────────
-
 -- bulk_delete_orders_by_ids
 -- Elimina un array específico de órdenes, sorteando los límites de longitud de URL del frontend
 CREATE OR REPLACE FUNCTION public.bulk_delete_orders_by_ids(p_ids UUID[])
@@ -826,17 +784,26 @@ $$;
 -- 2. GRANTS
 -- ============================================================
 
+REVOKE ALL ON FUNCTION public.get_orders(INT,INT,TEXT,TEXT[],TEXT[],TEXT[],DATE,TEXT[],TEXT,TEXT) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.get_orders_stats() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.get_order_history(INT,INT) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.get_orders_start_hours() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.record_order_history(TEXT,TEXT,UUID,JSONB) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.jsonb_text_array(JSONB) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.order_matches_filter_scope(public.orders,JSONB) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.order_is_selected_by_operations(public.orders,JSONB) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.order_export_value(TEXT,UUID,DATE,TEXT,TEXT,TEXT,TIME,TIME,TEXT,TEXT,TEXT,INT,NUMERIC,TEXT,TEXT,TEXT,TIMESTAMPTZ) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.text_csv_escape(TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.render_order_template(TEXT,UUID,DATE,TEXT,TEXT,TEXT,TIME,TIME,TEXT,TEXT,TEXT,INT,NUMERIC,TEXT,TEXT,TEXT,TIMESTAMPTZ) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.count_orders_by_selection(JSONB,JSONB) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.export_orders_by_selection(JSONB,TEXT,TEXT,TEXT,TEXT,TEXT[],BOOLEAN,TEXT) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.bulk_delete_orders_by_selection(JSONB,INT) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.bulk_delete_orders_by_ids(UUID[]) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_orders(INT,INT,TEXT,TEXT[],TEXT[],TEXT[],DATE,TEXT[],TEXT,TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_stats()                         TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_order_history(INT,INT)                 TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_start_hours()                   TO authenticated;
-REVOKE ALL ON FUNCTION public.record_order_history(TEXT,TEXT,UUID,JSONB) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.jsonb_text_array(JSONB) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.jsonb_text_array(JSONB) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.order_matches_filter_scope(public.orders,JSONB) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.order_is_selected_by_operations(public.orders,JSONB) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.count_orders_by_selection(JSONB,JSONB) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.export_orders_by_selection(JSONB,TEXT,TEXT,TEXT,TEXT[],BOOLEAN,TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.export_orders_by_selection(JSONB,TEXT,TEXT,TEXT,TEXT,TEXT[],BOOLEAN,TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_selection(JSONB,INT) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.get_orders_by_ids(UUID[])                  TO authenticated;
 GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_ids(UUID[])          TO authenticated;
