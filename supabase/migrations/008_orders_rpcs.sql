@@ -143,6 +143,167 @@ $$;
 
 -- ──────────────────────────────────────────────────────────────
 
+-- get_deleted_orders — lectura server-side de papelera con filtros y ordenamiento.
+CREATE OR REPLACE FUNCTION public.get_deleted_orders(
+    p_limit      INT      DEFAULT 25,
+    p_offset     INT      DEFAULT 0,
+    p_search     TEXT     DEFAULT '',
+    p_status     TEXT[]   DEFAULT NULL,
+    p_channel    TEXT[]   DEFAULT NULL,
+    p_priority   TEXT[]   DEFAULT NULL,
+    p_date       DATE     DEFAULT NULL,
+    p_start_hour TEXT[]   DEFAULT NULL,
+    p_sort_col   TEXT     DEFAULT NULL,
+    p_sort_dir   TEXT     DEFAULT NULL
+)
+RETURNS JSON
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_total      INT;
+    v_data       JSON;
+    v_sql        TEXT;
+    v_sort_c     TEXT := 'deleted_at';
+    v_sort_d     TEXT := 'DESC';
+    v_hours      INT[];
+    v_limit      INT;
+    v_offset     INT;
+BEGIN
+    IF NOT (SELECT public.has_current_permission('orders.trash.view')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.trash.view';
+    END IF;
+
+    v_sort_c := CASE p_sort_col
+        WHEN 'id' THEN 'id'
+        WHEN 'date' THEN 'date'
+        WHEN 'customer' THEN 'customer'
+        WHEN 'product' THEN 'product'
+        WHEN 'category' THEN 'category'
+        WHEN 'time' THEN 'start_time'
+        WHEN 'start_time' THEN 'start_time'
+        WHEN 'end_time' THEN 'end_time'
+        WHEN 'code' THEN 'code'
+        WHEN 'status' THEN 'status'
+        WHEN 'channel' THEN 'channel'
+        WHEN 'quantity' THEN 'quantity'
+        WHEN 'amount' THEN 'amount'
+        WHEN 'region' THEN 'region'
+        WHEN 'payment' THEN 'payment'
+        WHEN 'priority' THEN 'priority'
+        WHEN 'created_at' THEN 'created_at'
+        WHEN 'deleted_at' THEN 'deleted_at'
+        WHEN 'deleted_by_email' THEN 'deleted_by_email'
+        ELSE 'deleted_at'
+    END;
+
+    IF lower(p_sort_dir) = 'asc' THEN
+        v_sort_d := 'ASC';
+    ELSIF lower(p_sort_dir) = 'desc' THEN
+        v_sort_d := 'DESC';
+    END IF;
+
+    IF p_start_hour IS NOT NULL THEN
+        SELECT array_agg(x::INT)
+        INTO v_hours
+        FROM unnest(p_start_hour) x
+        WHERE x ~ '^\d+$';
+    END IF;
+
+    v_limit := LEAST(GREATEST(COALESCE(p_limit, 25), 1), 1000);
+    v_offset := GREATEST(COALESCE(p_offset, 0), 0);
+
+    v_sql := format($query$
+        WITH filtered AS (
+            SELECT
+                d.*,
+                COALESCE(u.email, 'system') AS deleted_by_email
+            FROM public.orders_deleted d
+            LEFT JOIN auth.users u ON u.id = d.deleted_by
+            WHERE ($1 = '' OR $1 IS NULL OR (
+                    d.customer ILIKE '%%' || $1 || '%%' OR
+                    d.code     ILIKE '%%' || $1 || '%%' OR
+                    d.product  ILIKE '%%' || $1 || '%%'
+                ))
+                AND ($2 IS NULL OR array_length($2, 1) IS NULL OR d.status  = ANY($2))
+                AND ($3 IS NULL OR array_length($3, 1) IS NULL OR d.channel = ANY($3))
+                AND ($4 IS NULL OR array_length($4, 1) IS NULL OR d.priority = ANY($4))
+                AND ($5 IS NULL OR d.date = $5)
+                AND ($6 IS NULL OR array_length($6, 1) IS NULL
+                    OR EXTRACT(HOUR FROM d.start_time)::INT = ANY($6))
+        )
+        SELECT
+            (SELECT COUNT(*) FROM filtered),
+            (
+                SELECT COALESCE(json_agg((to_jsonb(r) - '__row_order') ORDER BY r.__row_order), '[]'::json)
+                FROM (
+                    SELECT
+                        ROW_NUMBER() OVER (ORDER BY %I %s NULLS LAST, deleted_at DESC, id DESC) AS __row_order,
+                        id,
+                        date::TEXT,
+                        customer,
+                        product,
+                        category,
+                        to_char(start_time, 'HH24:MI') AS start_time,
+                        to_char(end_time,   'HH24:MI') AS end_time,
+                        code,
+                        status,
+                        channel,
+                        quantity,
+                        amount,
+                        region,
+                        payment,
+                        priority,
+                        created_at,
+                        updated_at,
+                        deleted_at,
+                        deleted_by,
+                        deleted_by_email
+                    FROM filtered
+                    ORDER BY %I %s NULLS LAST, deleted_at DESC, id DESC
+                    LIMIT $7 OFFSET $8
+                ) r
+            )
+    $query$, v_sort_c, v_sort_d, v_sort_c, v_sort_d);
+
+    EXECUTE v_sql
+    USING p_search, p_status, p_channel, p_priority, p_date, v_hours, v_limit, v_offset
+    INTO v_total, v_data;
+
+    RETURN json_build_object(
+        'data', v_data,
+        'total', v_total
+    );
+END;
+$$;
+
+-- ──────────────────────────────────────────────────────────────
+
+-- get_deleted_orders_start_hours
+CREATE OR REPLACE FUNCTION public.get_deleted_orders_start_hours()
+RETURNS TEXT[]
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+    IF NOT (SELECT public.has_current_permission('orders.trash.view')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.trash.view';
+    END IF;
+
+    RETURN ARRAY(
+        SELECT DISTINCT to_char(start_time, 'HH24')
+        FROM public.orders_deleted
+        ORDER BY 1
+    );
+END;
+$$;
+
+-- ──────────────────────────────────────────────────────────────
+
 -- get_orders_start_hours
 CREATE OR REPLACE FUNCTION public.get_orders_start_hours()
 RETURNS TEXT[]
@@ -425,12 +586,12 @@ BEGIN
     INSERT INTO public.orders_deleted (
         id, date, customer, product, category, start_time, end_time, code,
         status, channel, quantity, amount, region, payment, priority,
-        updated_by, created_at, updated_at, deleted_at, deleted_by, delete_mode
+        updated_by, created_at, updated_at, deleted_at, deleted_by
     )
     SELECT
         o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code,
         o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority,
-        o.updated_by, o.created_at, o.updated_at, NOW(), auth.uid(), 'selection'
+        o.updated_by, o.created_at, o.updated_at, NOW(), auth.uid()
     FROM public.orders o
     WHERE o.id = ANY(v_target_ids);
 
@@ -449,8 +610,7 @@ BEGIN
             END,
             COALESCE(auth.jwt() ->> 'email', 'system'),
             jsonb_build_object(
-                'rowCount', v_count,
-                'deleteMode', 'selection'
+                'rowCount', v_count
             )
         );
     END IF;
@@ -783,12 +943,12 @@ BEGIN
     INSERT INTO public.orders_deleted (
         id, date, customer, product, category, start_time, end_time, code,
         status, channel, quantity, amount, region, payment, priority,
-        updated_by, created_at, updated_at, deleted_at, deleted_by, delete_mode
+        updated_by, created_at, updated_at, deleted_at, deleted_by
     )
     SELECT
         o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code,
         o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority,
-        o.updated_by, o.created_at, o.updated_at, NOW(), auth.uid(), 'manual_ids'
+        o.updated_by, o.created_at, o.updated_at, NOW(), auth.uid()
     FROM public.orders o
     WHERE o.id = ANY(p_ids);
 
@@ -821,8 +981,7 @@ BEGIN
                 END,
                 COALESCE(auth.jwt() ->> 'email', 'system'),
                 jsonb_build_object(
-                    'rowCount', v_count,
-                    'deleteMode', 'manual_ids'
+                    'rowCount', v_count
                 )
             );
         END IF;
@@ -834,14 +993,56 @@ BEGIN
 END;
 $$;
 
+-- ──────────────────────────────────────────────────────────────
+
+-- empty_orders_trash — elimina definitivamente todo el contenido de la papelera.
+CREATE OR REPLACE FUNCTION public.empty_orders_trash()
+RETURNS INT
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_count INT;
+BEGIN
+    IF NOT (SELECT public.has_current_permission('orders.trash.empty')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.trash.empty';
+    END IF;
+
+    SELECT COUNT(*) INTO v_count FROM public.orders_deleted;
+
+    DELETE FROM public.orders_deleted;
+
+    IF v_count > 0 THEN
+        INSERT INTO public.order_history (action, description, actor_email, details)
+        VALUES (
+            'delete',
+            CASE
+                WHEN v_count = 1 THEN 'Emptied trash: 1 order permanently deleted'
+                ELSE 'Emptied trash: ' || v_count::TEXT || ' orders permanently deleted'
+            END,
+            COALESCE(auth.jwt() ->> 'email', 'system'),
+            jsonb_build_object(
+                'rowCount', v_count
+            )
+        );
+    END IF;
+
+    RETURN v_count;
+END;
+$$;
+
 -- ============================================================
 -- 2. GRANTS
 -- ============================================================
 
 REVOKE ALL ON FUNCTION public.get_orders(INT,INT,TEXT,TEXT[],TEXT[],TEXT[],DATE,TEXT[],TEXT,TEXT) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.get_deleted_orders(INT,INT,TEXT,TEXT[],TEXT[],TEXT[],DATE,TEXT[],TEXT,TEXT) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.get_orders_stats() FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.get_order_history(INT,INT) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.get_orders_start_hours() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.get_deleted_orders_start_hours() FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.record_order_history(TEXT,TEXT,UUID,JSONB) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.jsonb_text_array(JSONB) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.order_matches_filter_scope(public.orders,JSONB) FROM PUBLIC, anon, authenticated;
@@ -853,11 +1054,15 @@ REVOKE ALL ON FUNCTION public.count_orders_by_selection(JSONB,JSONB) FROM PUBLIC
 REVOKE ALL ON FUNCTION public.export_orders_by_selection(JSONB,TEXT,TEXT,TEXT,TEXT,TEXT[],BOOLEAN,TEXT) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.bulk_delete_orders_by_selection(JSONB,INT) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.bulk_delete_orders_by_ids(UUID[]) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.empty_orders_trash() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_orders(INT,INT,TEXT,TEXT[],TEXT[],TEXT[],DATE,TEXT[],TEXT,TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_deleted_orders(INT,INT,TEXT,TEXT[],TEXT[],TEXT[],DATE,TEXT[],TEXT,TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_stats()                         TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_order_history(INT,INT)                 TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_start_hours()                   TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_deleted_orders_start_hours()           TO authenticated;
 GRANT EXECUTE ON FUNCTION public.count_orders_by_selection(JSONB,JSONB) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.export_orders_by_selection(JSONB,TEXT,TEXT,TEXT,TEXT,TEXT[],BOOLEAN,TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_selection(JSONB,INT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_ids(UUID[])          TO authenticated;
+GRANT EXECUTE ON FUNCTION public.empty_orders_trash()                       TO authenticated;

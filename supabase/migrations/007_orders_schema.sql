@@ -5,7 +5,7 @@
 -- Ejecutar después de 006_rate_limiting.sql.
 --
 -- Qué configura:
---   1. Permisos RBAC para orders (granulares: view/create/update/delete/bulk_delete/export/copy)
+--   1. Permisos RBAC para orders (granulares: view/create/update/delete/bulk_delete/export/copy/trash)
 --   2. Tablas: orders, orders_deleted, order_history
 --   3. Triggers: updated_at, set_updated_by (para realtime skip-own)
 --   4. RLS granular basada en has_current_permission()
@@ -23,7 +23,9 @@ INSERT INTO public.permissions (name, description, min_role_level) VALUES
     ('orders.delete',      'Eliminar una orden',                        80),
     ('orders.bulk_delete', 'Eliminar órdenes masivamente',              80),
     ('orders.export',      'Exportar datos de órdenes',                 80),
-    ('orders.copy',        'Copiar datos de órdenes',                   80)
+    ('orders.copy',        'Copiar datos de órdenes',                   80),
+    ('orders.trash.view',  'Ver papelera de órdenes',                   80),
+    ('orders.trash.empty', 'Vaciar papelera de órdenes',                100)
 ON CONFLICT (name) DO NOTHING;
 
 -- member puede ver/crear/editar; admin puede ejecutar acciones destructivas/export.
@@ -37,7 +39,8 @@ INSERT INTO public.role_permissions (role, permission) VALUES
     ('admin',  'orders.delete'),
     ('admin',  'orders.bulk_delete'),
     ('admin',  'orders.export'),
-    ('admin',  'orders.copy')
+    ('admin',  'orders.copy'),
+    ('admin',  'orders.trash.view')
 ON CONFLICT DO NOTHING;
 
 -- ============================================================
@@ -100,9 +103,7 @@ CREATE TABLE public.orders_deleted (
     created_at  TIMESTAMPTZ NOT NULL,
     updated_at  TIMESTAMPTZ NOT NULL,
     deleted_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    deleted_by  UUID        REFERENCES auth.users(id) ON DELETE SET NULL,
-    delete_mode TEXT        NOT NULL DEFAULT 'manual_ids'
-                            CHECK (delete_mode IN ('manual_ids','selection'))
+    deleted_by  UUID        REFERENCES auth.users(id) ON DELETE SET NULL
 );
 
 CREATE INDEX idx_orders_deleted_deleted_at ON public.orders_deleted(deleted_at DESC, id DESC);

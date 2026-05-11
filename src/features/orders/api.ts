@@ -79,6 +79,57 @@ export const fetchOrdersStartHours = async (): Promise<string[]> => {
   return (data as string[]) ?? []
 }
 
+export interface DeletedOrder extends Order {
+  updated_at: string
+  created_at: string
+  deleted_at: string
+  deleted_by: string | null
+  deleted_by_email: string
+}
+
+export const fetchDeletedOrders = async ({
+  limit = 20,
+  offset = 0,
+  search = "",
+  filters = [],
+  date,
+  sorting = [],
+}: {
+  limit?: number
+  offset?: number
+  search?: string
+  filters?: ColumnFiltersState
+  date?: string
+  sorting?: SortingState
+} = {}): Promise<{ data: DeletedOrder[]; total: number }> => {
+  const db = assertSupabase()
+
+  const { data, error } = await db.rpc("get_deleted_orders", {
+    p_limit:      limit,
+    p_offset:     offset,
+    p_search:     search || "",
+    p_status:     pickFilter(filters, "status"),
+    p_channel:    pickFilter(filters, "channel"),
+    p_priority:   pickFilter(filters, "priority"),
+    p_date:       date ?? null,
+    p_start_hour: pickHourFilter(filters),
+    p_sort_col:   sorting[0]?.id ?? null,
+    p_sort_dir:   sorting[0]?.desc ? "desc" : (sorting[0] ? "asc" : null),
+  })
+
+  if (error) throw new Error(error.message)
+
+  const result = data as { data: DeletedOrder[]; total: number }
+  return { data: result.data ?? [], total: result.total ?? 0 }
+}
+
+export const fetchDeletedOrdersStartHours = async (): Promise<string[]> => {
+  const db = assertSupabase()
+  const { data, error } = await db.rpc("get_deleted_orders_start_hours")
+  if (error) throw new Error(error.message)
+  return (data as string[]) ?? []
+}
+
 // ── Order History ─────────────────────────────────────────────────────────────
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -164,6 +215,13 @@ export const createOrder = async (orderData: Partial<Order>) => {
 
 export const deleteOrder = async (id: string) => {
   await bulkDeleteOrders([id])
+}
+
+export const emptyOrdersTrash = async () => {
+  const db = assertSupabase()
+  const { data, error } = await db.rpc("empty_orders_trash")
+  if (error) throw new Error(error.message)
+  return (data as number) ?? 0
 }
 
 export const bulkDeleteOrders = async (ids: string[]) => {

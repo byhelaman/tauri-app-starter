@@ -24,7 +24,7 @@ export function useAppShortcuts({ canOpenSystem, onSetModal }: UseAppShortcutsOp
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey
-      const key = e.key.toLowerCase()
+      const key = typeof e.key === "string" ? e.key.toLowerCase() : ""
 
       if (mod && e.shiftKey && e.code === "KeyP") {
         e.preventDefault()
@@ -42,13 +42,13 @@ export function useAppShortcuts({ canOpenSystem, onSetModal }: UseAppShortcutsOp
         e.preventDefault()
         onSetModal("notifications")
       }
-      if (mod && e.key === "/") {
+      if (mod && (key === "/" || e.code === "Slash")) {
         e.preventDefault()
         onSetModal("shortcuts")
       }
 
       // Navigation (Ctrl/Cmd + 1…N)
-      if (mod && !e.shiftKey && !e.altKey) {
+      if (key && mod && !e.shiftKey && !e.altKey) {
         const idx = parseInt(key, 10) - 1
         if (idx >= 0 && idx < NAV_ITEMS.length) {
           e.preventDefault()
@@ -56,7 +56,7 @@ export function useAppShortcuts({ canOpenSystem, onSetModal }: UseAppShortcutsOp
         }
       }
 
-      if (e.key === "Escape") {
+      if (key === "escape" || e.code === "Escape") {
         onSetModal(null)
       }
     },

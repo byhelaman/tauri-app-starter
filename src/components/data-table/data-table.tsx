@@ -376,6 +376,7 @@ export function DataTable<TData, TValue>({
         facetedFilters={toolbar?.facetedFilters}
         intervalFilter={toolbar?.intervalFilter}
         actions={toolbar?.actions}
+        viewMenuItems={toolbar?.viewMenuItems}
         searchDebounceMs={toolbar?.searchDebounceMs}
         showViewOptions={toolbar?.showViewOptions}
         viewActionsMode={toolbar?.viewActionsMode}

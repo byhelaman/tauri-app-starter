@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import type { Table } from "@tanstack/react-table"
 import { toast } from "sonner"
 import {
@@ -7,7 +7,6 @@ import {
   DownloadIcon,
   History,
   Layers,
-  PrinterIcon,
   RotateCcwIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -46,8 +45,9 @@ interface DataTableViewOptionsProps<TData> {
   allowDataExport?: boolean
   /** Permite acciones de copia masiva fuera de la tabla visible */
   allowDataCopy?: boolean
-  mode?: "full" | "bulk-copy" | "none"
+  mode?: "full" | "bulk-copy" | "view" | "none"
   onResetTable?: () => void
+  menuItems?: ReactNode
 }
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
@@ -95,7 +95,16 @@ const SCOPE_LABEL: Record<Scope, string> = {
   all: "All",
 }
 
-export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle, infiniteScroll, allowDataExport = true, allowDataCopy = allowDataExport, mode = "full", onResetTable }: DataTableViewOptionsProps<TData>) {
+function columnLabel(id: string) {
+  if (id === "deleted_by_email") return "Deleted By"
+  return id
+    .split(/[_-]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ")
+}
+
+export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle, infiniteScroll, allowDataExport = true, allowDataCopy = allowDataExport, mode = "full", onResetTable, menuItems }: DataTableViewOptionsProps<TData>) {
   const [scope, setScope] = useState<Scope>("all")
   const [bulkCopyOpen, setBulkCopyOpen] = useState(false)
 
@@ -103,6 +112,7 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
   const canUseDataActions = allowDataExport && mode === "full"
   const canUseCopyActions = allowDataCopy && mode === "full"
   const canUseBulkCopy = allowDataCopy && (mode === "full" || mode === "bulk-copy")
+  const showScopeControls = canUseDataActions || canUseCopyActions || canUseBulkCopy
   const tableMeta = table.options.meta as DataTableMeta | undefined
   const usesServerScope = tableMeta?.isInfiniteScroll === true
   const selectedCount = usesServerScope && tableMeta?.selectionState?.mode === "operations"
@@ -230,11 +240,10 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
             .map((col) => (
               <DropdownMenuCheckboxItem
                 key={col.id}
-                className="capitalize"
                 checked={col.getIsVisible()}
                 onCheckedChange={(value) => col.toggleVisibility(!!value)}
               >
-                {col.id}
+                {columnLabel(col.id)}
               </DropdownMenuCheckboxItem>
             ))}
         </DropdownMenuContent>
@@ -248,19 +257,23 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-40">
-          <DropdownMenuRadioGroup value={scope} onValueChange={(v) => setScope(v as Scope)}>
-            {(["selected", "filtered", "all"] as Scope[]).map((s) => (
-              <DropdownMenuRadioItem
-                key={s}
-                value={s}
-                disabled={s === "selected" && selectedCount === 0}
-              >
-                {SCOPE_LABEL[s]} ({scopeCounts[s]})
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
+          {showScopeControls && (
+            <>
+              <DropdownMenuRadioGroup value={scope} onValueChange={(v) => setScope(v as Scope)}>
+                {(["selected", "filtered", "all"] as Scope[]).map((s) => (
+                  <DropdownMenuRadioItem
+                    key={s}
+                    value={s}
+                    disabled={s === "selected" && selectedCount === 0}
+                  >
+                    {SCOPE_LABEL[s]} ({scopeCounts[s]})
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
 
-          <DropdownMenuSeparator />
+              <DropdownMenuSeparator />
+            </>
+          )}
 
           {canUseBulkCopy && (
             <DropdownMenuItem
@@ -268,7 +281,7 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
               onClick={() => setBulkCopyOpen(true)}
             >
               <Layers />
-              Bulk Copy
+              Format
             </DropdownMenuItem>
           )}
 
@@ -278,6 +291,8 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
               Changes
             </DropdownMenuItem>
           )}
+
+          {menuItems}
 
           {(canUseDataActions || canUseCopyActions) && (
             <>
@@ -316,16 +331,9 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
               )}
             </>
           )}
-
-          {mode === "full" && (
-            <DropdownMenuItem onClick={() => window.print()}>
-              <PrinterIcon />
-              Print
-            </DropdownMenuItem>
+          {(showScopeControls || onSidePanelToggle || menuItems || canUseDataActions || canUseCopyActions) && (
+            <DropdownMenuSeparator />
           )}
-
-          <DropdownMenuSeparator />
-
           <DropdownMenuItem
             onClick={() => {
               setScope("all")

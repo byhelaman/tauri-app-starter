@@ -30,7 +30,8 @@ export interface DataTableToolbarConfig<TData> {
   actions?: ToolbarActionsRenderer<TData>
   searchDebounceMs?: number
   showViewOptions?: boolean
-  viewActionsMode?: "full" | "bulk-copy" | "none"
+  viewActionsMode?: "full" | "bulk-copy" | "view" | "none"
+  viewMenuItems?: ReactNode | ((table: Table<TData>) => ReactNode)
   resultCountMode?: "server" | "client"
   selectionMode?: "server" | "client"
 }

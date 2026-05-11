@@ -38,7 +38,8 @@ interface DataTableToolbarProps<TData> {
   infiniteScroll?: InfiniteScrollConfig
   allowDataExport?: boolean
   allowDataCopy?: boolean
-  viewActionsMode?: "full" | "bulk-copy" | "none"
+  viewActionsMode?: "full" | "bulk-copy" | "view" | "none"
+  viewMenuItems?: React.ReactNode | ((table: Table<TData>) => React.ReactNode)
   resultCountMode?: "server" | "client"
   onResetTable?: () => void
 }
@@ -58,6 +59,7 @@ export function DataTableToolbar<TData>({
   allowDataExport,
   allowDataCopy,
   viewActionsMode = "full",
+  viewMenuItems,
   resultCountMode = "server",
   onResetTable,
 }: DataTableToolbarProps<TData>) {
@@ -85,6 +87,7 @@ export function DataTableToolbar<TData>({
   const activeFiltersCount = table.getState().columnFilters.length
   const hasFiltersList = (facetedFilters && facetedFilters.length > 0) || intervalFilter
   const renderedActions = typeof actions === "function" ? actions(table) : actions
+  const renderedViewMenuItems = typeof viewMenuItems === "function" ? viewMenuItems(table) : viewMenuItems
   const resultCount = resultCountMode === "server"
     ? infiniteScroll?.totalRowCount ?? table.getFilteredRowModel().rows.length
     : table.getFilteredRowModel().rows.length
@@ -263,6 +266,7 @@ export function DataTableToolbar<TData>({
           allowDataCopy={allowDataCopy}
           mode={viewActionsMode}
           onResetTable={onResetTable}
+          menuItems={renderedViewMenuItems}
         />
       )}
     </div>

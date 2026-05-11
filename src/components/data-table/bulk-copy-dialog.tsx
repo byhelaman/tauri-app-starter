@@ -241,16 +241,16 @@ export function BulkCopyDialog<TData>({
                 onInteractOutside={(event) => event.preventDefault()}
             >
                 <DialogHeader>
-                    <DialogTitle>Bulk Copy</DialogTitle>
+                    <DialogTitle>Format</DialogTitle>
                     <DialogDescription>
-                        Configure how rows are formatted when copied.
+                        Configure the default copy format for this table.
                     </DialogDescription>
                 </DialogHeader>
 
                 <DialogBody className="py-1">
                     <FieldSet className="min-w-0">
                         <Field>
-                            <FieldLabel>Format</FieldLabel>
+                            <FieldLabel>Style</FieldLabel>
                             <Select value={format} onValueChange={(value) => setFormat(value as BulkCopyFormat)}>
                                 <SelectTrigger>
                                     <SelectValue />

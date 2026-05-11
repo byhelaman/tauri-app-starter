@@ -19,10 +19,12 @@ import {
   XCircle,
 } from "lucide-react"
 import { useOrders } from "@/features/orders/hooks/useOrders"
+import { useDeletedOrders } from "@/features/orders/hooks/useDeletedOrders"
 import {
   createColumns,
   type Order,
 } from "@/features/orders/columns"
+import { createTrashColumns } from "@/features/orders/trash-columns"
 import { DataTable } from "@/components/data-table/data-table"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Separator } from "@/components/ui/separator"
@@ -33,6 +35,7 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
 } from "@/components/ui/context-menu"
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { PageHeader } from "@/components/page-header"
 import { useTableHighlights } from "@/features/orders/table-highlights"
 import { Button } from "@/components/ui/button"
@@ -61,7 +64,7 @@ import {
 } from "@/features/orders/modal-columns"
 import { TableHistoryCard } from "@/components/data-table/table-history-card"
 import { OrderDialog } from "@/features/orders/order-dialog"
-import { MAX_BULK_ORDER_ROWS, fetchOrderHistory, fetchOrdersStartHours } from "@/features/orders/api"
+import { MAX_BULK_ORDER_ROWS, fetchDeletedOrdersStartHours, fetchOrderHistory, fetchOrdersStartHours } from "@/features/orders/api"
 import { useQuery } from "@tanstack/react-query"
 import { useAuth } from "@/contexts/use-auth"
 
@@ -118,6 +121,8 @@ export function OrdersPage() {
   const canCopyOrders = hasPermission("orders.copy")
   const canDeleteOrders = hasPermission("orders.delete")
   const canBulkDeleteOrders = hasPermission("orders.bulk_delete")
+  const canViewTrash = hasPermission("orders.trash.view")
+  const canEmptyTrash = hasPermission("orders.trash.empty")
   const [bulkDeleteOp, setBulkDeleteOp] = useState<{
     count: number
     selection: DataTableSelectionState
@@ -126,6 +131,8 @@ export function OrdersPage() {
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [isQueueDialogOpen, setIsQueueDialogOpen] = useState(false)
+  const [isTrashDialogOpen, setIsTrashDialogOpen] = useState(false)
+  const [isEmptyTrashDialogOpen, setIsEmptyTrashDialogOpen] = useState(false)
   const [isAddOrderDialogOpen, setIsAddOrderDialogOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date>()
 
@@ -134,6 +141,7 @@ export function OrdersPage() {
 
   const [sorting, setSorting] = useState<SortingState>([])
   const [queueSorting, setQueueSorting] = useState<SortingState>([])
+  const [trashSorting, setTrashSorting] = useState<SortingState>([])
 
   const {
     pageData,
@@ -164,6 +172,23 @@ export function OrdersPage() {
     enabled: isQueueDialogOpen,
   })
 
+  const {
+    pageData: trashPageData,
+    rowCount: trashRowCount,
+    isPageLoading: isTrashPageLoading,
+    infiniteScroll: trashInfiniteScroll,
+    columnFilters: trashColumnFilters,
+    setColumnFilters: setTrashColumnFilters,
+    globalFilter: trashGlobalFilter,
+    setGlobalFilter: setTrashGlobalFilter,
+    refreshCurrentOrderSort: refreshCurrentTrashSort,
+    actions: trashActions,
+    isPending: isTrashPending,
+  } = useDeletedOrders({
+    sorting: trashSorting,
+    enabled: isTrashDialogOpen && canViewTrash,
+  })
+
   const { toolbarActions, rowClassName } = useTableHighlights()
 
   // Horas de inicio realmente presentes en la BD — para el filtro de Interval
@@ -171,6 +196,13 @@ export function OrdersPage() {
     queryKey: ["orders", "startHours"],
     queryFn: fetchOrdersStartHours,
     staleTime: 5 * 60_000, // 5 min — no cambia frecuentemente
+  })
+
+  const { data: deletedStartHours } = useQuery({
+    queryKey: ["orders", "deleted", "startHours"],
+    queryFn: fetchDeletedOrdersStartHours,
+    staleTime: 5 * 60_000,
+    enabled: isTrashDialogOpen && canViewTrash,
   })
 
   const handleDeleteRequest = useCallback((order: Order) => {
@@ -185,6 +217,7 @@ export function OrdersPage() {
     () => createQueueColumns(queueActions.handleStatusChange),
     [queueActions.handleStatusChange]
   )
+  const trashColumns = useMemo(() => createTrashColumns(), [])
 
   const queueRows = useMemo<QueueOrder[]>(
     () => queuePageData.map((order) => ({
@@ -257,9 +290,9 @@ export function OrdersPage() {
         onResetView={() => setSelectedDate(undefined)}
         tableId="orders"
         sidePanel={(onClose) => (
-          <TableHistoryCard 
-            tableId="orders" 
-            onClose={onClose} 
+          <TableHistoryCard
+            tableId="orders"
+            onClose={onClose}
             queryKey={["orders", "history"]}
             queryFn={fetchOrderHistory}
           />
@@ -273,6 +306,12 @@ export function OrdersPage() {
           ],
           intervalFilter: { columnId: "time", title: "Interval", hours: startHours },
           actions: toolbarActions,
+          viewMenuItems: canViewTrash ? (
+            <DropdownMenuItem onSelect={() => setIsTrashDialogOpen(true)}>
+              <Trash2 />
+              Trash
+            </DropdownMenuItem>
+          ) : undefined,
           searchDebounceMs: 300,
         }}
         rowContextMenu={(order) => {
@@ -297,7 +336,7 @@ export function OrdersPage() {
               {canDeleteOrders && (
                 <>
                   <ContextMenuSeparator />
-                  <ContextMenuItem 
+                  <ContextMenuItem
                     onSelect={() => handleDeleteRequest(order)}
                   >
                     Cancel order
@@ -319,16 +358,16 @@ export function OrdersPage() {
                   try {
                     const copySettings = resolveBulkCopySettings("orders", ORDER_COPY_FIELDS)
                     const exportResult = await infiniteScroll.exportByScope!({
-                        scope: infiniteScroll.currentScope ?? { search: "", filters: [] },
-                        operations: selection.mode === "operations"
-                          ? selection.operations
-                          : [{ type: "selectIds", ids: selectedIds }],
-                        purpose: "copy",
-                        ...copySettings,
-                      })
+                      scope: infiniteScroll.currentScope ?? { search: "", filters: [] },
+                      operations: selection.mode === "operations"
+                        ? selection.operations
+                        : [{ type: "selectIds", ids: selectedIds }],
+                      purpose: "copy",
+                      ...copySettings,
+                    })
                     const content = exportResult.content
                     if (!content) { toast.error("Nothing to copy", { id: toastId }); return }
-                    
+
                     await navigator.clipboard.writeText(content)
                     const copiedCount = exportResult.rowCount
                     toast.success(`Copied ${copiedCount.toLocaleString()} rows`, { id: toastId })
@@ -412,13 +451,13 @@ export function OrdersPage() {
                     try {
                       const copySettings = resolveBulkCopySettings("orders-queue", QUEUE_COPY_FIELDS)
                       const exportResult = await queueInfiniteScroll.exportByScope!({
-                          scope: queueInfiniteScroll.currentScope ?? { search: "", filters: [] },
-                          operations: selection.mode === "operations"
-                            ? selection.operations
-                            : [{ type: "selectIds", ids: selectedIds }],
-                          purpose: "copy",
-                          ...copySettings,
-                        })
+                        scope: queueInfiniteScroll.currentScope ?? { search: "", filters: [] },
+                        operations: selection.mode === "operations"
+                          ? selection.operations
+                          : [{ type: "selectIds", ids: selectedIds }],
+                        purpose: "copy",
+                        ...copySettings,
+                      })
                       const content = exportResult.content
                       if (!content) {
                         toast.error("Nothing to copy", { id: toastId })
@@ -478,6 +517,89 @@ export function OrdersPage() {
           <DialogFooter showCloseButton />
         </DialogContent>
       </Dialog>
+
+      <Dialog open={isTrashDialogOpen} onOpenChange={setIsTrashDialogOpen}>
+        <DialogContent
+          className="w-[95vw]! h-auto! max-w-310! max-h-205!"
+          onInteractOutside={(event) => event.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>Trash</DialogTitle>
+            <DialogDescription>Deleted orders kept outside the active orders table.</DialogDescription>
+          </DialogHeader>
+          <DialogBody className="py-1 overflow-y-hidden">
+            <DataTable
+              columns={trashColumns}
+              data={trashPageData}
+              isLoading={isTrashPageLoading}
+              infiniteScroll={trashInfiniteScroll}
+              allowDataExport={false}
+              allowDataCopy={false}
+              columnFilters={trashColumnFilters}
+              onColumnFiltersChange={setTrashColumnFilters}
+              globalFilter={trashGlobalFilter}
+              onGlobalFilterChange={setTrashGlobalFilter}
+              sorting={trashSorting}
+              onSortingChange={setTrashSorting}
+              onSortingRefresh={refreshCurrentTrashSort}
+              tableId="orders-trash"
+              toolbar={{
+                searchable: true,
+                filterPlaceholder: "Search trash...",
+                facetedFilters: [
+                  { columnId: "status", title: "Status", options: STATUS_FILTER_OPTIONS },
+                  { columnId: "channel", title: "Channel", options: CHANNEL_FILTER_OPTIONS },
+                ],
+                intervalFilter: { columnId: "time", title: "Interval", hours: deletedStartHours },
+                searchDebounceMs: 300,
+                viewActionsMode: "view",
+              }}
+              getRowId={(row) => row.id}
+              layout={{
+                scrollAreaClassName: "max-h-[min(calc(100svh-22rem),30rem)] [--table-bg:var(--color-popover)]",
+              }}
+            />
+          </DialogBody>
+          <DialogFooter showCloseButton>
+            {canEmptyTrash && (
+              <Button
+                variant="default"
+                disabled={isTrashPending || trashRowCount === 0}
+                onClick={() => setIsEmptyTrashDialogOpen(true)}
+              >
+                Empty Trash
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={isEmptyTrashDialogOpen}
+        onOpenChange={setIsEmptyTrashDialogOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Empty trash?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {trashRowCount.toLocaleString()} orders from trash. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={isTrashPending || trashRowCount === 0}
+              onClick={async () => {
+                await trashActions.emptyTrash()
+                setIsEmptyTrashDialogOpen(false)
+              }}
+            >
+              Empty Trash
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={!!orderToDelete}
