@@ -5,7 +5,7 @@ import { toast } from "sonner"
 import * as api from "../api"
 import type { Order, EditableOrderField, Status } from "../columns"
 import { useOrdersRealtime } from "./useOrdersRealtime"
-import type { DataTableSelectionState } from "@/components/data-table/data-table-types"
+import type { DataTableSelectionOperation, DataTableSelectionScope, DataTableSelectionState } from "@/components/data-table/data-table-types"
 import { pickNormalizedFilter, pickNormalizedHourFilter } from "@/lib/table-filter-normalization"
 
 /** Número de filas por chunk en modo infinite scroll */
@@ -52,6 +52,31 @@ function orderMatchesActiveQuery(order: Order, {
   }
 
   return true
+}
+
+function orderMatchesScope(order: Order, scope: DataTableSelectionScope) {
+  return orderMatchesActiveQuery(order, {
+    filters: scope.filters,
+    search: scope.search,
+    date: scope.date,
+  })
+}
+
+function operationSelectsOrder(order: Order, operation: DataTableSelectionOperation) {
+  if (operation.type === "selectIds" || operation.type === "deselectIds") {
+    return operation.ids.includes(order.id)
+  }
+  return orderMatchesScope(order, operation.scope)
+}
+
+function orderIsSelectedByOperations(order: Order, operations: DataTableSelectionOperation[]) {
+  let selected = false
+  for (const operation of operations) {
+    if (operationSelectsOrder(order, operation)) {
+      selected = operation.type === "select" || operation.type === "selectIds"
+    }
+  }
+  return selected
 }
 
 export function useOrders({
@@ -117,8 +142,6 @@ export function useOrders({
   const pageData = useMemo(() => pages?.flatMap(p => p.data) ?? [], [pages])
   // Usa el total de la última página cargada — es el más reciente del servidor.
   const cachedRowCount = useMemo(() => pages?.[pages.length - 1]?.total ?? 0, [pages])
-
-  // TODO: Activar suscripción realtime de órdenes cuando las tablas de Supabase estén listas
 
   const { data: unfilteredCountData } = useQuery({
     queryKey: ["orders", "unfiltered-count"],
@@ -242,8 +265,11 @@ export function useOrders({
         return {
           ...old,
           pages: old.pages.map(page => {
+            const data = selection.mode === "ids"
+              ? page.data.filter(o => !idSet.has(o.id))
+              : page.data.filter(o => !orderIsSelectedByOperations(o, selection.operations))
             return {
-              data: selection.mode === "ids" ? page.data.filter(o => !idSet.has(o.id)) : page.data,
+              data,
               total: Math.max(0, page.total - deletedCount),
             }
           })

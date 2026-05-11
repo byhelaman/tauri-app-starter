@@ -173,8 +173,14 @@ export function useInfiniteSelection({
   const lastScopeCountKeyRef = useRef<string | null>(null)
 
   const operations = selectionState.mode === "operations" ? selectionState.operations : []
-  const selectionCountKey = useMemo(() => JSON.stringify(selectionState), [selectionState])
-  const scopeCountKey = useMemo(() => JSON.stringify({ selectionState, currentScope }), [currentScope, selectionState])
+  const selectionCountKey = useMemo(
+    () => JSON.stringify({ selectionState, totalRowCount }),
+    [selectionState, totalRowCount]
+  )
+  const scopeCountKey = useMemo(
+    () => JSON.stringify({ selectionState, currentScope, totalRowCount }),
+    [currentScope, selectionState, totalRowCount]
+  )
 
   const visibleSelectedIds = useMemo(() => {
     if (selectionState.mode === "ids") {

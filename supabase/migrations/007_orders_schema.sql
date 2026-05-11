@@ -108,6 +108,9 @@ CREATE TABLE public.orders_deleted (
 
 CREATE INDEX idx_orders_deleted_deleted_at ON public.orders_deleted(deleted_at DESC, id DESC);
 CREATE INDEX idx_orders_deleted_code ON public.orders_deleted(code);
+CREATE INDEX idx_orders_deleted_customer_trgm ON public.orders_deleted USING gin (customer extensions.gin_trgm_ops);
+CREATE INDEX idx_orders_deleted_code_trgm     ON public.orders_deleted USING gin (code extensions.gin_trgm_ops);
+CREATE INDEX idx_orders_deleted_product_trgm  ON public.orders_deleted USING gin (product extensions.gin_trgm_ops);
 
 CREATE TABLE public.order_history (
     id          BIGSERIAL   PRIMARY KEY,

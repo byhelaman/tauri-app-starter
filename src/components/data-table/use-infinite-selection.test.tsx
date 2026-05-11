@@ -297,4 +297,34 @@ describe("useInfiniteSelection operations model", () => {
     expect(result.current.selectedCount).toBe(allIds.length)
     expect(result.current.currentScopeSelectedCount).toBe(allIds.length)
   })
+
+  it("recounts a server-side select-all when the remote total changes", async () => {
+    let serverTotal = 100
+    const countByRemoteTotal = async () => serverTotal
+    const { result, rerender } = renderHook((props: { total: number }) =>
+      useInfiniteSelection({
+        enabled: true,
+        globalFilter: "",
+        columnFilters: [],
+        sorting: [],
+        totalRowCount: props.total,
+        loadedRowIds: allIds.slice(0, 3),
+        loadedRowsById: rows,
+        countBySelection: countByRemoteTotal,
+      }), {
+      initialProps: { total: serverTotal },
+    })
+
+    await act(async () => { await result.current.selectAll() })
+    await act(async () => { await Promise.resolve() })
+    expect(result.current.selectedCount).toBe(100)
+    expect(result.current.displaySelectedCount).toBe(100)
+
+    serverTotal = 1197
+    rerender({ total: serverTotal })
+
+    await act(async () => { await Promise.resolve() })
+    expect(result.current.selectedCount).toBe(1197)
+    expect(result.current.displaySelectedCount).toBe(1197)
+  })
 })

@@ -36,6 +36,8 @@ Prerequisites: Node 20+, pnpm 9+, Rust toolchain, Supabase account.
 
 This is a **Tauri 2 desktop app template** with React 19 + TypeScript frontend backed by Supabase for auth and database. The Rust backend (`src-tauri/`) is intentionally thin — it only registers three plugins (opener, updater, process) with no custom commands. All business logic lives in the frontend via Supabase RPC calls.
 
+Project-specific domain decisions live in `CONTEXT.md` and `docs/adr/`. Read those before changing table selection, bulk actions, Trash, or export behavior.
+
 ### Frontend (`src/`)
 
 **Routing** (React Router v7): Two main routes — `/login` (unauthenticated only) and `/` (protected by `AuthGuard`). Everything else redirects to `/`.

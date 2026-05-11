@@ -564,18 +564,20 @@ SET search_path = ''
 AS $$
 DECLARE
     v_count INT;
-    v_target_ids UUID[];
 BEGIN
     IF NOT (SELECT public.has_current_permission('orders.bulk_delete')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.bulk_delete';
     END IF;
 
-    SELECT COALESCE(array_agg(o.id ORDER BY o.created_at DESC, o.id DESC), ARRAY[]::UUID[])
-    INTO v_target_ids
+    DROP TABLE IF EXISTS pg_temp.selected_order_ids;
+    CREATE TEMP TABLE selected_order_ids ON COMMIT DROP AS
+    SELECT o.id
     FROM public.orders o
     WHERE public.order_is_selected_by_operations(o, p_operations);
 
-    v_count := COALESCE(array_length(v_target_ids, 1), 0);
+    SELECT COUNT(*)::INT
+    INTO v_count
+    FROM pg_temp.selected_order_ids;
 
     IF p_expected_count IS NOT NULL AND v_count <> p_expected_count THEN
         RAISE EXCEPTION 'Bulk delete scope changed: expected %, found %', p_expected_count, v_count;
@@ -593,10 +595,11 @@ BEGIN
         o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority,
         o.updated_by, o.created_at, o.updated_at, NOW(), auth.uid()
     FROM public.orders o
-    WHERE o.id = ANY(v_target_ids);
+    JOIN pg_temp.selected_order_ids target ON target.id = o.id;
 
     DELETE FROM public.orders o
-    WHERE o.id = ANY(v_target_ids);
+    USING pg_temp.selected_order_ids target
+    WHERE o.id = target.id;
 
     GET DIAGNOSTICS v_count = ROW_COUNT;
 
