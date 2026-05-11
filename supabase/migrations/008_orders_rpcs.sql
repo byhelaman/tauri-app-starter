@@ -273,6 +273,23 @@ $$;
 
 -- ──────────────────────────────────────────────────────────────
 
+CREATE OR REPLACE FUNCTION public.jsonb_text_array(p_value JSONB)
+RETURNS TEXT[]
+LANGUAGE sql
+IMMUTABLE
+SET search_path = ''
+AS $$
+    SELECT CASE jsonb_typeof(p_value)
+        WHEN 'array' THEN COALESCE(ARRAY(SELECT jsonb_array_elements_text(p_value)), ARRAY[]::TEXT[])
+        WHEN 'string' THEN ARRAY[p_value #>> '{}']
+        WHEN 'number' THEN ARRAY[p_value #>> '{}']
+        WHEN 'boolean' THEN ARRAY[p_value #>> '{}']
+        ELSE ARRAY[]::TEXT[]
+    END;
+$$;
+
+-- ──────────────────────────────────────────────────────────────
+
 CREATE OR REPLACE FUNCTION public.order_matches_filter_scope(
     p_order public.orders,
     p_scope JSONB
@@ -290,17 +307,9 @@ DECLARE
     v_date       DATE;
     v_start_hour INT[];
 BEGIN
-    SELECT array_agg(value)
-    INTO v_status
-    FROM jsonb_array_elements_text(COALESCE(p_scope -> 'status', '[]'::JSONB)) AS value;
-
-    SELECT array_agg(value)
-    INTO v_channel
-    FROM jsonb_array_elements_text(COALESCE(p_scope -> 'channel', '[]'::JSONB)) AS value;
-
-    SELECT array_agg(value)
-    INTO v_priority
-    FROM jsonb_array_elements_text(COALESCE(p_scope -> 'priority', '[]'::JSONB)) AS value;
+    v_status := public.jsonb_text_array(p_scope -> 'status');
+    v_channel := public.jsonb_text_array(p_scope -> 'channel');
+    v_priority := public.jsonb_text_array(p_scope -> 'priority');
 
     IF NULLIF(p_scope ->> 'date', '') IS NOT NULL THEN
         v_date := (p_scope ->> 'date')::DATE;
@@ -308,7 +317,7 @@ BEGIN
 
     SELECT array_agg(value::INT)
     INTO v_start_hour
-    FROM jsonb_array_elements_text(COALESCE(p_scope -> 'start_hour', '[]'::JSONB)) AS value
+    FROM unnest(public.jsonb_text_array(p_scope -> 'start_hour')) AS value
     WHERE value ~ '^\d+$';
 
     RETURN
@@ -352,17 +361,27 @@ BEGIN
 
     FOREACH v_field IN ARRAY ARRAY['status', 'channel', 'priority', 'start_hour']
     LOOP
-        SELECT array_agg(value)
-        INTO v_base_values
-        FROM jsonb_array_elements_text(COALESCE(p_base -> v_field, '[]'::JSONB)) AS value;
+        IF v_field = 'start_hour' THEN
+            SELECT array_agg((value::INT)::TEXT)
+            INTO v_base_values
+            FROM unnest(public.jsonb_text_array(p_base -> v_field)) AS value
+            WHERE value ~ '^\d+$';
+        ELSE
+            v_base_values := public.jsonb_text_array(p_base -> v_field);
+        END IF;
 
         IF v_base_values IS NULL OR array_length(v_base_values, 1) IS NULL THEN
             CONTINUE;
         END IF;
 
-        SELECT array_agg(value)
-        INTO v_target_values
-        FROM jsonb_array_elements_text(COALESCE(p_target -> v_field, '[]'::JSONB)) AS value;
+        IF v_field = 'start_hour' THEN
+            SELECT array_agg((value::INT)::TEXT)
+            INTO v_target_values
+            FROM unnest(public.jsonb_text_array(p_target -> v_field)) AS value
+            WHERE value ~ '^\d+$';
+        ELSE
+            v_target_values := public.jsonb_text_array(p_target -> v_field);
+        END IF;
 
         IF v_target_values IS NULL OR array_length(v_target_values, 1) IS NULL THEN
             RETURN false;
@@ -378,6 +397,64 @@ BEGIN
     END LOOP;
 
     RETURN true;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.order_is_selected_by_operations(
+    p_order public.orders,
+    p_operations JSONB
+)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SET search_path = ''
+AS $$
+    WITH matching AS (
+        SELECT op ->> 'type' AS op_type, ordinality
+        FROM jsonb_array_elements(
+            CASE WHEN jsonb_typeof(p_operations) = 'array' THEN p_operations ELSE '[]'::JSONB END
+        ) WITH ORDINALITY AS item(op, ordinality)
+        WHERE (
+            op ->> 'type' IN ('select', 'deselect')
+            AND public.order_matches_filter_scope(p_order, COALESCE(op -> 'scope', '{}'::JSONB))
+        ) OR (
+            op ->> 'type' IN ('selectIds', 'deselectIds')
+            AND p_order.id::TEXT IN (
+                SELECT value
+                FROM unnest(public.jsonb_text_array(op -> 'ids')) AS value
+            )
+        )
+        ORDER BY ordinality DESC
+        LIMIT 1
+    )
+    SELECT COALESCE((SELECT op_type IN ('select', 'selectIds') FROM matching), false);
+$$;
+
+CREATE OR REPLACE FUNCTION public.count_orders_by_selection(
+    p_operations JSONB DEFAULT '[]'::JSONB,
+    p_scope JSONB DEFAULT NULL
+)
+RETURNS INT
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_count INT;
+BEGIN
+    IF NOT (SELECT public.has_current_permission('orders.view')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.view';
+    END IF;
+
+    SELECT COUNT(*)::INT
+    INTO v_count
+    FROM public.orders o
+    WHERE o.deleted_at IS NULL
+      AND public.order_is_selected_by_operations(o, p_operations)
+      AND (p_scope IS NULL OR public.order_matches_filter_scope(o, p_scope));
+
+    RETURN v_count;
 END;
 $$;
 
@@ -644,6 +721,61 @@ BEGIN
                 'excludedIds', p_excluded_ids,
                 'excludedScopes', p_excluded_scopes
             )
+        );
+    END IF;
+
+    PERFORM set_config('app.bulk_op', 'false', true);
+
+    RETURN v_count;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.bulk_delete_orders_by_selection(
+    p_operations JSONB DEFAULT '[]'::JSONB,
+    p_expected_count INT DEFAULT NULL
+)
+RETURNS INT
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_count INT;
+    v_target_ids UUID[];
+BEGIN
+    IF NOT (SELECT public.has_current_permission('orders.bulk_delete')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.bulk_delete';
+    END IF;
+
+    SELECT COALESCE(array_agg(o.id ORDER BY o.created_at DESC, o.id DESC), ARRAY[]::UUID[])
+    INTO v_target_ids
+    FROM public.orders o
+    WHERE o.deleted_at IS NULL
+      AND public.order_is_selected_by_operations(o, p_operations);
+
+    v_count := COALESCE(array_length(v_target_ids, 1), 0);
+
+    IF p_expected_count IS NOT NULL AND v_count <> p_expected_count THEN
+        RAISE EXCEPTION 'Bulk delete scope changed: expected %, found %', p_expected_count, v_count;
+    END IF;
+
+    PERFORM set_config('app.bulk_op', 'true', true);
+
+    UPDATE public.orders o
+    SET deleted_at = NOW()
+    WHERE o.id = ANY(v_target_ids)
+      AND o.deleted_at IS NULL;
+
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+
+    IF v_count > 0 THEN
+        INSERT INTO public.order_history (action, description, actor_email, details)
+        VALUES (
+            'delete',
+            'Bulk deleted ' || v_count::TEXT || ' orders via selection',
+            COALESCE(auth.jwt() ->> 'email', 'system'),
+            jsonb_build_object('rowCount', v_count)
         );
     END IF;
 
@@ -1015,6 +1147,156 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.export_orders_by_selection(
+    p_operations JSONB DEFAULT '[]'::JSONB,
+    p_sort_col     TEXT    DEFAULT NULL,
+    p_sort_dir     TEXT    DEFAULT NULL,
+    p_format       TEXT    DEFAULT 'csv',
+    p_fields       TEXT[]  DEFAULT NULL,
+    p_headers      BOOLEAN DEFAULT TRUE,
+    p_template     TEXT    DEFAULT NULL
+)
+RETURNS JSON
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_sql        TEXT;
+    v_sort_c     TEXT := 'created_at';
+    v_sort_d     TEXT := 'DESC';
+    v_fields     TEXT[];
+    v_content    TEXT;
+    v_count      INT;
+    v_max_direct_rows INT := 10000;
+    v_delim      TEXT;
+    v_format     TEXT := lower(COALESCE(p_format, 'csv'));
+BEGIN
+    IF NOT (SELECT public.has_current_permission('orders.export')) AND NOT (SELECT public.has_current_permission('orders.copy')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.export or orders.copy';
+    END IF;
+
+    v_count := public.count_orders_by_selection(p_operations);
+    IF v_count > v_max_direct_rows THEN
+        RAISE EXCEPTION 'Direct export is limited to % rows. Use an async export job for % rows.',
+            v_max_direct_rows, v_count;
+    END IF;
+
+    v_fields := COALESCE(p_fields, ARRAY['date','customer','product','category','start_time','end_time','code','status','channel','quantity','amount','region','payment','priority']);
+    WITH expanded AS (
+        SELECT next_field AS field, input_field.ordinality, next_field_expanded.ordinality AS sub_ordinality
+        FROM unnest(v_fields) WITH ORDINALITY AS input_field(field, ordinality)
+        CROSS JOIN LATERAL unnest(
+            CASE
+                WHEN input_field.field = 'time' THEN ARRAY['start_time','end_time']
+                ELSE ARRAY[input_field.field]
+            END
+        ) WITH ORDINALITY AS next_field_expanded(next_field, ordinality)
+        WHERE next_field = ANY(ARRAY['id','date','customer','product','category','start_time','end_time','code','status','channel','quantity','amount','region','payment','priority','created_at'])
+    ),
+    dedup AS (
+        SELECT DISTINCT ON (field) field, ordinality, sub_ordinality
+        FROM expanded
+        ORDER BY field, ordinality, sub_ordinality
+    )
+    SELECT array_agg(field ORDER BY ordinality, sub_ordinality)
+    INTO v_fields
+    FROM dedup;
+
+    IF array_length(v_fields, 1) IS NULL THEN
+        RAISE EXCEPTION 'No exportable fields selected';
+    END IF;
+
+    v_sort_c := CASE p_sort_col
+        WHEN 'id' THEN 'id' WHEN 'date' THEN 'date' WHEN 'customer' THEN 'customer'
+        WHEN 'product' THEN 'product' WHEN 'category' THEN 'category' WHEN 'time' THEN 'start_time'
+        WHEN 'start_time' THEN 'start_time' WHEN 'end_time' THEN 'end_time' WHEN 'code' THEN 'code'
+        WHEN 'status' THEN 'status' WHEN 'channel' THEN 'channel' WHEN 'quantity' THEN 'quantity'
+        WHEN 'amount' THEN 'amount' WHEN 'region' THEN 'region' WHEN 'payment' THEN 'payment'
+        WHEN 'priority' THEN 'priority' WHEN 'created_at' THEN 'created_at' ELSE 'created_at'
+    END;
+
+    IF lower(p_sort_dir) = 'asc' THEN v_sort_d := 'ASC';
+    ELSIF lower(p_sort_dir) = 'desc' THEN v_sort_d := 'DESC';
+    END IF;
+
+    v_delim := CASE
+        WHEN v_format = 'tsv' THEN E'\t'
+        WHEN v_format = 'lines' THEN ' - '
+        ELSE ','
+    END;
+
+    v_sql := format($query$
+        WITH selected AS (
+            SELECT o.*
+            FROM public.orders o
+            WHERE o.deleted_at IS NULL
+              AND public.order_is_selected_by_operations(o, $1)
+        ),
+        ordered AS (
+            SELECT row_number() OVER () AS rn, ordered_rows.*
+            FROM (
+                SELECT *
+                FROM selected
+                ORDER BY %I %s NULLS LAST, created_at DESC, id DESC
+            ) ordered_rows
+        ),
+        row_lines AS (
+            SELECT o.rn,
+                   o.id,
+                   string_agg(
+                       CASE
+                           WHEN $4 = 'custom' THEN public.render_order_template($7, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority, o.created_at)
+                           WHEN $4 = 'csv' THEN public.text_csv_escape(public.order_export_value(f.field, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority, o.created_at))
+                           ELSE COALESCE(replace(public.order_export_value(f.field, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority, o.created_at), E'\t', ' '), '')
+                       END,
+                       $3 ORDER BY f.ordinality
+                   ) AS line
+            FROM ordered o
+            CROSS JOIN unnest(CASE WHEN $4 = 'custom' THEN ARRAY['id'] ELSE $2 END::text[]) WITH ORDINALITY AS f(field, ordinality)
+            GROUP BY o.rn, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time,
+                     o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment,
+                     o.priority, o.created_at
+        )
+        SELECT
+            (SELECT COUNT(*) FROM ordered),
+            CASE
+                WHEN $4 = 'json' THEN (
+                    SELECT COALESCE(jsonb_agg(obj ORDER BY rn)::text, '[]')
+                    FROM (
+                        SELECT o.rn,
+                               jsonb_object_agg(f.field, public.order_export_value(f.field, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time, o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment, o.priority, o.created_at) ORDER BY f.ordinality) AS obj
+                        FROM ordered o
+                        CROSS JOIN unnest($2::text[]) WITH ORDINALITY AS f(field, ordinality)
+                        GROUP BY o.rn, o.id, o.date, o.customer, o.product, o.category, o.start_time, o.end_time,
+                                 o.code, o.status, o.channel, o.quantity, o.amount, o.region, o.payment,
+                                 o.priority, o.created_at
+                    ) j
+                )
+                WHEN $4 = 'md' THEN (
+                    '| ' || array_to_string($2, ' | ') || ' |' || E'\n' ||
+                    '| ' || array_to_string(ARRAY(SELECT '---' FROM unnest($2)), ' | ') || ' |' || E'\n' ||
+                    COALESCE((SELECT string_agg('| ' || replace(line, $3, ' | ') || ' |', E'\n' ORDER BY rn) FROM row_lines), '')
+                )
+                WHEN $4 = 'custom' THEN (
+                    COALESCE((SELECT string_agg(line, E'\n' ORDER BY rn) FROM row_lines), '')
+                )
+                ELSE (
+                    CASE WHEN $4 IN ('csv','tsv') AND $5 THEN array_to_string($2, $3) || E'\n' ELSE '' END ||
+                    COALESCE((SELECT string_agg(line, E'\n' ORDER BY rn) FROM row_lines), '')
+                )
+            END
+    $query$, v_sort_c, v_sort_d);
+
+    EXECUTE v_sql
+    USING p_operations, v_fields, v_delim, v_format, p_headers, p_sort_col, p_template
+    INTO v_count, v_content;
+
+    RETURN json_build_object('content', COALESCE(v_content, ''), 'row_count', COALESCE(v_count, 0));
+END;
+$$;
+
 -- get_orders_by_ids
 -- Obtiene un array de órdenes completo a partir de sus IDs, sorteando los límites de longitud de URL del frontend
 CREATE OR REPLACE FUNCTION public.get_orders_by_ids(p_ids UUID[])
@@ -1121,10 +1403,16 @@ GRANT EXECUTE ON FUNCTION public.get_orders_stats()                         TO a
 GRANT EXECUTE ON FUNCTION public.get_order_history(INT,INT)                 TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_start_hours()                   TO authenticated;
 REVOKE ALL ON FUNCTION public.record_order_history(TEXT,TEXT,UUID,JSONB) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.jsonb_text_array(JSONB) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.jsonb_text_array(JSONB) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.order_matches_filter_scope(public.orders,JSONB) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.order_filter_scope_covers(JSONB,JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.order_is_selected_by_operations(public.orders,JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.count_orders_by_selection(JSONB,JSONB) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_by_filter(TEXT,TEXT[],TEXT[],TEXT[],DATE,TEXT[],UUID[],UUID[],JSONB,JSONB,TEXT,TEXT,INT,INT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.export_orders_by_filter(TEXT,TEXT[],TEXT[],TEXT[],DATE,TEXT[],UUID[],UUID[],JSONB,JSONB,TEXT,TEXT,TEXT,TEXT[],BOOLEAN,TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.export_orders_by_selection(JSONB,TEXT,TEXT,TEXT,TEXT[],BOOLEAN,TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_filter(TEXT,TEXT[],TEXT[],TEXT[],DATE,TEXT[],UUID[],UUID[],JSONB,JSONB,INT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_selection(JSONB,INT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_orders_by_ids(UUID[])                  TO authenticated;
 GRANT EXECUTE ON FUNCTION public.bulk_delete_orders_by_ids(UUID[])          TO authenticated;

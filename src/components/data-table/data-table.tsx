@@ -187,6 +187,7 @@ export function DataTable<TData, TValue>({
     date: infiniteScroll?.currentScope?.date,
     loadedRowIds,
     loadedRowsById,
+    countBySelection: infiniteScroll?.countBySelection,
   })
 
   const fitHeight = layout?.fitHeight ?? false

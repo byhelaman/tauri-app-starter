@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { ColumnFiltersState, RowSelectionState, SortingState, Updater } from "@tanstack/react-table"
-import type { DataTableExcludedSelectionScope, DataTableIncludedSelectionScope, DataTableSelectionScope, DataTableSelectionState } from "./data-table-types"
+import type { DataTableSelectionOperation, DataTableSelectionScope, DataTableSelectionState } from "./data-table-types"
+import { filterValues, normalizeFilters, normalizeHourValue } from "@/lib/table-filter-normalization"
 
 type SelectionAction = "selectAll" | "deselectAll"
 
@@ -13,96 +14,77 @@ interface UseInfiniteSelectionOptions {
   date?: string
   loadedRowIds: string[]
   loadedRowsById?: Record<string, Record<string, unknown>>
+  countBySelection?: (selection: DataTableSelectionState, scope?: DataTableSelectionScope) => Promise<number>
 }
 
-function normalizeFilters(filters: ColumnFiltersState): ColumnFiltersState {
-  return filters
-    .map((filter) => ({ id: filter.id, value: filter.value }))
-    .sort((a, b) => a.id.localeCompare(b.id))
+function normalizeScope(scope: DataTableSelectionScope): DataTableSelectionScope {
+  return {
+    search: scope.search || "",
+    filters: normalizeFilters(scope.filters),
+    date: scope.date,
+    sorting: scope.sorting ?? [],
+  }
+}
+
+function operationKey(operation: DataTableSelectionOperation): string {
+  if (operation.type === "selectIds" || operation.type === "deselectIds") {
+    return JSON.stringify({ type: operation.type, ids: [...operation.ids].sort() })
+  }
+  return JSON.stringify({ type: operation.type, scope: normalizeScope(operation.scope) })
 }
 
 function scopeKey(scope: DataTableSelectionScope): string {
-  return JSON.stringify({
-    search: scope.search || "",
-    filters: normalizeFilters(scope.filters),
-    date: scope.date ?? null,
-    sorting: scope.sorting ?? [],
-  })
+  return JSON.stringify(normalizeScope(scope))
 }
 
-function scopeMembershipKey(scope: DataTableSelectionScope): string {
-  return JSON.stringify({
-    search: scope.search || "",
-    filters: normalizeFilters(scope.filters),
-    date: scope.date ?? null,
-  })
-}
-
-function scopeHasConstraints(scope: DataTableSelectionScope): boolean {
-  return Boolean(scope.search?.trim() || scope.date || normalizeFilters(scope.filters).length > 0)
-}
-
-function idsToRowSelection(ids: string[]): RowSelectionState {
-  return Object.fromEntries(ids.map((id) => [id, true]))
-}
-
-function selectedCount(selection: DataTableSelectionState): number {
-  if (selection.mode === "ids") return selection.ids.length
-  const includedIdTotal = selection.includedIds?.length ?? 0
-  const includedScopeTotal = (selection.includedScopes ?? []).reduce((sum, included) => sum + included.total, 0)
-  const excludedScopeTotal = (selection.excludedScopes ?? []).reduce((sum, excluded) => sum + excluded.total, 0)
-  return Math.max(0, selection.total + includedIdTotal + includedScopeTotal - excludedScopeTotal - selection.excludedIds.length)
-}
-
-function uniqueScopes<TScope extends DataTableExcludedSelectionScope | DataTableIncludedSelectionScope>(scopes: TScope[]): TScope[] {
-  const seen = new Set<string>()
-  const result: TScope[] = []
-  for (const excluded of scopes) {
-    const key = scopeMembershipKey(excluded.scope)
-    if (seen.has(key)) continue
-    seen.add(key)
-    result.push(excluded)
+function dedupeOperations(operations: DataTableSelectionOperation[]): DataTableSelectionOperation[] {
+  const result: DataTableSelectionOperation[] = []
+  const latestByKey = new Map<string, number>()
+  for (const operation of operations) {
+    const key = operationKey(operation)
+    const previousIndex = latestByKey.get(key)
+    if (previousIndex !== undefined) result.splice(previousIndex, 1)
+    latestByKey.clear()
+    result.push(operation)
+    result.forEach((item, index) => latestByKey.set(operationKey(item), index))
   }
   return result
 }
 
-function scopeIsExcluded(scope: DataTableSelectionScope, excludedScopes: DataTableExcludedSelectionScope[] = []): boolean {
-  return excludedScopes.some((excluded) => scopeCoversScope(excluded.scope, scope))
-}
+function exactScopeSelectionCount(
+  operations: DataTableSelectionOperation[],
+  currentScope: DataTableSelectionScope,
+  totalRowCount: number,
+  loadedRowsById: Record<string, Record<string, unknown>>
+): number | null {
+  const currentKey = scopeKey(currentScope)
+  let count: number | null = null
 
-function scopeIsIncluded(scope: DataTableSelectionScope, includedScopes: DataTableIncludedSelectionScope[] = []): boolean {
-  return includedScopes.some((included) => scopeCoversScope(included.scope, scope))
-}
+  for (const operation of operations) {
+    if (operation.type === "select" || operation.type === "deselect") {
+      if (scopeKey(operation.scope) === currentKey) {
+        count = operation.type === "select" ? totalRowCount : 0
+      } else if (count !== null) {
+        return null
+      }
+      continue
+    }
 
-function scopeHasExactMatch(scope: DataTableSelectionScope, scopes: Array<DataTableExcludedSelectionScope | DataTableIncludedSelectionScope> = []): boolean {
-  const key = scopeMembershipKey(scope)
-  return scopes.some((item) => scopeMembershipKey(item.scope) === key)
-}
+    if (count === null) continue
 
-function scopeCoversScope(baseScope: DataTableSelectionScope, targetScope: DataTableSelectionScope): boolean {
-  if (baseScope.search?.trim()) {
-    if ((baseScope.search || "").trim() !== (targetScope.search || "").trim()) return false
+    const matchingIds = operation.ids.filter((id) => rowMatchesScope(loadedRowsById[id], currentScope))
+    if (operation.type === "selectIds") {
+      count = Math.min(totalRowCount, count + matchingIds.length)
+    } else {
+      count = Math.max(0, count - matchingIds.length)
+    }
   }
 
-  if (baseScope.date && baseScope.date !== targetScope.date) return false
+  return count
+}
 
-  const targetFilters = new Map(
-    normalizeFilters(targetScope.filters).map((filter) => [
-      filter.id,
-      Array.isArray(filter.value) ? filter.value.map(String) : [],
-    ])
-  )
-
-  for (const filter of normalizeFilters(baseScope.filters)) {
-    const baseValues = Array.isArray(filter.value) ? filter.value.map(String) : []
-    if (baseValues.length === 0) continue
-
-    const targetValues = targetFilters.get(filter.id)
-    if (!targetValues || targetValues.length === 0) return false
-    if (targetValues.some((value) => !baseValues.includes(value))) return false
-  }
-
-  return true
+function idsToRowSelection(ids: string[]): RowSelectionState {
+  return Object.fromEntries(ids.map((id) => [id, true]))
 }
 
 function rowMatchesScope(row: Record<string, unknown> | undefined, scope: DataTableSelectionScope): boolean {
@@ -121,13 +103,12 @@ function rowMatchesScope(row: Record<string, unknown> | undefined, scope: DataTa
   if (scope.date && String(row.date ?? "") !== scope.date) return false
 
   for (const filter of normalizeFilters(scope.filters)) {
-    const values = Array.isArray(filter.value) ? filter.value.map(String) : []
+    const values = filterValues(filter)
     if (values.length === 0) continue
 
     if (filter.id === "time") {
-      const startTime = String(row.start_time ?? "")
-      const hour = startTime.split(":")[0]
-      if (!values.includes(hour)) return false
+      const hour = normalizeHourValue(String(row.start_time ?? "").split(":")[0] ?? "")
+      if (!hour || !values.includes(hour)) return false
       continue
     }
 
@@ -137,28 +118,32 @@ function rowMatchesScope(row: Record<string, unknown> | undefined, scope: DataTa
   return true
 }
 
-function rowMatchesExcludedScopes(row: Record<string, unknown> | undefined, excludedScopes: DataTableExcludedSelectionScope[] = []): boolean {
-  return excludedScopes.some((excluded) => rowMatchesScope(row, excluded.scope))
-}
-
-function rowMatchesBlockingExcludedScopes(
+function rowIsSelectedByOperations(
+  id: string,
   row: Record<string, unknown> | undefined,
-  currentScope: DataTableSelectionScope,
-  excludedScopes: DataTableExcludedSelectionScope[] = []
+  operations: DataTableSelectionOperation[]
 ): boolean {
-  return excludedScopes.some((excluded) => !scopeCoversScope(excluded.scope, currentScope) && rowMatchesScope(row, excluded.scope))
+  let selected = false
+  for (const operation of operations) {
+    if (operation.type === "selectIds") {
+      if (operation.ids.includes(id)) selected = true
+      continue
+    }
+    if (operation.type === "deselectIds") {
+      if (operation.ids.includes(id)) selected = false
+      continue
+    }
+    if (rowMatchesScope(row, operation.scope)) {
+      selected = operation.type === "select"
+    }
+  }
+  return selected
 }
 
-function rowMatchesIncludedScopes(row: Record<string, unknown> | undefined, includedScopes: DataTableIncludedSelectionScope[] = []): boolean {
-  return includedScopes.some((included) => rowMatchesScope(row, included.scope))
-}
-
-function idsIncludedByExplicitSelection(
-  ids: string[],
-  included: Set<string>,
-  excluded: Set<string>
-): RowSelectionState {
-  return Object.fromEntries(ids.filter((id) => included.has(id) && !excluded.has(id)).map((id) => [id, true]))
+function fallbackSelectedCount(selection: DataTableSelectionState, loadedRowIds: string[], loadedRowsById: Record<string, Record<string, unknown>>): number {
+  if (selection.mode === "ids") return selection.ids.length
+  if (selection.mode !== "operations") return Math.max(0, selection.total - selection.excludedIds.length)
+  return loadedRowIds.filter((id) => rowIsSelectedByOperations(id, loadedRowsById[id], selection.operations)).length
 }
 
 export function useInfiniteSelection({
@@ -170,86 +155,92 @@ export function useInfiniteSelection({
   date,
   loadedRowIds,
   loadedRowsById = {},
+  countBySelection,
 }: UseInfiniteSelectionOptions) {
-  const currentScope = useMemo<DataTableSelectionScope>(() => ({
+  const currentScope = useMemo<DataTableSelectionScope>(() => normalizeScope({
     search: globalFilter || "",
     filters: columnFilters,
     date,
     sorting,
   }), [columnFilters, date, globalFilter, sorting])
 
-  const currentScopeKey = useMemo(() => scopeKey(currentScope), [currentScope])
   const [selectionState, setSelectionState] = useState<DataTableSelectionState>({ mode: "ids", ids: [] })
-  const [materializedSelectedIds, setMaterializedSelectedIds] = useState<string[]>([])
+  const [selectedCountOverride, setSelectedCountOverride] = useState<{ key: string; count: number } | null>(null)
+  const [scopeSelectedCountOverride, setScopeSelectedCountOverride] = useState<{ key: string; count: number } | null>(null)
   const [isSelectingAll, setIsSelectingAll] = useState<SelectionAction | false>(false)
+  const countRequestRef = useRef(0)
+  const scopeCountRequestRef = useRef(0)
+  const lastCountKeyRef = useRef<string | null>(null)
+  const lastScopeCountKeyRef = useRef<string | null>(null)
 
-  const filterScopeIsCurrent = selectionState.mode === "filter" && scopeKey(selectionState.scope) === currentScopeKey
-  const filterScopeCoversCurrentRows = selectionState.mode === "filter" && (
-    filterScopeIsCurrent || scopeCoversScope(selectionState.scope, currentScope)
-  )
-  const includedScopeCoversCurrentRows = selectionState.mode === "filter" && scopeIsIncluded(currentScope, selectionState.includedScopes)
-  const currentScopeIsExcluded = selectionState.mode === "filter" && scopeIsExcluded(currentScope, selectionState.excludedScopes)
-  const currentScopeIsExplicitlyExcluded = selectionState.mode === "filter" && scopeHasExactMatch(currentScope, selectionState.excludedScopes)
-  const currentScopeIsOnlyExcluded = currentScopeIsExcluded && (!includedScopeCoversCurrentRows || currentScopeIsExplicitlyExcluded)
-  const currentScopeIsConstrained = scopeHasConstraints(currentScope)
-  const loadedRowIdSet = useMemo(() => new Set(loadedRowIds), [loadedRowIds])
-  const materializedSelectedIdSet = useMemo(() => new Set(materializedSelectedIds), [materializedSelectedIds])
+  const operations = selectionState.mode === "operations" ? selectionState.operations : []
+  const selectionCountKey = useMemo(() => JSON.stringify(selectionState), [selectionState])
+  const scopeCountKey = useMemo(() => JSON.stringify({ selectionState, currentScope }), [currentScope, selectionState])
 
-  useEffect(() => {
-    if (selectionState.mode !== "filter" || !filterScopeIsCurrent) return
-    // Materializes newly loaded IDs so a scoped selection remains visible after the user changes filters.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMaterializedSelectedIds((previous) => {
-      const next = new Set(previous)
-      const excluded = new Set(selectionState.excludedIds)
-      let changed = false
-      for (const id of loadedRowIds) {
-        if (!excluded.has(id) && !next.has(id)) {
-          next.add(id)
-          changed = true
-        }
-      }
-      if (!changed) return previous
-      return Array.from(next)
-    })
-  }, [filterScopeIsCurrent, loadedRowIds, selectionState])
+  const visibleSelectedIds = useMemo(() => {
+    if (selectionState.mode === "ids") {
+      const selected = new Set(selectionState.ids)
+      return loadedRowIds.filter((id) => selected.has(id))
+    }
+    if (selectionState.mode === "operations") {
+      return loadedRowIds.filter((id) => rowIsSelectedByOperations(id, loadedRowsById[id], selectionState.operations))
+    }
+    return loadedRowIds.filter((id) => rowMatchesScope(loadedRowsById[id], selectionState.scope) && !selectionState.excludedIds.includes(id))
+  }, [loadedRowIds, loadedRowsById, selectionState])
 
   const rowSelection = useMemo<RowSelectionState>(() => {
-    if (!enabled || selectionState.mode === "ids") {
-      return idsToRowSelection(selectionState.mode === "ids" ? selectionState.ids : [])
+    if (!enabled) {
+      return idsToRowSelection(selectionState.mode === "ids" ? selectionState.ids : visibleSelectedIds)
     }
+    return idsToRowSelection(visibleSelectedIds)
+  }, [enabled, selectionState, visibleSelectedIds])
 
-    const excluded = new Set(selectionState.excludedIds)
-    const included = new Set(selectionState.includedIds ?? [])
-    if (currentScopeIsOnlyExcluded) return idsIncludedByExplicitSelection(loadedRowIds, included, excluded)
+  const localSelectedCount = useMemo(
+    () => fallbackSelectedCount(selectionState, loadedRowIds, loadedRowsById),
+    [loadedRowIds, loadedRowsById, selectionState]
+  )
 
-    if (!filterScopeCoversCurrentRows && !includedScopeCoversCurrentRows) {
-      return Object.fromEntries(
-        loadedRowIds
-          .filter((id) => !excluded.has(id))
-          .filter((id) => included.has(id) || materializedSelectedIds.includes(id))
-          .filter((id) => included.has(id) || !loadedRowsById[id] || rowMatchesScope(loadedRowsById[id], selectionState.scope) || rowMatchesIncludedScopes(loadedRowsById[id], selectionState.includedScopes))
-          .filter((id) => !rowMatchesExcludedScopes(loadedRowsById[id], selectionState.excludedScopes))
-          .map((id) => [id, true])
-      )
-    }
+  useEffect(() => {
+    if (!enabled || !countBySelection || selectionState.mode !== "operations") return
+    if (lastCountKeyRef.current === selectionCountKey) return
+    lastCountKeyRef.current = selectionCountKey
+    const requestId = ++countRequestRef.current
+    const key = selectionCountKey
+    void countBySelection(selectionState).then((count) => {
+      if (countRequestRef.current === requestId) setSelectedCountOverride({ key, count })
+    }).catch(() => {
+      if (countRequestRef.current === requestId) setSelectedCountOverride(null)
+    })
+  }, [countBySelection, enabled, selectionCountKey, selectionState])
 
-    return Object.fromEntries(
-      loadedRowIds
-        .filter((id) => !excluded.has(id))
-        .filter((id) => {
-          if (included.has(id)) return true
-          const row = loadedRowsById[id]
-          if (rowMatchesBlockingExcludedScopes(row, currentScope, selectionState.excludedScopes)) return false
-          if (rowMatchesIncludedScopes(row, selectionState.includedScopes)) return true
-          return !rowMatchesExcludedScopes(row, selectionState.excludedScopes)
-        })
-        .map((id) => [id, true])
-    )
-  }, [currentScope, currentScopeIsOnlyExcluded, enabled, filterScopeCoversCurrentRows, includedScopeCoversCurrentRows, loadedRowIds, loadedRowsById, materializedSelectedIds, selectionState])
+  useEffect(() => {
+    if (!enabled || !countBySelection || selectionState.mode !== "operations") return
+    if (lastScopeCountKeyRef.current === scopeCountKey) return
+    lastScopeCountKeyRef.current = scopeCountKey
+    const requestId = ++scopeCountRequestRef.current
+    const key = scopeCountKey
+    void countBySelection(selectionState, currentScope).then((count) => {
+      if (scopeCountRequestRef.current === requestId) setScopeSelectedCountOverride({ key, count })
+    }).catch(() => {
+      if (scopeCountRequestRef.current === requestId) setScopeSelectedCountOverride(null)
+    })
+  }, [countBySelection, currentScope, enabled, scopeCountKey, selectionState])
+
+  const selectedCount = selectedCountOverride?.key === selectionCountKey ? selectedCountOverride.count : (
+    selectionState.mode === "operations" ? selectionState.selectedCount : localSelectedCount
+  )
+  const exactCurrentScopeSelectedCount = selectionState.mode === "operations"
+    ? exactScopeSelectionCount(selectionState.operations, currentScope, totalRowCount, loadedRowsById)
+    : null
+  const currentScopeSelectedCount = exactCurrentScopeSelectedCount
+    ?? (scopeSelectedCountOverride?.key === scopeCountKey
+      ? scopeSelectedCountOverride.count
+      : visibleSelectedIds.length)
+  const displaySelectedCount = currentScopeSelectedCount
 
   const clearSelection = useCallback(() => {
-    setMaterializedSelectedIds([])
+    setSelectedCountOverride(null)
+    setScopeSelectedCountOverride(null)
     setSelectionState({ mode: "ids", ids: [] })
   }, [])
 
@@ -257,205 +248,71 @@ export function useInfiniteSelection({
     if (!enabled) return
     setIsSelectingAll("selectAll")
     setSelectionState((previous) => {
-      if (previous.mode !== "filter") {
-        return {
-          mode: "filter",
-          scope: currentScope,
-          total: totalRowCount,
-          includedIds: previous.ids.filter((id) => !loadedRowIdSet.has(id)),
-          excludedIds: [],
-          excludedScopes: [],
-        }
+      const nextOperations: DataTableSelectionOperation[] = previous.mode === "operations"
+        ? previous.operations
+        : previous.mode === "ids" && previous.ids.length > 0
+          ? [{ type: "selectIds", ids: previous.ids }]
+          : []
+      const previousCount = previous.mode === "operations" ? selectedCount : previous.mode === "ids" ? previous.ids.length : 0
+      const addedCount = Math.max(0, totalRowCount - currentScopeSelectedCount)
+      const nextSelection: DataTableSelectionState = {
+        mode: "operations",
+        operations: dedupeOperations([...nextOperations, { type: "select", scope: currentScope, total: totalRowCount }]),
+        selectedCount: previousCount + addedCount,
       }
-
-      if (scopeCoversScope(currentScope, previous.scope)) {
-        return {
-          mode: "filter",
-          scope: currentScope,
-          total: totalRowCount,
-          includedScopes: (previous.includedScopes ?? []).filter((included) => !scopeCoversScope(currentScope, included.scope)),
-          includedIds: scopeHasConstraints(currentScope)
-            ? (previous.includedIds ?? []).filter((id) => !loadedRowIdSet.has(id))
-            : [],
-          excludedIds: scopeHasConstraints(currentScope)
-            ? previous.excludedIds.filter((id) => !loadedRowIdSet.has(id))
-            : [],
-          excludedScopes: (previous.excludedScopes ?? []).filter((excluded) => !scopeCoversScope(currentScope, excluded.scope)),
-        }
-      }
-
-      if (scopeCoversScope(previous.scope, currentScope) || scopeIsIncluded(currentScope, previous.includedScopes)) {
-        const currentCoversExcludedScope = (previous.excludedScopes ?? []).some((excluded) => scopeCoversScope(currentScope, excluded.scope))
-        const shouldIncludeCurrentScope = scopeIsExcluded(currentScope, previous.excludedScopes) && !currentCoversExcludedScope
-        return {
-          ...previous,
-          includedScopes: shouldIncludeCurrentScope
-            ? uniqueScopes([
-              ...(previous.includedScopes ?? []).filter((included) => !scopeCoversScope(currentScope, included.scope)),
-              { scope: currentScope, total: totalRowCount },
-            ])
-            : previous.includedScopes,
-          includedIds: (previous.includedIds ?? []).filter((id) => !loadedRowIdSet.has(id)),
-          excludedIds: previous.excludedIds.filter((id) => !loadedRowIdSet.has(id)),
-          excludedScopes: shouldIncludeCurrentScope
-            ? previous.excludedScopes
-            : (previous.excludedScopes ?? []).filter((excluded) => !scopeCoversScope(currentScope, excluded.scope)),
-        }
-      }
-
-      return {
-        ...previous,
-        includedIds: (previous.includedIds ?? []).filter((id) => !loadedRowIdSet.has(id)),
-        includedScopes: uniqueScopes([
-          ...(previous.includedScopes ?? []).filter((included) => !scopeCoversScope(currentScope, included.scope)),
-          { scope: currentScope, total: totalRowCount },
-        ]),
-        excludedScopes: (previous.excludedScopes ?? []).filter((excluded) => !scopeCoversScope(currentScope, excluded.scope)),
-      }
+      return nextSelection
     })
-    setMaterializedSelectedIds(loadedRowIds)
     setIsSelectingAll(false)
-  }, [currentScope, enabled, loadedRowIdSet, loadedRowIds, totalRowCount])
+  }, [currentScope, currentScopeSelectedCount, enabled, selectedCount, totalRowCount])
 
   const deselectAll = useCallback(async () => {
     if (!enabled) return
     setIsSelectingAll("deselectAll")
     setSelectionState((previous) => {
-      if (previous.mode !== "filter" || !scopeHasConstraints(currentScope)) {
-        setMaterializedSelectedIds([])
-        return { mode: "ids", ids: [] }
-      }
-
-      const remainingExcludedScopes = (previous.excludedScopes ?? []).filter((excluded) => !scopeCoversScope(currentScope, excluded.scope))
-      const currentScopeIsInsideIncludedScope = scopeIsIncluded(currentScope, previous.includedScopes)
-      const currentScopeExactlyMatchesIncludedScope = scopeHasExactMatch(currentScope, previous.includedScopes)
-      const shouldAddExcludedScope = (currentScopeIsInsideIncludedScope && !currentScopeExactlyMatchesIncludedScope)
-        || !scopeIsExcluded(currentScope, remainingExcludedScopes)
-
+      const nextOperations: DataTableSelectionOperation[] = previous.mode === "operations"
+        ? previous.operations
+        : previous.mode === "ids" && previous.ids.length > 0
+          ? [{ type: "selectIds", ids: previous.ids }]
+          : []
+      const previousCount = previous.mode === "operations" ? selectedCount : previous.mode === "ids" ? previous.ids.length : 0
       return {
-        ...previous,
-        includedIds: (previous.includedIds ?? []).filter((id) => !loadedRowIdSet.has(id)),
-        includedScopes: (previous.includedScopes ?? []).filter((included) => !scopeCoversScope(currentScope, included.scope)),
-        excludedScopes: shouldAddExcludedScope
-          ? uniqueScopes([...remainingExcludedScopes, { scope: currentScope, total: totalRowCount }])
-          : remainingExcludedScopes,
+        mode: "operations",
+        operations: dedupeOperations([...nextOperations, { type: "deselect", scope: currentScope, total: totalRowCount }]),
+        selectedCount: Math.max(0, previousCount - currentScopeSelectedCount),
       }
     })
     setIsSelectingAll(false)
-  }, [currentScope, enabled, loadedRowIdSet, totalRowCount])
+  }, [currentScope, currentScopeSelectedCount, enabled, selectedCount, totalRowCount])
 
   const setRowSelection = useCallback((updater: Updater<RowSelectionState>) => {
     setSelectionState((previous) => {
-      const previousScopeCoversCurrentRows = previous.mode === "filter" && (
-        scopeKey(previous.scope) === currentScopeKey || !scopeHasConstraints(previous.scope)
-      )
-      const previousIncludedScopeCoversCurrentRows = previous.mode === "filter" && scopeIsIncluded(currentScope, previous.includedScopes)
-      const previousIncludedIds = previous.mode === "filter" ? new Set(previous.includedIds ?? []) : new Set<string>()
-      const previousExcludedIds = previous.mode === "filter" ? new Set(previous.excludedIds) : new Set<string>()
-      const previousRows = previous.mode === "filter" && (previousScopeCoversCurrentRows || previousIncludedScopeCoversCurrentRows)
-        ? Object.fromEntries(loadedRowIds
-          .filter((id) => !previousExcludedIds.has(id))
-          .filter((id) => {
-            if (previousIncludedIds.has(id)) return true
-            const row = loadedRowsById[id]
-            if (rowMatchesBlockingExcludedScopes(row, currentScope, previous.excludedScopes)) return false
-            if (rowMatchesIncludedScopes(row, previous.includedScopes)) return true
-            return !rowMatchesExcludedScopes(row, previous.excludedScopes)
-          })
-          .map((id) => [id, true]))
-        : previous.mode === "filter"
-          ? Object.fromEntries(loadedRowIds
-            .filter((id) => !previousExcludedIds.has(id))
-            .filter((id) => previousIncludedIds.has(id) || materializedSelectedIdSet.has(id))
-            .filter((id) => previousIncludedIds.has(id) || !loadedRowsById[id] || rowMatchesScope(loadedRowsById[id], previous.scope) || rowMatchesIncludedScopes(loadedRowsById[id], previous.includedScopes))
-            .filter((id) => previousIncludedIds.has(id) || !rowMatchesExcludedScopes(loadedRowsById[id], previous.excludedScopes))
-            .map((id) => [id, true]))
-        : previous.mode === "ids"
-          ? idsToRowSelection(previous.ids)
-          : {}
+      const previousRows = previous.mode === "ids"
+        ? idsToRowSelection(previous.ids)
+        : idsToRowSelection(loadedRowIds.filter((id) => rowIsSelectedByOperations(id, loadedRowsById[id], previous.mode === "operations" ? previous.operations : [])))
       const nextRows = typeof updater === "function" ? updater(previousRows) : updater
-
-      if (previous.mode === "filter") {
-        const excluded = new Set(previous.excludedIds)
-        const included = new Set(previous.includedIds ?? [])
-        for (const id of loadedRowIds) {
-          const wasSelected = !!previousRows[id]
-          const isSelected = !!nextRows[id]
-          const row = loadedRowsById[id]
-          const isCoveredBySelectedScope = !row || rowMatchesScope(row, previous.scope) || rowMatchesIncludedScopes(row, previous.includedScopes)
-          const isBlockedByExcludedScope = rowMatchesExcludedScopes(row, previous.excludedScopes)
-          if (wasSelected && !isSelected) {
-            const wasExplicitlyIncluded = included.has(id)
-            if (wasExplicitlyIncluded) included.delete(id)
-            if (isCoveredBySelectedScope && !(wasExplicitlyIncluded && isBlockedByExcludedScope)) excluded.add(id)
-          }
-          if (!wasSelected && isSelected) {
-            if (!isCoveredBySelectedScope || isBlockedByExcludedScope) included.add(id)
-          }
-          if (isSelected) excluded.delete(id)
-        }
-        return { ...previous, includedIds: Array.from(included), excludedIds: Array.from(excluded) }
+      const selectedIds: string[] = []
+      const deselectedIds: string[] = []
+      for (const id of loadedRowIds) {
+        const wasSelected = !!previousRows[id]
+        const isSelected = !!nextRows[id]
+        if (!wasSelected && isSelected) selectedIds.push(id)
+        if (wasSelected && !isSelected) deselectedIds.push(id)
       }
 
+      if (previous.mode === "ids") {
+        return { mode: "ids", ids: Object.keys(nextRows).filter((id) => nextRows[id]) }
+      }
+
+      const operations: DataTableSelectionOperation[] = previous.mode === "operations" ? [...previous.operations] : []
+      if (selectedIds.length > 0) operations.push({ type: "selectIds", ids: selectedIds })
+      if (deselectedIds.length > 0) operations.push({ type: "deselectIds", ids: deselectedIds })
       return {
-        mode: "ids",
-        ids: Object.keys(nextRows).filter((id) => nextRows[id]),
+        mode: "operations",
+        operations: dedupeOperations(operations),
+        selectedCount: Math.max(0, (previous.mode === "operations" ? previous.selectedCount : 0) + selectedIds.length - deselectedIds.length),
       }
     })
-  }, [currentScope, currentScopeKey, loadedRowIds, loadedRowsById, materializedSelectedIdSet])
-
-  const visibleSelectedIds = useMemo(() => {
-    if (selectionState.mode === "ids") return selectionState.ids
-    const excluded = new Set(selectionState.excludedIds)
-    const included = new Set(selectionState.includedIds ?? [])
-    if (currentScopeIsOnlyExcluded) return loadedRowIds.filter((id) => included.has(id) && !excluded.has(id))
-    if (!filterScopeCoversCurrentRows && !includedScopeCoversCurrentRows) {
-      return loadedRowIds.filter((id) => !excluded.has(id))
-        .filter((id) => included.has(id) || materializedSelectedIdSet.has(id))
-        .filter((id) => included.has(id) || !loadedRowsById[id] || rowMatchesScope(loadedRowsById[id], selectionState.scope) || rowMatchesIncludedScopes(loadedRowsById[id], selectionState.includedScopes))
-        .filter((id) => !rowMatchesExcludedScopes(loadedRowsById[id], selectionState.excludedScopes))
-    }
-    return loadedRowIds
-      .filter((id) => included.has(id) || !excluded.has(id))
-      .filter((id) => {
-        if (included.has(id)) return true
-        const row = loadedRowsById[id]
-        if (rowMatchesBlockingExcludedScopes(row, currentScope, selectionState.excludedScopes)) return false
-        if (rowMatchesIncludedScopes(row, selectionState.includedScopes)) return true
-        return !rowMatchesExcludedScopes(row, selectionState.excludedScopes)
-      })
-  }, [currentScope, currentScopeIsOnlyExcluded, filterScopeCoversCurrentRows, includedScopeCoversCurrentRows, loadedRowIds, loadedRowsById, materializedSelectedIdSet, selectionState])
-
-  const totalSelectedCount = selectedCount(selectionState)
-  const currentScopeSelectedCount = useMemo(() => {
-    if (selectionState.mode === "ids") {
-      const selected = new Set(selectionState.ids)
-      return loadedRowIds.filter((id) => selected.has(id)).length
-    }
-    if (currentScopeIsOnlyExcluded) {
-      const included = new Set(selectionState.includedIds ?? [])
-      const excluded = new Set(selectionState.excludedIds)
-      return loadedRowIds.filter((id) => included.has(id) && !excluded.has(id)).length
-    }
-
-    const selectedScopeCoversCurrent = scopeCoversScope(selectionState.scope, currentScope)
-    const includedScopeCoversCurrent = scopeIsIncluded(currentScope, selectionState.includedScopes)
-    const currentScopeCoversSelected = scopeCoversScope(currentScope, selectionState.scope)
-
-    if (selectedScopeCoversCurrent || includedScopeCoversCurrent) {
-      const excludedIdsInCurrentScope = selectionState.excludedIds.filter((id) => rowMatchesScope(loadedRowsById[id], currentScope)).length
-      const excludedScopesInCurrentScope = (selectionState.excludedScopes ?? [])
-        .filter((excluded) => scopeCoversScope(currentScope, excluded.scope))
-        .reduce((sum, excluded) => sum + excluded.total, 0)
-      return Math.max(0, totalRowCount - excludedIdsInCurrentScope - excludedScopesInCurrentScope)
-    }
-
-    if (currentScopeCoversSelected) return totalSelectedCount
-
-    return visibleSelectedIds.length
-  }, [currentScope, currentScopeIsOnlyExcluded, loadedRowIds, loadedRowsById, selectionState, totalRowCount, totalSelectedCount, visibleSelectedIds.length])
-
-  const displaySelectedCount = currentScopeIsConstrained ? currentScopeSelectedCount : totalSelectedCount
+  }, [loadedRowIds, loadedRowsById])
 
   return {
     rowSelection,
@@ -463,12 +320,13 @@ export function useInfiniteSelection({
     clearSelection,
     currentScope,
     selectionState,
-    selectedCount: totalSelectedCount,
+    selectedCount,
     displaySelectedCount,
     currentScopeSelectedCount,
     visibleSelectedIds,
     selectAll,
     deselectAll,
     isSelectingAll,
+    operations,
   }
 }

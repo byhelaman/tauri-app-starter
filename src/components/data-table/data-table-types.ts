@@ -63,8 +63,19 @@ export interface DataTableIncludedSelectionScope {
   total: number
 }
 
+export type DataTableSelectionOperation =
+  | { type: "select"; scope: DataTableSelectionScope; total: number }
+  | { type: "deselect"; scope: DataTableSelectionScope; total: number }
+  | { type: "selectIds"; ids: string[] }
+  | { type: "deselectIds"; ids: string[] }
+
 export type DataTableSelectionState =
   | { mode: "ids"; ids: string[] }
+  | {
+      mode: "operations"
+      operations: DataTableSelectionOperation[]
+      selectedCount: number
+    }
   | {
       mode: "filter"
       scope: DataTableSelectionScope
@@ -79,6 +90,7 @@ export type ServerExportFormat = "csv" | "tsv" | "json" | "md" | "lines" | "cust
 
 export interface ServerScopeExportRequest {
   scope: DataTableSelectionScope
+  operations?: DataTableSelectionOperation[]
   includedIds?: string[]
   includedScopes?: DataTableIncludedSelectionScope[]
   excludedIds?: string[]
@@ -123,6 +135,8 @@ export interface InfiniteScrollConfig {
   currentScope?: DataTableSelectionScope
   /** Genera contenido server-side para scopes grandes sin cargar registros en memoria del cliente. */
   exportByScope?: (request: ServerScopeExportRequest) => Promise<ServerScopeExportResult>
+  /** Cuenta exactamente la selección por operaciones en backend. */
+  countBySelection?: (selection: DataTableSelectionState, scope?: DataTableSelectionScope) => Promise<number>
 }
 
 // ────────────────────────────────────────────────────────────────────────────

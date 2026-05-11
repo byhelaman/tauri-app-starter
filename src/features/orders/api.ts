@@ -8,12 +8,14 @@ import type {
 import type {
   DataTableExcludedSelectionScope,
   DataTableIncludedSelectionScope,
+  DataTableSelectionOperation,
   DataTableSelectionScope,
   DataTableSelectionState,
   ServerExportFormat,
   ServerScopeExportResult,
 } from "@/components/data-table/data-table-types"
 import { expandDataActionFields } from "@/components/data-table/data-action-fields"
+import { pickNormalizedFilter, pickNormalizedHourFilter } from "@/lib/table-filter-normalization"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -25,23 +27,12 @@ function assertSupabase(): NonNullable<typeof supabase> {
   return supabase
 }
 
-/** Extrae todos los valores seleccionados por columnId como array (multi-select) */
 function pickFilter(filters: ColumnFiltersState, id: string): string[] | null {
-  const f = filters.find((f) => f.id === id)
-  if (!f) return null
-  const v = f.value
-  if (Array.isArray(v) && v.length > 0) return v as string[]
-  if (typeof v === "string" && v) return [v]
-  return null
+  return pickNormalizedFilter(filters, id)
 }
 
-/** Extrae todas las horas seleccionadas del filtro de columna 'time' */
 function pickHourFilter(filters: ColumnFiltersState): string[] | null {
-  const f = filters.find((f) => f.id === "time")
-  if (!f) return null
-  const v = f.value
-  if (Array.isArray(v) && v.length > 0) return v as string[]
-  return null
+  return pickNormalizedHourFilter(filters)
 }
 
 // ── Orders ────────────────────────────────────────────────────────────────────
@@ -224,6 +215,26 @@ function includedScopesRpcParam(includedScopes: DataTableIncludedSelectionScope[
   }))
 }
 
+function scopeJson(scope: DataTableSelectionScope) {
+  return {
+    search: scope.search || "",
+    status: pickFilter(scope.filters, "status"),
+    channel: pickFilter(scope.filters, "channel"),
+    priority: pickFilter(scope.filters, "priority"),
+    date: scope.date ?? null,
+    start_hour: pickHourFilter(scope.filters),
+  }
+}
+
+function operationsRpcParam(operations: DataTableSelectionOperation[] = []) {
+  return operations.map((operation) => {
+    if (operation.type === "selectIds" || operation.type === "deselectIds") {
+      return { type: operation.type, ids: operation.ids }
+    }
+    return { type: operation.type, scope: scopeJson(operation.scope) }
+  })
+}
+
 function scopeExportRpcParams(scope: DataTableSelectionScope, excludedIds: string[] = [], includedIds: string[] = []) {
   return {
     ...scopeRpcParams(scope, excludedIds, includedIds),
@@ -235,6 +246,15 @@ function scopeExportRpcParams(scope: DataTableSelectionScope, excludedIds: strin
 export const bulkDeleteOrdersBySelection = async (selection: DataTableSelectionState) => {
   if (selection.mode === "ids") {
     return bulkDeleteOrders(selection.ids)
+  }
+  if (selection.mode === "operations") {
+    const db = assertSupabase()
+    const { data, error } = await db.rpc("bulk_delete_orders_by_selection", {
+      p_operations: operationsRpcParam(selection.operations),
+      p_expected_count: selection.selectedCount,
+    })
+    if (error) throw new Error(error.message)
+    return (data as number) ?? 0
   }
   const includedIdTotal = selection.includedIds?.length ?? 0
   const includedScopeTotal = (selection.includedScopes ?? []).reduce((sum, included) => sum + included.total, 0)
@@ -252,6 +272,7 @@ export const bulkDeleteOrdersBySelection = async (selection: DataTableSelectionS
 
 export const exportOrdersByScope = async ({
   scope,
+  operations,
   includedIds = [],
   includedScopes = [],
   excludedIds = [],
@@ -262,6 +283,7 @@ export const exportOrdersByScope = async ({
   template,
 }: {
   scope: DataTableSelectionScope
+  operations?: DataTableSelectionOperation[]
   includedIds?: string[]
   includedScopes?: DataTableIncludedSelectionScope[]
   excludedIds?: string[]
@@ -272,6 +294,23 @@ export const exportOrdersByScope = async ({
   template?: string
 }): Promise<ServerScopeExportResult> => {
   const db = assertSupabase()
+  if (operations && operations.length > 0) {
+    const { data, error } = await db.rpc("export_orders_by_selection", {
+      p_operations: operationsRpcParam(operations),
+      p_sort_col: scope.sorting?.[0]?.id ?? null,
+      p_sort_dir: scope.sorting?.[0]?.desc ? "desc" : (scope.sorting?.[0] ? "asc" : null),
+      p_format: format,
+      p_fields: expandDataActionFields(fields),
+      p_headers: headers ?? true,
+      p_template: template ?? null,
+    })
+    if (error) throw new Error(error.message)
+    const result = data as { content?: string; row_count?: number } | null
+    return {
+      content: result?.content ?? "",
+      rowCount: result?.row_count ?? 0,
+    }
+  }
   const { data, error } = await db.rpc("export_orders_by_filter", {
     ...scopeExportRpcParams(scope, excludedIds, includedIds),
     p_included_scopes: includedScopesRpcParam(includedScopes),
@@ -287,6 +326,23 @@ export const exportOrdersByScope = async ({
     content: result?.content ?? "",
     rowCount: result?.row_count ?? 0,
   }
+}
+
+export const countOrdersBySelection = async (selection: DataTableSelectionState, scope?: DataTableSelectionScope): Promise<number> => {
+  if (selection.mode === "ids") return selection.ids.length
+  if (selection.mode === "filter") {
+    const includedIdTotal = selection.includedIds?.length ?? 0
+    const includedScopeTotal = (selection.includedScopes ?? []).reduce((sum, included) => sum + included.total, 0)
+    const excludedScopeTotal = (selection.excludedScopes ?? []).reduce((sum, excluded) => sum + excluded.total, 0)
+    return Math.max(0, selection.total + includedIdTotal + includedScopeTotal - selection.excludedIds.length - excludedScopeTotal)
+  }
+  const db = assertSupabase()
+  const { data, error } = await db.rpc("count_orders_by_selection", {
+    p_operations: operationsRpcParam(selection.operations),
+    p_scope: scope ? scopeJson(scope) : null,
+  })
+  if (error) throw new Error(error.message)
+  return (data as number) ?? 0
 }
 
 /** Obtiene las órdenes que coinciden con los filtros activos, hasta el límite máximo permitido.

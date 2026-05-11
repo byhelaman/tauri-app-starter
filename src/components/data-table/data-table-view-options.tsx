@@ -111,8 +111,10 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
   const canUseBulkCopy = allowDataExport && (mode === "full" || mode === "bulk-copy")
   const tableMeta = table.options.meta as DataTableMeta | undefined
   const usesServerScope = tableMeta?.isInfiniteScroll === true
-  const selectedCount = usesServerScope && tableMeta?.selectionState?.mode === "filter"
+  const selectedCount = usesServerScope && tableMeta?.selectionState?.mode === "operations"
     ? tableMeta.selectedCount ?? 0
+    : usesServerScope && tableMeta?.selectionState?.mode === "filter"
+      ? tableMeta.selectedCount ?? 0
     : isSelectAllByFilter
       ? (infiniteScroll?.totalRowCount ?? 0) - (excludedIds?.size ?? 0)
       : tableMeta?.visibleSelectedCount ?? table.getSelectedRowModel().rows.length
@@ -164,7 +166,15 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
   function selectedFilterExportRequest(format: ExportFormat) {
     const selection = tableMeta?.selectionState
     if (!usesServerScope) return null
-    if (effectiveScope !== "selected" || selection?.mode !== "filter") return null
+    if (effectiveScope !== "selected" || !selection || selection.mode === "ids") return null
+    if (selection.mode === "operations") {
+      return {
+        scope: infiniteScroll?.currentScope ?? { search: "", filters: [] },
+        operations: selection.operations,
+        format,
+        fields: getExportFieldIds(table),
+      }
+    }
     return {
       scope: selection.scope,
       includedIds: selection.includedIds,

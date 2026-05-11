@@ -6,15 +6,13 @@ import * as api from "../api"
 import type { Order, EditableOrderField, Status } from "../columns"
 import { useOrdersRealtime } from "./useOrdersRealtime"
 import type { DataTableSelectionState } from "@/components/data-table/data-table-types"
+import { pickNormalizedFilter, pickNormalizedHourFilter } from "@/lib/table-filter-normalization"
 
 /** Número de filas por chunk en modo infinite scroll */
 const ORDER_CHUNK = 1000
 
 function pickFilterValues(filters: ColumnFiltersState, id: string): string[] {
-  const value = filters.find((filter) => filter.id === id)?.value
-  if (Array.isArray(value)) return value.map(String)
-  if (typeof value === "string" && value) return [value]
-  return []
+  return pickNormalizedFilter(filters, id) ?? []
 }
 
 function orderMatchesActiveQuery(order: Order, {
@@ -37,7 +35,7 @@ function orderMatchesActiveQuery(order: Order, {
   const priority = pickFilterValues(filters, "priority")
   if (priority.length > 0 && !priority.includes(order.priority)) return false
 
-  const hours = pickFilterValues(filters, "time")
+  const hours = pickNormalizedHourFilter(filters) ?? []
   if (hours.length > 0) {
     const startHour = String(order.start_time ?? "").split(":")[0]
     if (!hours.includes(startHour)) return false
@@ -240,7 +238,9 @@ export function useOrders({
         if (!old) return old
         const deletedCount = selection.mode === "ids"
           ? selection.ids.length
-          : Math.max(0, selection.total - selection.excludedIds.length)
+          : selection.mode === "operations"
+            ? selection.selectedCount
+            : Math.max(0, selection.total - selection.excludedIds.length)
         return {
           ...old,
           pages: old.pages.map(page => {
@@ -340,6 +340,7 @@ export function useOrders({
         sorting,
       },
       exportByScope: api.exportOrdersByScope,
+      countBySelection: api.countOrdersBySelection,
       // Obtiene filas completas del servidor vía RPC dedicada, con límite backend.
       fetchAllByFilter: async (): Promise<Record<string, unknown>[]> => {
         // Si el total aún no está disponible (primera carga no completada), no hay filas que retornar

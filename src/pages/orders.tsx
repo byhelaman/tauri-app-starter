@@ -316,13 +316,19 @@ export function OrdersPage() {
                   toast.loading(`Preparing copy...`, { id: toastId })
                   try {
                     const copySettings = resolveBulkCopySettings("orders", ORDER_COPY_FIELDS)
-                    const rowsToCopy = selection.mode === "filter"
+                    const rowsToCopy = selection.mode !== "ids"
                       ? null
                       : selectedIds.length === selectedLoadedRows.length
                         ? selectedLoadedRows
                         : await fetchOrdersByIds(selectedIds)
 
-                    const exportResult = selection.mode === "filter"
+                    const exportResult = selection.mode === "operations"
+                        ? await infiniteScroll.exportByScope!({
+                          scope: infiniteScroll.currentScope ?? { search: "", filters: [] },
+                          operations: selection.operations,
+                          ...copySettings,
+                        })
+                      : selection.mode === "filter"
                         ? await infiniteScroll.exportByScope!({
                           scope: selection.scope,
                           includedIds: selection.includedIds,
@@ -337,7 +343,7 @@ export function OrdersPage() {
                     if (!content) { toast.error("Nothing to copy", { id: toastId }); return }
                     
                     await navigator.clipboard.writeText(content)
-                    const copiedCount = selection.mode === "filter"
+                    const copiedCount = selection.mode !== "ids"
                       ? exportResult?.rowCount ?? 0
                       : (rowsToCopy?.length ?? 0)
                     toast.success(`Copied ${copiedCount.toLocaleString()} rows`, { id: toastId })
@@ -357,7 +363,9 @@ export function OrdersPage() {
                 aria-label="Delete"
                 onClick={() => {
                   setBulkDeleteOp({
-                    count: selection.mode === "filter"
+                    count: selection.mode === "operations"
+                      ? selection.selectedCount
+                      : selection.mode === "filter"
                       ? Math.max(
                           0,
                           selection.total
@@ -427,12 +435,18 @@ export function OrdersPage() {
                     toast.loading("Preparing copy...", { id: toastId })
                     try {
                       const copySettings = resolveBulkCopySettings("orders-queue", QUEUE_COPY_FIELDS)
-                      const rowsToCopy = selection.mode === "filter"
+                      const rowsToCopy = selection.mode !== "ids"
                         ? null
                         : selectedIds.length === selectedLoadedRows.length
                           ? selectedLoadedRows
                           : await fetchOrdersByIds(selectedIds)
-                      const exportResult = selection.mode === "filter"
+                      const exportResult = selection.mode === "operations"
+                        ? await queueInfiniteScroll.exportByScope!({
+                          scope: queueInfiniteScroll.currentScope ?? { search: "", filters: [] },
+                          operations: selection.operations,
+                          ...copySettings,
+                        })
+                        : selection.mode === "filter"
                         ? await queueInfiniteScroll.exportByScope!({
                           scope: selection.scope,
                           includedIds: selection.includedIds,
@@ -450,7 +464,7 @@ export function OrdersPage() {
                       }
 
                       await navigator.clipboard.writeText(content)
-                      const copiedCount = selection.mode === "filter"
+                      const copiedCount = selection.mode !== "ids"
                         ? exportResult?.rowCount ?? 0
                         : (rowsToCopy?.length ?? 0)
                       toast.success(`Copied ${copiedCount.toLocaleString()} rows`, { id: toastId })
