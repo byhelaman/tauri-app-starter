@@ -7,7 +7,6 @@ import {
   type FilterFn,
   type SortingState,
   type VisibilityState,
-  flexRender,
   getFacetedRowModel,
   getFacetedUniqueValues,
   getCoreRowModel,
@@ -19,20 +18,10 @@ import {
   type OnChangeFn,
 } from "@tanstack/react-table"
 import { useVirtualizer } from "@tanstack/react-virtual"
-import { X } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { DataTableToolbar } from "./data-table-toolbar"
 import { DataTablePagination } from "./data-table-pagination"
-import { DataTableSkeleton } from "./data-table-skeleton"
+import { DataTableSelectionBar } from "./data-table-selection-bar"
+import { DataTableViewport } from "./data-table-viewport"
 import {
   DataTableLayoutConfig,
   DataTableToolbarConfig,
@@ -41,7 +30,6 @@ import {
   type DataTableResetContext,
   type DataTableSelectionState,
 } from "./data-table-types"
-import { getColumnSizeStyle, getPinnedColumnStyle } from "./data-table-utils"
 import { useInfiniteSelection } from "./use-infinite-selection"
 
 /**
@@ -389,172 +377,47 @@ export function DataTable<TData, TValue>({
       />
 
 
-      <div
-        className={cn(
-          "flex flex-1 min-h-0 w-full overflow-hidden rounded-md border",
-          !fitHeight && "max-h-[calc(100svh-14rem)]"
-        )}
-      >
-        <div
-          ref={scrollRef}
-          className={cn("overflow-auto flex-1 scrollbar", scrollAreaClassName)}
-          style={{ scrollPadding: `${headerHeight}px ${rightPinnedWidth}px ${cellPadding}px ${leftPinnedWidth}px` }}
-        >
-          <Table containerClassName="overflow-visible">
-            <TableHeader className={cn("sticky top-0 z-50 bg-(--table-bg,var(--color-background))", tableHeaderClassName)}>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id} className="group">
-                  {headerGroup.headers.map((header) => {
-                    const pin = header.column.getIsPinned()
-                    const isFirst = pin === "left" && header.column.getStart("left") === 0
-                    const isEdge = pin === "left" ? header.column.id === leftEdgeId : pin === "right" ? header.column.id === rightEdgeId : false
-                    return (
-                      <TableHead
-                        key={header.id}
-                        className={cn(
-                          header.column.getIsPinned() &&
-                          "z-40 bg-(--table-bg,var(--color-background)) transition-colors group-hover:bg-[color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))]"
-                        )}
-                        style={{
-                          ...(header.column.getIsPinned() ? undefined : getColumnSizeStyle(header.column.columnDef)),
-                          ...getPinnedColumnStyle(header.column, true, isEdge, isFirst)
-                        }}
-                      >
-                        {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                      </TableHead>
-                    )
-                  })}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {/* Spacer superior — ocupa el espacio de filas no renderizadas (spacer-row approach) */}
-              {paddingTop > 0 && (
-                <TableRow><TableCell colSpan={columns.length} style={{ height: paddingTop, padding: 0, border: 0 }} /></TableRow>
-              )}
-
-              {(virtualRows ?? rows).map((item) => {
-                const row = virtualRows ? rows[(item as { index: number }).index] : (item as typeof rows[0])
-                if (!row) return null
-                const rowEl = (
-                  <TableRow key={row.id} className={cn("group/row group", rowClassName?.(row.original))} data-state={row.getIsSelected() ? "selected" : undefined}>
-                    {row.getVisibleCells().map((cell) => {
-                      const pin = cell.column.getIsPinned()
-                      const isFirst = pin === "left" && cell.column.getStart("left") === 0
-                      const isEdge = pin === "left" ? cell.column.id === leftEdgeId : pin === "right" ? cell.column.id === rightEdgeId : false
-                      return (
-                        <TableCell
-                          key={cell.id}
-                          className={cn(
-                            cell.column.getIsPinned() &&
-                            "relative z-10 group-hover/row:z-30 border-b group-last/row:border-b-0 bg-(--highlight-bg,var(--table-bg,var(--color-background))) transition-colors group-hover:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-has-data-open:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-has-aria-expanded:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-data-[state=selected]:bg-muted"
-                          )}
-                          style={{
-                            ...(cell.column.getIsPinned() ? undefined : getColumnSizeStyle(cell.column.columnDef)),
-                            ...getPinnedColumnStyle(cell.column, false, isEdge, isFirst)
-                          }}
-                        >
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      )
-                    })}
-                  </TableRow>
-                )
-                if (!rowContextMenu) return rowEl
-                return (
-                  <ContextMenu key={row.id}>
-                    <ContextMenuTrigger asChild>{rowEl}</ContextMenuTrigger>
-                    <ContextMenuContent>{rowContextMenu(row.original)}</ContextMenuContent>
-                  </ContextMenu>
-                )
-              })}
-
-              {/* Skeleton de carga inicial (paginación clásica) */}
-              {isLoading && !infiniteScroll && rows.length < table.getState().pagination.pageSize && (
-                <DataTableSkeleton
-                  table={table}
-                  rowCount={table.getState().pagination.pageSize - rows.length}
-                  leftEdgeId={leftEdgeId}
-                  rightEdgeId={rightEdgeId}
-                />
-              )}
-
-              {/* Skeleton de carga INICIAL en modo infinite scroll
-                  (isLoading=true, isFetchingNextPage=false aún) */}
-              {isLoading && !!infiniteScroll && (
-                <DataTableSkeleton
-                  table={table}
-                  rowCount={100}
-                  leftEdgeId={leftEdgeId}
-                  rightEdgeId={rightEdgeId}
-                />
-              )}
-
-              {/* Skeleton al cargar chunks adicionales — ANTES del spacer inferior
-                  para quedar visible en el viewport al llegar al fondo */}
-              {!isLoading && infiniteScroll?.isFetchingNextPage && (
-                <DataTableSkeleton
-                  table={table}
-                  rowCount={5}
-                  leftEdgeId={leftEdgeId}
-                  rightEdgeId={rightEdgeId}
-                />
-              )}
-
-              {/* Spacer inferior — ocupa el espacio de filas aún no visibles */}
-              {paddingBottom > 0 && (
-                <TableRow><TableCell colSpan={columns.length} style={{ height: paddingBottom, padding: 0, border: 0 }} /></TableRow>
-              )}
-
-              {!isLoading && rows.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">No results.</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-
-          </Table>
-        </div>
-
-        {sidePanel && isSidePanelOpen && (
-          <div className="w-96 shrink-0 border-l bg-muted/10 flex flex-col">
-            {sidePanel(() => setIsSidePanelOpen(false))}
-          </div>
-        )}
+      <div className={cn(!fitHeight && "max-h-[calc(100svh-14rem)]", "flex flex-1 min-h-0 w-full")}>
+        <DataTableViewport
+          table={table}
+          columns={columns}
+          rows={rows}
+          virtualRows={virtualRows}
+          paddingTop={paddingTop}
+          paddingBottom={paddingBottom}
+          scrollRef={scrollRef}
+          scrollAreaClassName={scrollAreaClassName}
+          tableHeaderClassName={tableHeaderClassName}
+          headerHeight={headerHeight}
+          rightPinnedWidth={rightPinnedWidth}
+          leftPinnedWidth={leftPinnedWidth}
+          cellPadding={cellPadding}
+          leftEdgeId={leftEdgeId}
+          rightEdgeId={rightEdgeId}
+          isLoading={isLoading}
+          isInfiniteScroll={!!infiniteScroll}
+          isFetchingNextPage={infiniteScroll?.isFetchingNextPage}
+          rowClassName={rowClassName}
+          rowContextMenu={rowContextMenu}
+          sidePanel={sidePanel}
+          isSidePanelOpen={isSidePanelOpen}
+          onCloseSidePanel={() => setIsSidePanelOpen(false)}
+        />
       </div>
 
       {/* Paginador clásico — oculto en modo infinite scroll */}
       {!infiniteScroll && enablePagination && <DataTablePagination table={table} pageSizeOptions={pageSizeOptions} />}
 
-      {selectedCount > 0 && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">
-          {(() => {
-            const selectedLoadedRows = table.getFilteredSelectedRowModel().rows
-            const currentScopeTotal = infiniteScroll?.totalRowCount ?? table.getFilteredRowModel().rows.length
-            const hasViewSelectionContext = displaySelectedCount !== selectedCount
-            return (
-              <div className="relative">
-                {hasViewSelectionContext && (
-                  <div className="absolute bottom-full left-0 mb-1 rounded-lg border bg-background px-4 py-2 text-sm shadow-lg">
-                    {displaySelectedCount.toLocaleString()} of {currentScopeTotal.toLocaleString()} in view
-                  </div>
-                )}
-                <div className="flex items-center gap-3 rounded-lg border bg-background p-2 shadow-lg">
-                  <span className="pl-2 text-sm">{selectedCount.toLocaleString()} selected</span>
-                  {bulkActions && (
-                    <>
-                      <div className="h-4 w-px bg-border" />
-                      {bulkActions(selectedLoadedRows.map((r) => r.original), clearSelection, visibleSelectedIds, selectionState)}
-                    </>
-                  )}
-                  <div className="h-4 w-px bg-border" />
-                  <Button variant="ghost" size="icon-sm" onClick={clearSelection}><X /></Button>
-                </div>
-              </div>
-            )
-          })()}
-        </div>
-      )}
+      <DataTableSelectionBar
+        table={table}
+        selectedCount={selectedCount}
+        displaySelectedCount={displaySelectedCount}
+        currentScopeTotal={infiniteScroll?.totalRowCount ?? table.getFilteredRowModel().rows.length}
+        visibleSelectedIds={visibleSelectedIds}
+        selectionState={selectionState}
+        clearSelection={clearSelection}
+        bulkActions={bulkActions}
+      />
     </div>
   )
 }
