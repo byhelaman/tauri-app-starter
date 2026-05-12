@@ -3,34 +3,23 @@ import { format } from "date-fns"
 import { toast } from "sonner"
 import type { SortingState } from "@tanstack/react-table"
 import {
-  CheckCircle2,
-  Clock,
   Copy,
-  Globe,
-  Handshake,
   ListTodo,
-  LoaderCircle,
-  Phone,
   Plus,
-  Store,
   Trash2,
-  Truck,
   Upload,
-  XCircle,
 } from "lucide-react"
 import { useOrders } from "@/features/orders/hooks/useOrders"
-import { useDeletedOrders } from "@/features/orders/hooks/useDeletedOrders"
 import {
   createColumns,
   type Order,
 } from "@/features/orders/columns"
-import { createTrashColumns } from "@/features/orders/trash-columns"
 import { DataTable } from "@/components/data-table/data-table"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Separator } from "@/components/ui/separator"
-import type { DataTableSelectionState, FacetedFilterOption } from "@/components/data-table/data-table-types"
+import type { DataTableSelectionState } from "@/components/data-table/data-table-types"
 import { ImportDialog } from "@/components/data-table/import-dialog"
-import { buildBulkCopyText, resolveBulkCopySettings } from "@/components/data-table/bulk-copy"
+import { resolveBulkCopySettings } from "@/components/data-table/bulk-copy"
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -49,71 +38,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import {
-  createQueueColumns,
-  type QueueOrder,
-} from "@/features/orders/modal-columns"
 import { TableHistoryCard } from "@/components/data-table/table-history-card"
 import { OrderDialog } from "@/features/orders/order-dialog"
-import { MAX_BULK_ORDER_ROWS, fetchDeletedOrdersStartHours, fetchOrderHistory, fetchOrdersStartHours, type DeletedOrder } from "@/features/orders/api"
+import { MAX_BULK_ORDER_ROWS, fetchOrderHistory, fetchOrdersStartHours } from "@/features/orders/api"
 import { useQuery } from "@tanstack/react-query"
 import { useAuth } from "@/contexts/use-auth"
-
-const STATUS_FILTER_OPTIONS: FacetedFilterOption[] = [
-  { label: "Pending", value: "pending", icon: Clock },
-  { label: "Processing", value: "processing", icon: LoaderCircle },
-  { label: "Shipped", value: "shipped", icon: Truck },
-  { label: "Delivered", value: "delivered", icon: CheckCircle2 },
-  { label: "Cancelled", value: "cancelled", icon: XCircle },
-]
-
-const CHANNEL_FILTER_OPTIONS: FacetedFilterOption[] = [
-  { label: "Online", value: "Online", icon: Globe },
-  { label: "Retail", value: "Retail", icon: Store },
-  { label: "Partner", value: "Partner", icon: Handshake },
-  { label: "Phone", value: "Phone", icon: Phone },
-]
-
-const ORDER_COPY_FIELDS = [
-  "date",
-  "customer",
-  "product",
-  "category",
-  "time",
-  "code",
-  "status",
-  "channel",
-  "quantity",
-  "amount",
-  "region",
-  "payment",
-  "priority",
-]
-
-const QUEUE_COPY_FIELDS = [
-  "time",
-  "code",
-  "customer",
-  "status",
-  "channel",
-  "agent",
-  "priority",
-]
-
-const PRIORITY_FILTER_OPTIONS: FacetedFilterOption[] = [
-  { label: "High", value: "High", icon: Clock },
-  { label: "Medium", value: "Medium", icon: Clock },
-  { label: "Low", value: "Low", icon: Clock },
-]
+import { QueueDialog } from "@/features/orders/queue-dialog"
+import { TrashDialog } from "@/features/orders/trash-dialog"
+import {
+  CHANNEL_FILTER_OPTIONS,
+  ORDER_COPY_FIELDS,
+  STATUS_FILTER_OPTIONS,
+} from "@/features/orders/orders-table-config"
 
 export function OrdersPage() {
   const { hasPermission } = useAuth()
@@ -132,8 +68,6 @@ export function OrdersPage() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [isQueueDialogOpen, setIsQueueDialogOpen] = useState(false)
   const [isTrashDialogOpen, setIsTrashDialogOpen] = useState(false)
-  const [isEmptyTrashDialogOpen, setIsEmptyTrashDialogOpen] = useState(false)
-  const [trashOrderToRemove, setTrashOrderToRemove] = useState<DeletedOrder | null>(null)
   const [isAddOrderDialogOpen, setIsAddOrderDialogOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date>()
 
@@ -141,8 +75,6 @@ export function OrdersPage() {
   const dateFilter = selectedDate ? format(selectedDate, "yyyy-MM-dd") : undefined
 
   const [sorting, setSorting] = useState<SortingState>([])
-  const [queueSorting, setQueueSorting] = useState<SortingState>([])
-  const [trashSorting, setTrashSorting] = useState<SortingState>([])
 
   const {
     pageData,
@@ -156,40 +88,6 @@ export function OrdersPage() {
     actions
   } = useOrders({ dateFilter, sorting })
 
-  const {
-    pageData: queuePageData,
-    isPageLoading: isQueuePageLoading,
-    infiniteScroll: queueInfiniteScroll,
-    columnFilters: queueColumnFilters,
-    setColumnFilters: setQueueColumnFilters,
-    globalFilter: queueGlobalFilter,
-    setGlobalFilter: setQueueGlobalFilter,
-    refreshCurrentOrderSort: refreshCurrentQueueSort,
-    actions: queueActions,
-  } = useOrders({
-    sorting: queueSorting,
-    queryScope: "orders-queue",
-    realtime: false,
-    enabled: isQueueDialogOpen,
-  })
-
-  const {
-    pageData: trashPageData,
-    rowCount: trashRowCount,
-    isPageLoading: isTrashPageLoading,
-    infiniteScroll: trashInfiniteScroll,
-    columnFilters: trashColumnFilters,
-    setColumnFilters: setTrashColumnFilters,
-    globalFilter: trashGlobalFilter,
-    setGlobalFilter: setTrashGlobalFilter,
-    refreshCurrentOrderSort: refreshCurrentTrashSort,
-    actions: trashActions,
-    isPending: isTrashPending,
-  } = useDeletedOrders({
-    sorting: trashSorting,
-    enabled: isTrashDialogOpen && canViewTrash,
-  })
-
   const { toolbarActions, rowClassName } = useTableHighlights()
 
   // Horas de inicio realmente presentes en la BD — para el filtro de Interval
@@ -199,13 +97,6 @@ export function OrdersPage() {
     staleTime: 5 * 60_000, // 5 min — no cambia frecuentemente
   })
 
-  const { data: deletedStartHours } = useQuery({
-    queryKey: ["orders", "deleted", "startHours"],
-    queryFn: fetchDeletedOrdersStartHours,
-    staleTime: 5 * 60_000,
-    enabled: isTrashDialogOpen && canViewTrash,
-  })
-
   const handleDeleteRequest = useCallback((order: Order) => {
     setOrderToDelete(order)
   }, [])
@@ -213,20 +104,6 @@ export function OrdersPage() {
   const columns = useMemo(
     () => createColumns(actions.deleteOrder, actions.handleStatusChange, actions.handleCellChange),
     [actions.deleteOrder, actions.handleStatusChange, actions.handleCellChange]
-  )
-  const queueColumns = useMemo(
-    () => createQueueColumns(queueActions.handleStatusChange),
-    [queueActions.handleStatusChange]
-  )
-  const trashColumns = useMemo(() => createTrashColumns(), [])
-
-  const queueRows = useMemo<QueueOrder[]>(
-    () => queuePageData.map((order) => ({
-      ...order,
-      time: order.start_time && order.end_time ? `${order.start_time} - ${order.end_time}` : "",
-      agent: "",
-    })),
-    [queuePageData]
   )
 
   const copyContextValue = useCallback(async (content: string, successMessage: string) => {
@@ -250,7 +127,7 @@ export function OrdersPage() {
         title="Orders"
         description="Track customer orders and their fulfillment status."
         actions={
-          <div className="flex items-center jus gap-2">
+          <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setIsQueueDialogOpen(true)}>
               <ListTodo />
               Queue
@@ -406,257 +283,20 @@ export function OrdersPage() {
         defaultPageSize={25}
       />
 
-      <Dialog open={isQueueDialogOpen} onOpenChange={setIsQueueDialogOpen}>
-        <DialogContent
-          className="w-[95vw]! h-auto! max-w-310! max-h-205!"
-          onInteractOutside={(event) => event.preventDefault()}
-        >
-          <DialogHeader>
-            <DialogTitle>Connected queue</DialogTitle>
-            <DialogDescription>Live queue linked to your current orders.</DialogDescription>
-          </DialogHeader>
-          <DialogBody className="py-1 overflow-y-hidden">
-            <DataTable
-              columns={queueColumns}
-              data={queueRows}
-              isLoading={isQueuePageLoading}
-              infiniteScroll={queueInfiniteScroll}
-              allowDataExport={canExportOrders}
-              allowDataCopy={canCopyOrders}
-              columnFilters={queueColumnFilters}
-              onColumnFiltersChange={setQueueColumnFilters}
-              globalFilter={queueGlobalFilter}
-              onGlobalFilterChange={setQueueGlobalFilter}
-              sorting={queueSorting}
-              onSortingChange={setQueueSorting}
-              onSortingRefresh={refreshCurrentQueueSort}
-              tableId="orders-queue"
-              toolbar={{
-                searchable: true,
-                filterPlaceholder: "Search queue...",
-                facetedFilters: [
-                  { columnId: "status", title: "Status", options: STATUS_FILTER_OPTIONS },
-                  { columnId: "channel", title: "Channel", options: CHANNEL_FILTER_OPTIONS },
-                  { columnId: "priority", title: "Priority", options: PRIORITY_FILTER_OPTIONS },
-                ],
-                searchDebounceMs: 300,
-                viewActionsMode: "bulk-copy",
-              }}
-              bulkActions={(_selectedLoadedRows, _clearSelection, selectedIds, selection) => (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
-                    const toastId = "copy-queue-selection"
-                    toast.loading("Preparing copy...", { id: toastId })
-                    try {
-                      const copySettings = resolveBulkCopySettings("orders-queue", QUEUE_COPY_FIELDS)
-                      const exportResult = await queueInfiniteScroll.exportByScope!({
-                        scope: queueInfiniteScroll.currentScope ?? { search: "", filters: [] },
-                        operations: selection.mode === "operations"
-                          ? selection.operations
-                          : [{ type: "selectIds", ids: selectedIds }],
-                        purpose: "copy",
-                        ...copySettings,
-                      })
-                      const content = exportResult.content
-                      if (!content) {
-                        toast.error("Nothing to copy", { id: toastId })
-                        return
-                      }
+      <QueueDialog
+        open={isQueueDialogOpen}
+        onOpenChange={setIsQueueDialogOpen}
+        canCopyOrders={canCopyOrders}
+        copyContextValue={copyContextValue}
+      />
 
-                      await navigator.clipboard.writeText(content)
-                      const copiedCount = exportResult.rowCount
-                      toast.success(`Copied ${copiedCount.toLocaleString()} rows`, { id: toastId })
-                    } catch (error) {
-                      toast.error(error instanceof Error ? error.message : "Could not copy to clipboard", { id: toastId })
-                    }
-                  }}
-                >
-                  <Copy />
-                  Copy
-                </Button>
-              )}
-              rowContextMenu={(order) => (
-                <>
-                  <ContextMenuItem
-                    onSelect={() => void copyContextValue(order.code, "Order code copied")}
-                  >
-                    Copy code
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    onSelect={() => {
-                      const content = buildBulkCopyText(
-                        [order as unknown as Record<string, unknown>],
-                        "orders-queue",
-                        QUEUE_COPY_FIELDS
-                      )
-                      void copyContextValue(content, "Row copied")
-                    }}
-                  >
-                    Copy row
-                  </ContextMenuItem>
-                </>
-              )}
-              getRowId={(row) => row.id}
-              layout={{
-                scrollAreaClassName: "max-h-[min(calc(100svh-22rem),30rem)] [--table-bg:var(--color-popover)]",
-              }}
-            />
-          </DialogBody>
-          <DialogFooter showCloseButton />
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isTrashDialogOpen} onOpenChange={setIsTrashDialogOpen}>
-        <DialogContent
-          className="w-[95vw]! h-auto! max-w-310! max-h-205!"
-          onInteractOutside={(event) => event.preventDefault()}
-        >
-          <DialogHeader>
-            <DialogTitle>Trash</DialogTitle>
-            <DialogDescription>Deleted orders kept outside the active orders table.</DialogDescription>
-          </DialogHeader>
-          <DialogBody className="py-1 overflow-y-hidden">
-            <DataTable
-              columns={trashColumns}
-              data={trashPageData}
-              isLoading={isTrashPageLoading}
-              infiniteScroll={trashInfiniteScroll}
-              allowDataExport={false}
-              allowDataCopy={false}
-              columnFilters={trashColumnFilters}
-              onColumnFiltersChange={setTrashColumnFilters}
-              globalFilter={trashGlobalFilter}
-              onGlobalFilterChange={setTrashGlobalFilter}
-              sorting={trashSorting}
-              onSortingChange={setTrashSorting}
-              onSortingRefresh={refreshCurrentTrashSort}
-              tableId="orders-trash"
-              toolbar={{
-                searchable: true,
-                filterPlaceholder: "Search trash...",
-                facetedFilters: [
-                  { columnId: "status", title: "Status", options: STATUS_FILTER_OPTIONS },
-                  { columnId: "channel", title: "Channel", options: CHANNEL_FILTER_OPTIONS },
-                ],
-                intervalFilter: { columnId: "time", title: "Interval", hours: deletedStartHours },
-                searchDebounceMs: 300,
-                viewActionsMode: "view",
-              }}
-              rowContextMenu={(order) => (
-                <>
-                  <ContextMenuItem
-                    onSelect={() => void copyContextValue(order.code, "Order code copied")}
-                  >
-                    Copy code
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    onSelect={() => {
-                      const content = [
-                        order.date,
-                        order.customer,
-                        order.product,
-                        order.category,
-                        `${order.start_time} - ${order.end_time}`,
-                        order.code,
-                        order.status,
-                        order.channel,
-                        order.quantity,
-                        order.amount,
-                        order.region,
-                        order.payment,
-                        order.priority,
-                        order.deleted_at,
-                        order.deleted_by_email,
-                      ].join(" - ")
-                      void copyContextValue(content, "Row copied")
-                    }}
-                  >
-                    Copy row
-                  </ContextMenuItem>
-                  <ContextMenuSeparator />
-                  <ContextMenuItem
-                    onSelect={() => setTrashOrderToRemove(order)}
-                  >
-                    Remove
-                  </ContextMenuItem>
-                </>
-              )}
-              getRowId={(row) => row.id}
-              layout={{
-                scrollAreaClassName: "max-h-[min(calc(100svh-22rem),30rem)] [--table-bg:var(--color-popover)]",
-              }}
-            />
-          </DialogBody>
-          <DialogFooter showCloseButton>
-            {canEmptyTrash && (
-              <Button
-                variant="default"
-                disabled={isTrashPending || trashRowCount === 0}
-                onClick={() => setIsEmptyTrashDialogOpen(true)}
-              >
-                Empty Trash
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog
-        open={isEmptyTrashDialogOpen}
-        onOpenChange={setIsEmptyTrashDialogOpen}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Empty trash?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete {trashRowCount.toLocaleString()} orders from trash. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              disabled={isTrashPending || trashRowCount === 0}
-              onClick={async () => {
-                await trashActions.emptyTrash()
-                setIsEmptyTrashDialogOpen(false)
-              }}
-            >
-              Empty Trash
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={!!trashOrderToRemove}
-        onOpenChange={(open) => { if (!open) setTrashOrderToRemove(null) }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove from trash?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove <span className="font-medium text-foreground">{trashOrderToRemove?.code}</span> from trash. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              disabled={isTrashPending}
-              onClick={async () => {
-                if (!trashOrderToRemove) return
-                await trashActions.removeDeletedOrder(trashOrderToRemove.id)
-                setTrashOrderToRemove(null)
-              }}
-            >
-              Remove
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <TrashDialog
+        open={isTrashDialogOpen}
+        onOpenChange={setIsTrashDialogOpen}
+        canViewTrash={canViewTrash}
+        canEmptyTrash={canEmptyTrash}
+        copyContextValue={copyContextValue}
+      />
 
       <AlertDialog
         open={!!orderToDelete}
