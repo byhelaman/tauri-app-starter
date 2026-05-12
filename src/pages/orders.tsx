@@ -13,27 +13,21 @@ import {
 } from "@/features/orders/columns"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Separator } from "@/components/ui/separator"
-import type { DataTableSelectionState } from "@/components/data-table/data-table-types"
 import { ImportDialog } from "@/components/data-table/import-dialog"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { OrderDialog } from "@/features/orders/order-dialog"
-import { MAX_BULK_ORDER_ROWS, fetchOrdersStartHours } from "@/features/orders/api"
+import { fetchOrdersStartHours } from "@/features/orders/api"
 import { useQuery } from "@tanstack/react-query"
 import { useAuth } from "@/contexts/use-auth"
 import { QueueDialog } from "@/features/orders/queue-dialog"
 import { TrashDialog } from "@/features/orders/trash-dialog"
 import { OrdersTableSection } from "@/features/orders/orders-table-section"
+import {
+  OrderDeleteDialog,
+  OrdersBulkDeleteDialog,
+  type BulkDeleteRequest,
+} from "@/features/orders/orders-delete-dialogs"
 
 export function OrdersPage() {
   const { hasPermission } = useAuth()
@@ -43,11 +37,7 @@ export function OrdersPage() {
   const canBulkDeleteOrders = hasPermission("orders.bulk_delete")
   const canViewTrash = hasPermission("orders.trash.view")
   const canEmptyTrash = hasPermission("orders.trash.empty")
-  const [bulkDeleteOp, setBulkDeleteOp] = useState<{
-    count: number
-    selection: DataTableSelectionState
-    clearSelection: () => void
-  } | null>(null)
+  const [bulkDeleteOp, setBulkDeleteOp] = useState<BulkDeleteRequest | null>(null)
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [isQueueDialogOpen, setIsQueueDialogOpen] = useState(false)
@@ -149,76 +139,17 @@ export function OrdersPage() {
         copyContextValue={copyContextValue}
       />
 
-      <AlertDialog
-        open={!!orderToDelete}
+      <OrderDeleteDialog
+        order={orderToDelete}
         onOpenChange={(open) => { if (!open) setOrderToDelete(null) }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete order?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete <span className="font-medium text-foreground">{orderToDelete?.code}</span>. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={() => {
-                if (!orderToDelete) return
-                orders.actions.deleteOrder(orderToDelete.id)
-                toast.success("Order deleted")
-                setOrderToDelete(null)
-              }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onDelete={orders.actions.deleteOrder}
+      />
 
-      <AlertDialog
-        open={!!bulkDeleteOp}
+      <OrdersBulkDeleteDialog
+        request={bulkDeleteOp}
         onOpenChange={(open) => { if (!open) setBulkDeleteOp(null) }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Delete {bulkDeleteOp?.count.toLocaleString()} orders?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              This will delete the selected orders. This action cannot be undone.
-              {bulkDeleteOp && bulkDeleteOp.selection.mode === "ids" && bulkDeleteOp.count > MAX_BULK_ORDER_ROWS && (
-                <span className="mt-2 block font-medium text-destructive">
-                  Bulk delete is limited to {MAX_BULK_ORDER_ROWS.toLocaleString()} orders at a time.
-                </span>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              disabled={!bulkDeleteOp || (bulkDeleteOp.selection.mode === "ids" && bulkDeleteOp.count > MAX_BULK_ORDER_ROWS)}
-              onClick={async () => {
-                if (!bulkDeleteOp) return
-                const toastId = "bulk-delete-orders"
-                toast.loading(`Deleting ${bulkDeleteOp.count.toLocaleString()} orders...`, { id: toastId })
-                try {
-                  await orders.actions.deleteBulkOrders(bulkDeleteOp.selection)
-                  toast.success(`${bulkDeleteOp.count.toLocaleString()} orders deleted`, { id: toastId })
-                  bulkDeleteOp.clearSelection()
-                  setBulkDeleteOp(null)
-                } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Could not delete orders", { id: toastId })
-                }
-              }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onDelete={orders.actions.deleteBulkOrders}
+      />
 
     </main>
   )

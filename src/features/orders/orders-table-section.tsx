@@ -8,9 +8,9 @@ import { TableHistoryCard } from "@/components/data-table/table-history-card"
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu"
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
-import type { DataTableSelectionState } from "@/components/data-table/data-table-types"
 import { fetchOrderHistory } from "@/features/orders/api"
 import { createColumns, type Order } from "@/features/orders/columns"
+import type { BulkDeleteRequest } from "@/features/orders/orders-delete-dialogs"
 import type { useOrders } from "@/features/orders/hooks/useOrders"
 import { useTableHighlights } from "@/features/orders/table-highlights"
 import {
@@ -34,11 +34,7 @@ interface OrdersTableSectionProps {
   onResetDateFilter: () => void
   onOpenTrash: () => void
   onRequestDelete: (order: Order) => void
-  onRequestBulkDelete: (request: {
-    count: number
-    selection: DataTableSelectionState
-    clearSelection: () => void
-  }) => void
+  onRequestBulkDelete: (request: BulkDeleteRequest) => void
 }
 
 export function OrdersTableSection({
