@@ -1,32 +1,21 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useState } from "react"
 import { format } from "date-fns"
 import { toast } from "sonner"
 import type { SortingState } from "@tanstack/react-table"
 import {
-  Copy,
   ListTodo,
   Plus,
-  Trash2,
   Upload,
 } from "lucide-react"
 import { useOrders } from "@/features/orders/hooks/useOrders"
 import {
-  createColumns,
   type Order,
 } from "@/features/orders/columns"
-import { DataTable } from "@/components/data-table/data-table"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Separator } from "@/components/ui/separator"
 import type { DataTableSelectionState } from "@/components/data-table/data-table-types"
 import { ImportDialog } from "@/components/data-table/import-dialog"
-import { resolveBulkCopySettings } from "@/components/data-table/bulk-copy"
-import {
-  ContextMenuItem,
-  ContextMenuSeparator,
-} from "@/components/ui/context-menu"
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { PageHeader } from "@/components/page-header"
-import { useTableHighlights } from "@/features/orders/table-highlights"
 import { Button } from "@/components/ui/button"
 import {
   AlertDialog,
@@ -38,18 +27,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { TableHistoryCard } from "@/components/data-table/table-history-card"
 import { OrderDialog } from "@/features/orders/order-dialog"
-import { MAX_BULK_ORDER_ROWS, fetchOrderHistory, fetchOrdersStartHours } from "@/features/orders/api"
+import { MAX_BULK_ORDER_ROWS, fetchOrdersStartHours } from "@/features/orders/api"
 import { useQuery } from "@tanstack/react-query"
 import { useAuth } from "@/contexts/use-auth"
 import { QueueDialog } from "@/features/orders/queue-dialog"
 import { TrashDialog } from "@/features/orders/trash-dialog"
-import {
-  CHANNEL_FILTER_OPTIONS,
-  ORDER_COPY_FIELDS,
-  STATUS_FILTER_OPTIONS,
-} from "@/features/orders/orders-table-config"
+import { OrdersTableSection } from "@/features/orders/orders-table-section"
 
 export function OrdersPage() {
   const { hasPermission } = useAuth()
@@ -76,19 +60,7 @@ export function OrdersPage() {
 
   const [sorting, setSorting] = useState<SortingState>([])
 
-  const {
-    pageData,
-    isPageLoading,
-    infiniteScroll,
-    columnFilters,
-    setColumnFilters,
-    globalFilter,
-    setGlobalFilter,
-    refreshCurrentOrderSort,
-    actions
-  } = useOrders({ dateFilter, sorting })
-
-  const { toolbarActions, rowClassName } = useTableHighlights()
+  const orders = useOrders({ dateFilter, sorting })
 
   // Horas de inicio realmente presentes en la BD — para el filtro de Interval
   const { data: startHours } = useQuery({
@@ -100,11 +72,6 @@ export function OrdersPage() {
   const handleDeleteRequest = useCallback((order: Order) => {
     setOrderToDelete(order)
   }, [])
-
-  const columns = useMemo(
-    () => createColumns(actions.deleteOrder, actions.handleStatusChange, actions.handleCellChange),
-    [actions.deleteOrder, actions.handleStatusChange, actions.handleCellChange]
-  )
 
   const copyContextValue = useCallback(async (content: string, successMessage: string) => {
     if (!content) {
@@ -149,138 +116,22 @@ export function OrdersPage() {
       <OrderDialog
         open={isAddOrderDialogOpen}
         onOpenChange={setIsAddOrderDialogOpen}
-        onSubmit={(newOrder) => actions.createOrder(newOrder)}
+        onSubmit={(newOrder) => orders.actions.createOrder(newOrder)}
       />
-      <DataTable
-        columns={columns}
-        data={pageData}
-        isLoading={isPageLoading}
-        infiniteScroll={infiniteScroll}
-        allowDataExport={canExportOrders}
-        allowDataCopy={canCopyOrders}
-        columnFilters={columnFilters}
-        onColumnFiltersChange={setColumnFilters}
-        globalFilter={globalFilter}
-        onGlobalFilterChange={setGlobalFilter}
+      <OrdersTableSection
+        orders={orders}
         sorting={sorting}
         onSortingChange={setSorting}
-        onSortingRefresh={refreshCurrentOrderSort}
-        onResetView={() => setSelectedDate(undefined)}
-        tableId="orders"
-        sidePanel={(onClose) => (
-          <TableHistoryCard
-            tableId="orders"
-            onClose={onClose}
-            queryKey={["orders", "history"]}
-            queryFn={fetchOrderHistory}
-          />
-        )}
-        toolbar={{
-          searchable: true,
-          filterPlaceholder: "Search...",
-          facetedFilters: [
-            { columnId: "status", title: "Status", options: STATUS_FILTER_OPTIONS },
-            { columnId: "channel", title: "Channel", options: CHANNEL_FILTER_OPTIONS },
-          ],
-          intervalFilter: { columnId: "time", title: "Interval", hours: startHours },
-          actions: toolbarActions,
-          viewMenuItems: canViewTrash ? (
-            <DropdownMenuItem onSelect={() => setIsTrashDialogOpen(true)}>
-              <Trash2 />
-              Trash
-            </DropdownMenuItem>
-          ) : undefined,
-          searchDebounceMs: 300,
-        }}
-        rowContextMenu={(order) => {
-          return (
-            <>
-              <ContextMenuItem onSelect={() => toast.info(`Viewing details for ${order.id}`)}>
-                View details
-              </ContextMenuItem>
-              <ContextMenuItem onSelect={() => toast.info(`Duplicating order ${order.id}`)}>
-                Duplicate order
-              </ContextMenuItem>
-              <ContextMenuItem onSelect={() => {
-                navigator.clipboard.writeText(`https://tracking.com/${order.id}`)
-                toast.success("Tracking link copied")
-              }}>
-                Copy tracking link
-              </ContextMenuItem>
-              <ContextMenuSeparator />
-              <ContextMenuItem onSelect={() => toast.info(`Drafting email for ${order.customer}`)}>
-                Send email
-              </ContextMenuItem>
-              {canDeleteOrders && (
-                <>
-                  <ContextMenuSeparator />
-                  <ContextMenuItem
-                    onSelect={() => handleDeleteRequest(order)}
-                  >
-                    Cancel order
-                  </ContextMenuItem>
-                </>
-              )}
-            </>
-          )
-        }}
-        bulkActions={(_selectedLoadedRows, clearSelection, selectedIds, selection) => (
-          <>
-            {canCopyOrders && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  const toastId = "copy-all"
-                  toast.loading(`Preparing copy...`, { id: toastId })
-                  try {
-                    const copySettings = resolveBulkCopySettings("orders", ORDER_COPY_FIELDS)
-                    const exportResult = await infiniteScroll.exportByScope!({
-                      scope: infiniteScroll.currentScope ?? { search: "", filters: [] },
-                      operations: selection.mode === "operations"
-                        ? selection.operations
-                        : [{ type: "selectIds", ids: selectedIds }],
-                      purpose: "copy",
-                      ...copySettings,
-                    })
-                    const content = exportResult.content
-                    if (!content) { toast.error("Nothing to copy", { id: toastId }); return }
-
-                    await navigator.clipboard.writeText(content)
-                    const copiedCount = exportResult.rowCount
-                    toast.success(`Copied ${copiedCount.toLocaleString()} rows`, { id: toastId })
-                  } catch (error) {
-                    toast.error(error instanceof Error ? error.message : "Could not copy to clipboard", { id: toastId })
-                  }
-                }}
-              >
-                <Copy />
-                Copy
-              </Button>
-            )}
-            {canBulkDeleteOrders && (
-              <Button
-                variant="destructive"
-                size="sm"
-                aria-label="Delete"
-                onClick={() => {
-                  setBulkDeleteOp({
-                    count: selection.mode === "operations" ? selection.selectedCount : selectedIds.length,
-                    selection,
-                    clearSelection
-                  })
-                }}
-              >
-                <Trash2 />
-                Delete
-              </Button>
-            )}
-          </>
-        )}
-
-        rowClassName={rowClassName}
-        getRowId={(row) => row.id}
-        defaultPageSize={25}
+        startHours={startHours}
+        canExportOrders={canExportOrders}
+        canCopyOrders={canCopyOrders}
+        canDeleteOrders={canDeleteOrders}
+        canBulkDeleteOrders={canBulkDeleteOrders}
+        canViewTrash={canViewTrash}
+        onResetDateFilter={() => setSelectedDate(undefined)}
+        onOpenTrash={() => setIsTrashDialogOpen(true)}
+        onRequestDelete={handleDeleteRequest}
+        onRequestBulkDelete={setBulkDeleteOp}
       />
 
       <QueueDialog
@@ -315,7 +166,7 @@ export function OrdersPage() {
               variant="destructive"
               onClick={() => {
                 if (!orderToDelete) return
-                actions.deleteOrder(orderToDelete.id)
+                orders.actions.deleteOrder(orderToDelete.id)
                 toast.success("Order deleted")
                 setOrderToDelete(null)
               }}
@@ -354,7 +205,7 @@ export function OrdersPage() {
                 const toastId = "bulk-delete-orders"
                 toast.loading(`Deleting ${bulkDeleteOp.count.toLocaleString()} orders...`, { id: toastId })
                 try {
-                  await actions.deleteBulkOrders(bulkDeleteOp.selection)
+                  await orders.actions.deleteBulkOrders(bulkDeleteOp.selection)
                   toast.success(`${bulkDeleteOp.count.toLocaleString()} orders deleted`, { id: toastId })
                   bulkDeleteOp.clearSelection()
                   setBulkDeleteOp(null)
