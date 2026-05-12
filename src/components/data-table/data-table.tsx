@@ -1,19 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
-import { cn, joinSearchValues, matchesSearchGroups, normalizeSearchGroups } from "@/lib/utils"
+import { useEffect, useRef, useState, type ReactNode } from "react"
+import { cn } from "@/lib/utils"
 import {
   type ColumnDef,
   type ColumnFiltersState,
-  type ColumnPinningState,
-  type FilterFn,
   type SortingState,
-  type VisibilityState,
-  getFacetedRowModel,
-  getFacetedUniqueValues,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
   type PaginationState,
   type OnChangeFn,
 } from "@tanstack/react-table"
@@ -26,18 +16,10 @@ import {
   DataTableLayoutConfig,
   DataTableToolbarConfig,
   InfiniteScrollConfig,
-  DataTableMeta,
   type DataTableResetContext,
   type DataTableSelectionState,
 } from "./data-table-types"
-import { useInfiniteSelection } from "./use-infinite-selection"
-
-/**
- * Tamaño de "página" virtual en modo infinite scroll.
- * Sobreescribimos pageSize al máximo posible para que getPaginationRowModel()
- * no filtre las filas cargadas — el virtualizer se encarga de renderizar solo las visibles.
- */
-const VIRTUAL_PAGE_SIZE = Number.MAX_SAFE_INTEGER
+import { useDataTableInstance } from "./use-data-table-instance"
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -120,19 +102,6 @@ export function DataTable<TData, TValue>({
   enablePagination = true,
   onResetView,
 }: DataTableProps<TData, TValue>) {
-  const [internalSorting, setInternalSorting] = useState<SortingState>([])
-  const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>([])
-  const [internalGlobalFilter, setInternalGlobalFilter] = useState("")
-
-  const columnFilters = externalColumnFilters ?? internalColumnFilters
-  const setColumnFilters = setExternalColumnFilters ?? setInternalColumnFilters
-  const globalFilter = externalGlobalFilter ?? internalGlobalFilter
-  const setGlobalFilter = setExternalGlobalFilter ?? setInternalGlobalFilter
-  const sorting = externalSorting ?? internalSorting
-  const setSorting = setExternalSorting ?? setInternalSorting
-
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
-  const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({ left: ["select"], right: [] })
   const scrollRef = useRef<HTMLDivElement>(null)
   const [isSidePanelOpen, setIsSidePanelOpen] = useState(() => {
     try {
@@ -151,139 +120,35 @@ export function DataTable<TData, TValue>({
     }
   }, [isSidePanelOpen, tableId])
 
-  const loadedRowIds = useMemo(() => data.map((row, index) => getRowId?.(row) ?? String(index)), [data, getRowId])
-  const loadedRowsById = useMemo(
-    () => Object.fromEntries(data.map((row, index) => [getRowId?.(row) ?? String(index), row as Record<string, unknown>])),
-    [data, getRowId]
-  )
-  const usesServerSelection = !!infiniteScroll && toolbar?.selectionMode !== "client"
   const {
-    rowSelection,
-    setRowSelection,
-    clearSelection,
-    visibleSelectedIds,
-    selectionState,
-    selectedCount,
-    displaySelectedCount,
-    currentScopeSelectedCount,
-    selectAll,
-    deselectAll,
-    isSelectingAll,
-  } = useInfiniteSelection({
-    enabled: usesServerSelection,
-    globalFilter,
-    columnFilters,
-    sorting,
-    totalRowCount: infiniteScroll?.totalRowCount ?? rowCount ?? data.length,
-    date: infiniteScroll?.currentScope?.date,
-    loadedRowIds,
-    loadedRowsById,
-    countBySelection: infiniteScroll?.countBySelection,
+    table,
+    selection,
+    setColumnPinning,
+  } = useDataTableInstance({
+    columns,
+    data,
+    toolbar,
+    defaultPageSize,
+    getRowId,
+    manualPagination,
+    pageCount,
+    rowCount,
+    pagination,
+    onPaginationChange,
+    externalColumnFilters,
+    setExternalColumnFilters,
+    externalGlobalFilter,
+    setExternalGlobalFilter,
+    externalSorting,
+    setExternalSorting,
+    onSortingRefresh,
+    infiniteScroll,
+    enablePagination,
   })
 
   const fitHeight = layout?.fitHeight ?? false
   const scrollAreaClassName = layout?.scrollAreaClassName
   const tableHeaderClassName = layout?.tableHeaderClassName
-
-  const multiColumnGlobalFilter = useMemo<FilterFn<TData>>(() => {
-    let lastQuery = ""
-    let lastGroups: string[][] = []
-    let searchableColumnIds: string[] | null = null
-
-    return (row, _columnId, filterValue) => {
-      const query = typeof filterValue === "string" ? filterValue : ""
-      if (!query.trim()) return true
-      if (query !== lastQuery) {
-        lastQuery = query
-        lastGroups = normalizeSearchGroups(query)
-      }
-      if (lastGroups.length === 0) return true
-      if (!searchableColumnIds) {
-        searchableColumnIds = row.getAllCells().filter((cell) => cell.column.getCanGlobalFilter()).map((cell) => cell.column.id)
-      }
-      if (searchableColumnIds.length === 0) return true
-      const haystack = joinSearchValues(searchableColumnIds.map((columnId) => row.getValue(columnId)))
-      return matchesSearchGroups(haystack, lastGroups)
-    }
-  }, [])
-
-  const table = useReactTable({
-    data,
-    columns,
-    defaultColumn: { enableGlobalFilter: false },
-    enableColumnPinning: true,
-    enableMultiSort: true,
-    enableSortingRemoval: false,
-    isMultiSortEvent: () => true,
-    getRowId,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onGlobalFilterChange: setGlobalFilter,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getFacetedRowModel: getFacetedRowModel(),
-    getFacetedUniqueValues: getFacetedUniqueValues(),
-    globalFilterFn: multiColumnGlobalFilter,
-    onColumnPinningChange: setColumnPinning,
-    onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: setRowSelection,
-    autoResetPageIndex: false,
-    autoResetAll: false,
-    manualPagination,
-    manualFiltering: !!infiniteScroll || !!manualPagination,
-    manualSorting: !!infiniteScroll,
-    pageCount,
-    rowCount,
-    onPaginationChange,
-    initialState: { pagination: { pageSize: defaultPageSize, pageIndex: 0 } },
-    state: {
-      sorting,
-      columnFilters,
-      globalFilter,
-      columnPinning,
-      columnVisibility,
-      rowSelection,
-      // En modo infinite scroll, el virtualizer maneja qué filas renderizar —
-      // por eso sobreescribimos pageSize a MAX para que getPaginationRowModel()
-      // no limite los rows y todos los datos cargados queden disponibles.
-      ...(infiniteScroll || !enablePagination
-        ? { pagination: { pageIndex: 0, pageSize: VIRTUAL_PAGE_SIZE } }
-        : manualPagination ? { pagination } : {}
-      )
-    },
-    meta: {} satisfies DataTableMeta,
-  })
-
-  const tablePageCount = table.getPageCount()
-  const tablePageIndex = table.getState().pagination.pageIndex
-
-  // Ensure page index doesn't go out of bounds when data shrinks (e.g. bulk deleting items on the last page)
-  useEffect(() => {
-    if (tablePageCount > 0 && tablePageIndex >= tablePageCount) {
-      table.setPageIndex(tablePageCount - 1)
-    }
-  }, [table, tablePageCount, tablePageIndex])
-
-  const totalRows = infiniteScroll?.totalRowCount ?? rowCount ?? 0
-
-  // Patch meta values after computation
-  if (table.options.meta) {
-    const meta = table.options.meta as DataTableMeta
-    meta.visibleSelectedCount = visibleSelectedIds.length
-    meta.visibleSelectedIds = visibleSelectedIds
-    meta.selectionState = selectionState
-    meta.selectedCount = selectedCount
-    meta.displaySelectedCount = displaySelectedCount
-    meta.currentScopeSelectedCount = currentScopeSelectedCount
-    meta.totalRowCount = totalRows
-    meta.refreshSorting = onSortingRefresh
-    meta.selectAll = selectAll
-    meta.deselectAll = deselectAll
-    meta.isSelectingAll = isSelectingAll
-    meta.isInfiniteScroll = usesServerSelection
-  }
 
   const cellPadding = 8
   const { left: leftPinned = [], right: rightPinned = [] } = table.getState().columnPinning
@@ -301,6 +166,7 @@ export function DataTable<TData, TValue>({
 
   // ── Virtualizador de filas (solo en modo infinite scroll) ──────────────────
   const rows = table.getRowModel().rows
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual returns imperative helpers by design.
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
@@ -410,12 +276,12 @@ export function DataTable<TData, TValue>({
 
       <DataTableSelectionBar
         table={table}
-        selectedCount={selectedCount}
-        displaySelectedCount={displaySelectedCount}
+        selectedCount={selection.selectedCount}
+        displaySelectedCount={selection.displaySelectedCount}
         currentScopeTotal={infiniteScroll?.totalRowCount ?? table.getFilteredRowModel().rows.length}
-        visibleSelectedIds={visibleSelectedIds}
-        selectionState={selectionState}
-        clearSelection={clearSelection}
+        visibleSelectedIds={selection.visibleSelectedIds}
+        selectionState={selection.selectionState}
+        clearSelection={selection.clearSelection}
         bulkActions={bulkActions}
       />
     </div>
