@@ -62,65 +62,56 @@ export function createIsolatedSupabaseClient() {
 }
 
 // ── Auto-refresh para apps de escritorio con Tauri ──────────────────────
-// Supabase no puede detectar el estado primer plano/segundo plano en entornos que no son
-// navegador, por lo que lo manejamos manualmente mediante eventos de visibilidad y foco.
+// Supabase-js no detecta foreground/background en Tauri, así que gestionamos
+// el refresco de sesión manualmente con eventos de visibilidad y foco.
 //
-// Rate limiting: el refresh de sesión lo disparan eventos del SO (focus/blur, visibilitychange).
-// Supabase aplica validación de tokens en el servidor en cada llamada RPC, por lo que aunque
-// el refresh se ejecute con frecuencia el riesgo se limita a peticiones de red extra.
-// El buffer de 5 minutos de expiración evita llamadas de refresh innecesarias.
-let isAutoRefreshActive = false
-
-export const startSessionRefresh = () => {
-  if (supabase && !isAutoRefreshActive) {
-    supabase.auth.startAutoRefresh()
-    isAutoRefreshActive = true
-  }
-}
-
-export const stopSessionRefresh = () => {
-  if (supabase && isAutoRefreshActive) {
-    supabase.auth.stopAutoRefresh()
-    isAutoRefreshActive = false
-  }
-}
+// Diseño: autoRefresh NUNCA se detiene — solo dispara ~1 request/hora y previene
+// que el JWT expire en background (laptop sleep, app minimizada largo rato).
+// Al volver al foco, forzamos un refresh síncrono ANTES de que React Query
+// dispare refetchOnWindowFocus, evitando 401s con tokens expirados.
 
 /**
  * Configura los listeners de refresco de sesión para Tauri desktop.
  * Llamar UNA vez al inicio de la app (desde main.tsx). Devuelve una función de cleanup.
- * Supabase no puede detectar foreground/background en entornos no-browser,
- * por lo que lo gestionamos manualmente con eventos de visibilidad y foco.
  */
 export function setupDesktopSessionRefresh(): () => void {
   if (!supabase || typeof window === "undefined") return () => {}
   const client = supabase
-  startSessionRefresh()
+
+  // Arrancar autoRefresh una vez — nunca lo detenemos.
+  client.auth.startAutoRefresh()
+
+  let isRefreshing = false
 
   const handleResume = async () => {
-    startSessionRefresh()
-    const { data: { session } } = await client.auth.getSession()
-    if (session?.expires_at) {
-      const secondsUntilExpiry = session.expires_at - Math.floor(Date.now() / 1000)
-      if (secondsUntilExpiry < 5 * 60) {
-        await client.auth.refreshSession()
+    if (isRefreshing) return
+    isRefreshing = true
+    try {
+      const { data: { session } } = await client.auth.getSession()
+      if (session?.expires_at) {
+        const secondsUntilExpiry = session.expires_at - Math.floor(Date.now() / 1000)
+        if (secondsUntilExpiry < 5 * 60) {
+          await client.auth.refreshSession()
+        }
       }
+    } catch {
+      // El auto-refresh de Supabase reintentará; no bloquear el hilo del evento.
+    } finally {
+      isRefreshing = false
     }
   }
 
   const handleVisibility = () => {
     if (document.visibilityState === "visible") void handleResume()
-    else stopSessionRefresh()
   }
   const handleFocus = () => void handleResume()
 
   document.addEventListener("visibilitychange", handleVisibility)
   window.addEventListener("focus", handleFocus)
-  window.addEventListener("blur", stopSessionRefresh)
 
   return () => {
     document.removeEventListener("visibilitychange", handleVisibility)
     window.removeEventListener("focus", handleFocus)
-    window.removeEventListener("blur", stopSessionRefresh)
-    stopSessionRefresh()
+    client.auth.stopAutoRefresh()
   }
 }
