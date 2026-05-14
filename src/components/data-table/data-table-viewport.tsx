@@ -133,7 +133,7 @@ export function DataTableViewport<TData, TValue>({
               )
               if (!rowContextMenu) return rowEl
               return (
-                <ContextMenu key={row.id}>
+                <ContextMenu key={row.id} modal={false}>
                   <ContextMenuTrigger asChild>{rowEl}</ContextMenuTrigger>
                   <ContextMenuContent>{rowContextMenu(row.original)}</ContextMenuContent>
                 </ContextMenu>

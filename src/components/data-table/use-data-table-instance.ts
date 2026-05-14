@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { joinSearchValues, matchesSearchGroups, normalizeSearchGroups } from "@/lib/utils"
 import {
   type ColumnDef,
@@ -28,6 +28,7 @@ import { useInfiniteSelection } from "./use-infinite-selection"
 const VIRTUAL_PAGE_SIZE = Number.MAX_SAFE_INTEGER
 
 interface UseDataTableInstanceOptions<TData, TValue> {
+  tableId: string
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   toolbar?: DataTableToolbarConfig<TData>
@@ -47,9 +48,11 @@ interface UseDataTableInstanceOptions<TData, TValue> {
   onSortingRefresh?: () => void
   infiniteScroll?: InfiniteScrollConfig
   enablePagination: boolean
+  isLoading?: boolean
 }
 
 export function useDataTableInstance<TData, TValue>({
+  tableId,
   columns,
   data,
   toolbar,
@@ -69,12 +72,30 @@ export function useDataTableInstance<TData, TValue>({
   onSortingRefresh,
   infiniteScroll,
   enablePagination,
+  isLoading = false,
 }: UseDataTableInstanceOptions<TData, TValue>) {
   const [internalSorting, setInternalSorting] = useState<SortingState>([])
   const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>([])
   const [internalGlobalFilter, setInternalGlobalFilter] = useState("")
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
-  const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({ left: ["select"], right: [] })
+  
+  const [columnPinning, setColumnPinning] = useState<ColumnPinningState>(() => {
+    try {
+      const stored = localStorage.getItem(`table-pinning-${tableId}`)
+      if (stored) return JSON.parse(stored)
+    } catch {
+      // Ignorar errores de parseo
+    }
+    return { left: ["select"], right: [] }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`table-pinning-${tableId}`, JSON.stringify(columnPinning))
+    } catch {
+      // Ignorar cuotas excedidas
+    }
+  }, [columnPinning, tableId])
 
   const columnFilters = externalColumnFilters ?? internalColumnFilters
   const setColumnFilters = setExternalColumnFilters ?? setInternalColumnFilters
@@ -95,6 +116,7 @@ export function useDataTableInstance<TData, TValue>({
     columnFilters,
     sorting,
     totalRowCount: infiniteScroll?.totalRowCount ?? rowCount ?? data.length,
+    unfilteredTotalRowCount: infiniteScroll?.unfilteredTotalRowCount,
     date: infiniteScroll?.currentScope?.date,
     loadedRowIds,
     loadedRowsById,
@@ -122,6 +144,8 @@ export function useDataTableInstance<TData, TValue>({
       return matchesSearchGroups(haystack, lastGroups)
     }
   }, [])
+
+  const lastSelectedRowIdRef = useRef<string | null>(null)
 
   const table = useReactTable({
     data,
@@ -181,10 +205,12 @@ export function useDataTableInstance<TData, TValue>({
   const totalRows = infiniteScroll?.totalRowCount ?? rowCount ?? 0
   if (table.options.meta) {
     const meta = table.options.meta as DataTableMeta
+    meta.isLoading = isLoading
     meta.visibleSelectedCount = selection.visibleSelectedIds.length
     meta.visibleSelectedIds = selection.visibleSelectedIds
     meta.selectionState = selection.selectionState
     meta.selectedCount = selection.selectedCount
+    meta.isSelectionCountPending = selection.isSelectionCountPending
     meta.displaySelectedCount = selection.displaySelectedCount
     meta.currentScopeSelectedCount = selection.currentScopeSelectedCount
     meta.totalRowCount = totalRows
@@ -193,6 +219,33 @@ export function useDataTableInstance<TData, TValue>({
     meta.deselectAll = selection.deselectAll
     meta.isSelectingAll = selection.isSelectingAll
     meta.isInfiniteScroll = usesServerSelection
+
+    meta.handleRowSelect = (rowId: string, value: boolean, isShift: boolean) => {
+      if (isShift && lastSelectedRowIdRef.current) {
+        const rows = table.getRowModel().rows
+        const currentIndex = rows.findIndex((r) => r.id === rowId)
+        const lastIndex = rows.findIndex((r) => r.id === lastSelectedRowIdRef.current)
+
+        if (currentIndex !== -1 && lastIndex !== -1) {
+          const start = Math.min(currentIndex, lastIndex)
+          const end = Math.max(currentIndex, lastIndex)
+
+          const currentSelection = table.getState().rowSelection
+          const newSelection = { ...currentSelection }
+          for (let i = start; i <= end; i++) {
+            if (value) newSelection[rows[i].id] = true
+            else delete newSelection[rows[i].id]
+          }
+          selection.setRowSelection(newSelection)
+          lastSelectedRowIdRef.current = rowId
+          return
+        }
+      }
+
+      const row = table.getRow(rowId)
+      if (row) row.toggleSelected(value)
+      lastSelectedRowIdRef.current = rowId
+    }
   }
 
   return {

@@ -18,9 +18,13 @@ export function renderCell(value: string | number, classNameOrOptions?: string |
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const multiValueFilter: FilterFn<any> = (row, columnId, filterValue) => {
-  if (!Array.isArray(filterValue) || filterValue.length === 0) return true
-  return filterValue.includes(row.getValue(columnId))
+  const value = filterValue as string[] | undefined
+  if (!value || value.length === 0) return true
+  const rowValue = row.getValue(columnId)
+  return value.includes(String(rowValue))
 }
+
+let isShiftPressed = false
 
 export function createSelectColumn<TData>(): ColumnDef<TData> {
   return {
@@ -36,6 +40,15 @@ export function createSelectColumn<TData>(): ColumnDef<TData> {
           disabled: true,
           className: "opacity-50 cursor-wait",
           "aria-label": "Processing selection...",
+        })
+      }
+
+      if (meta?.isLoading) {
+        return createElement(Checkbox, {
+          checked: false,
+          disabled: true,
+          className: "opacity-50 cursor-not-allowed",
+          "aria-label": "Loading...",
         })
       }
 
@@ -62,11 +75,25 @@ export function createSelectColumn<TData>(): ColumnDef<TData> {
         "aria-label": "Select all",
       })
     },
-    cell: ({ row }) => createElement(Checkbox, {
-      checked: row.getIsSelected(),
-      onCheckedChange: (value) => row.toggleSelected(!!value),
-      "aria-label": "Select row",
-    }),
+    cell: ({ row, table }) => {
+      const meta = table.options.meta as DataTableMeta | undefined
+      return createElement(Checkbox, {
+        checked: row.getIsSelected(),
+        disabled: meta?.isLoading,
+        onClick: (e: React.MouseEvent) => {
+          isShiftPressed = e.shiftKey
+        },
+        onCheckedChange: (value) => {
+          if (meta?.handleRowSelect) {
+            meta.handleRowSelect(row.id, !!value, isShiftPressed)
+          } else {
+            row.toggleSelected(!!value)
+          }
+          isShiftPressed = false
+        },
+        "aria-label": "Select row",
+      })
+    },
     enableSorting: false,
     enableHiding: false,
     enablePinning: false,

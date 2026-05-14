@@ -33,7 +33,8 @@ interface DataTableProps<TData, TValue> {
     selectedLoadedRows: TData[],
     clearSelection: () => void,
     selectedIds: string[],
-    selection: DataTableSelectionState
+    selection: DataTableSelectionState,
+    meta: { selectedCount: number; isSelectionCountPending: boolean }
   ) => ReactNode
   rowContextMenu?: (row: TData) => ReactNode
   defaultPageSize?: number
@@ -125,6 +126,7 @@ export function DataTable<TData, TValue>({
     selection,
     setColumnPinning,
   } = useDataTableInstance({
+    tableId,
     columns,
     data,
     toolbar,
@@ -144,6 +146,7 @@ export function DataTable<TData, TValue>({
     onSortingRefresh,
     infiniteScroll,
     enablePagination,
+    isLoading,
   })
 
   const fitHeight = layout?.fitHeight ?? false
@@ -231,7 +234,6 @@ export function DataTable<TData, TValue>({
         intervalFilter={toolbar?.intervalFilter}
         actions={toolbar?.actions}
         viewMenuItems={toolbar?.viewMenuItems}
-        searchDebounceMs={toolbar?.searchDebounceMs}
         showViewOptions={toolbar?.showViewOptions}
         viewActionsMode={toolbar?.viewActionsMode}
         resultCountMode={toolbar?.resultCountMode}
@@ -240,6 +242,8 @@ export function DataTable<TData, TValue>({
         allowDataExport={allowDataExport}
         allowDataCopy={allowDataCopy}
         onResetTable={resetTableView}
+        searchAutocomplete={toolbar?.searchAutocomplete}
+        onSearchInputChange={toolbar?.onSearchInputChange}
       />
 
 
@@ -277,6 +281,7 @@ export function DataTable<TData, TValue>({
       <DataTableSelectionBar
         table={table}
         selectedCount={selection.selectedCount}
+        isSelectionCountPending={selection.isSelectionCountPending}
         displaySelectedCount={selection.displaySelectedCount}
         currentScopeTotal={infiniteScroll?.totalRowCount ?? table.getFilteredRowModel().rows.length}
         visibleSelectedIds={selection.visibleSelectedIds}

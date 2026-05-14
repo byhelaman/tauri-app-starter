@@ -49,7 +49,7 @@ export function DataTableSkeleton<TData>({
                 }}
               >
                 {colId === "select" ? (
-                  <Skeleton className="size-[18px] rounded-[4px]" />
+                  <Skeleton className="size-[17px] rounded-[4px]" />
                 ) : colId === "actions" ? (
                   <Skeleton className="size-[22px] rounded-sm" />
                 ) : (

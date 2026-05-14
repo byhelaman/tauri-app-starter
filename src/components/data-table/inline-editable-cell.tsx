@@ -131,6 +131,10 @@ export function InlineEditableCell({
     }
 
     if (enableEditing && (e.ctrlKey || e.metaKey) && e.key === "v") {
+      e.preventDefault()
+      navigator.clipboard.readText().then((text) => {
+        if (text) handleCommit(text)
+      })
       return
     }
 

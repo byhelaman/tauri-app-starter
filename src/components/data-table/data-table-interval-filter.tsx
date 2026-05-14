@@ -16,16 +16,23 @@ interface DataTableIntervalFilterProps<TData, TValue> {
   title?: string
   /** Horas disponibles desde el servidor (e.g. ["06", "08", "14", "21"]) */
   hours?: string[]
+  /** Valor draft controlado externamente (modo action-based). */
+  draftValue?: string[]
+  /** Callback para cambios en modo draft. */
+  onDraftChange?: (values: string[] | undefined) => void
 }
 
 export function DataTableIntervalFilter<TData, TValue>({
   column,
   title = "Interval",
   hours,
+  draftValue,
+  onDraftChange,
 }: DataTableIntervalFilterProps<TData, TValue>) {
   if (!column) return null
 
-  const filterValue = column.getFilterValue()
+  const isDraftMode = onDraftChange !== undefined
+  const filterValue = isDraftMode ? (draftValue ?? []) : column.getFilterValue()
   const selectedValues = new Set(
     Array.isArray(filterValue) ? (filterValue as string[]) : []
   )
@@ -38,7 +45,20 @@ export function DataTableIntervalFilter<TData, TValue>({
     } else {
       next.add(value)
     }
-    column.setFilterValue(next.size ? Array.from(next) : undefined)
+    const result = next.size ? Array.from(next) : undefined
+    if (isDraftMode) {
+      onDraftChange!(result)
+    } else {
+      column.setFilterValue(result)
+    }
+  }
+
+  const clear = () => {
+    if (isDraftMode) {
+      onDraftChange!(undefined)
+    } else {
+      column.setFilterValue(undefined)
+    }
   }
 
   return (
@@ -92,9 +112,8 @@ export function DataTableIntervalFilter<TData, TValue>({
             <div className="p-1">
               <Button
                 variant="ghost"
-                // size="sm"
                 className="w-full justify-center font-normal"
-                onClick={() => column.setFilterValue(undefined)}
+                onClick={clear}
               >
                 Clear filters
               </Button>

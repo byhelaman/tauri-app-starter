@@ -118,6 +118,11 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
   const selectedCount = usesServerScope && tableMeta?.selectionState?.mode === "operations"
     ? tableMeta.selectedCount ?? 0
     : tableMeta?.visibleSelectedCount ?? table.getSelectedRowModel().rows.length
+  const hasSelection = tableMeta?.selectionState?.mode === "operations"
+    ? tableMeta.selectionState.operations.length > 0
+    : tableMeta?.selectionState?.mode === "ids"
+      ? tableMeta.selectionState.ids.length > 0
+      : selectedCount > 0
   const selectedIds = tableMeta?.visibleSelectedIds
     ?? Object.keys(table.getState().rowSelection).filter((id) => table.getState().rowSelection[id])
   const filteredCount = table.getFilteredRowModel().rows.length
@@ -130,7 +135,7 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
   const effectiveFilteredCount = serverTotal ?? filteredCount
   const effectiveTotalCount = serverUnfilteredTotal ?? totalCount
 
-  const effectiveScope: Scope = scope === "selected" && selectedCount === 0 ? "filtered" : scope
+  const effectiveScope: Scope = scope === "selected" && !hasSelection ? "filtered" : scope
 
   const scopeCounts: Record<Scope, number> = {
     selected: selectedCount,
@@ -264,7 +269,7 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
                   <DropdownMenuRadioItem
                     key={s}
                     value={s}
-                    disabled={s === "selected" && selectedCount === 0}
+                    disabled={s === "selected" && !hasSelection}
                   >
                     {SCOPE_LABEL[s]} ({scopeCounts[s]})
                   </DropdownMenuRadioItem>
