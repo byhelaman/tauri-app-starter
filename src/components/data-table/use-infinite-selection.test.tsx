@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react"
-import { describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { ColumnFiltersState } from "@tanstack/react-table"
 import { useInfiniteSelection } from "./use-infinite-selection"
 import type { DataTableSelectionOperation, DataTableSelectionState } from "./data-table-types"
@@ -69,6 +69,7 @@ function renderSelection(columnFilters: ColumnFiltersState = [], remoteCount = t
       columnFilters: props.filters,
       sorting: [],
       totalRowCount: props.total,
+      unfilteredTotalRowCount: allIds.length,
       loadedRowIds: props.ids,
       loadedRowsById: rows,
       countBySelection: props.remoteCount ? countBySelection : undefined,
@@ -92,7 +93,7 @@ async function expectState(
   visibleIds: string[],
   expectedIds: string[]
 ) {
-  await act(async () => { await Promise.resolve() })
+  await act(async () => { await vi.runAllTimersAsync() })
   expect(result.current.selectedCount).toBe(expectedIds.length)
   const expectedVisible = visibleIds.filter((id) => expectedIds.includes(id))
   expect(result.current.visibleSelectedIds).toEqual(expectedVisible)
@@ -101,6 +102,9 @@ async function expectState(
 }
 
 describe("useInfiniteSelection operations model", () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
   it("uses ordered operations so the last matching scope wins", async () => {
     const time8910 = filters({ time: ["08", "09", "10"] })
     const time89 = filters({ time: ["08", "09"] })
@@ -205,10 +209,10 @@ describe("useInfiniteSelection operations model", () => {
   it("does not drift selected count when the same filtered scope is toggled repeatedly", async () => {
     const all = filters({})
     const processing = filters({ status: ["processing"] })
-    const { result, rerender } = renderSelection(all, false)
+    const { result, rerender } = renderSelection(all)
 
     await act(async () => { await result.current.selectAll() })
-    const visible = rerenderScope(rerender, processing, false)
+    const visible = rerenderScope(rerender, processing)
 
     for (let index = 0; index < 5; index += 1) {
       await act(async () => { await result.current.deselectAll() })
@@ -326,5 +330,63 @@ describe("useInfiniteSelection operations model", () => {
     await act(async () => { await Promise.resolve() })
     expect(result.current.selectedCount).toBe(1197)
     expect(result.current.displaySelectedCount).toBe(1197)
+  })
+
+  it("does not drift while clearing filters and toggling all before remote counts resolve", async () => {
+    const pendingCounts: Array<(count: number) => void> = []
+    const delayedCount = () => new Promise<number>((resolve) => {
+      pendingCounts.push(resolve)
+    })
+    const all = filters({})
+    const processingRetail8 = filters({ status: ["processing"], channel: ["Retail"], time: ["8"] })
+    const processingRetail9 = filters({ status: ["processing"], channel: ["Retail"], time: ["9"] })
+    const processingRetail10 = filters({ status: ["processing"], channel: ["Retail"], time: ["10"] })
+    const { result, rerender } = renderHook((props: { filters: ColumnFiltersState; ids: string[]; total: number }) =>
+      useInfiniteSelection({
+        enabled: true,
+        globalFilter: "",
+        columnFilters: props.filters,
+        sorting: [],
+        totalRowCount: props.total,
+        unfilteredTotalRowCount: 100,
+        loadedRowIds: props.ids,
+        loadedRowsById: rows,
+        countBySelection: delayedCount,
+      }), {
+      initialProps: { filters: all, ids: ["a", "b", "c"], total: 100 },
+    })
+
+    await act(async () => { await result.current.selectAll() })
+    expect(result.current.selectedCount).toBe(100)
+
+    rerender({ filters: processingRetail8, ids: ["b"], total: 10 })
+    await act(async () => { await result.current.deselectAll() })
+    expect(result.current.isSelectionCountPending).toBe(false)
+    expect(result.current.selectedCount).toBe(90)
+
+    rerender({ filters: processingRetail9, ids: [], total: 12 })
+    await act(async () => { await result.current.deselectAll() })
+    expect(result.current.isSelectionCountPending).toBe(false)
+    expect(result.current.selectedCount).toBe(78)
+
+    rerender({ filters: processingRetail10, ids: [], total: 14 })
+    await act(async () => { await result.current.deselectAll() })
+    expect(result.current.isSelectionCountPending).toBe(false)
+    expect(result.current.selectedCount).toBe(64)
+
+    rerender({ filters: all, ids: ["a", "b", "c"], total: 100 })
+
+    for (let index = 0; index < 3; index += 1) {
+      await act(async () => { await result.current.selectAll() })
+      expect(result.current.selectedCount).toBe(100)
+
+      await act(async () => { await result.current.deselectAll() })
+      expect(result.current.selectedCount).toBe(0)
+    }
+
+    await act(async () => {
+      pendingCounts.splice(0).forEach((resolve) => resolve(result.current.selectedCount))
+      await Promise.resolve()
+    })
   })
 })

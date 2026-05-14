@@ -28,12 +28,15 @@ export interface DataTableToolbarConfig<TData> {
   facetedFilters?: FacetedFilterConfig[]
   intervalFilter?: IntervalFilterConfig
   actions?: ToolbarActionsRenderer<TData>
-  searchDebounceMs?: number
   showViewOptions?: boolean
   viewActionsMode?: "full" | "bulk-copy" | "view" | "none"
   viewMenuItems?: ReactNode | ((table: Table<TData>) => ReactNode)
   resultCountMode?: "server" | "client"
   selectionMode?: "server" | "client"
+  /** Opciones de autocompletado para la barra de búsqueda (server-side). */
+  searchAutocomplete?: { label: string; value: string }[]
+  /** Callback invocado cuando cambia el texto de búsqueda (para alimentar el autocomplete). */
+  onSearchInputChange?: (value: string) => void
 }
 
 export interface DataTableLayoutConfig {
@@ -65,7 +68,6 @@ export type DataTableSelectionState =
   | {
       mode: "operations"
       operations: DataTableSelectionOperation[]
-      selectedCount: number
     }
 
 export type ServerExportFormat = "csv" | "tsv" | "json" | "md" | "lines" | "custom"
@@ -112,6 +114,8 @@ export interface InfiniteScrollConfig {
 // table.options.meta. Permite que las columnas accedan al estado de selección.
 // ────────────────────────────────────────────────────────────────────────────
 export interface DataTableMeta {
+  /** Indica si la tabla está cargando datos */
+  isLoading?: boolean
   /** Indica si la tabla está funcionando en modo infinite scroll */
   isInfiniteScroll?: boolean
   /** Selecciona todas las filas del scope/filtro actual sin descargar IDs. */
@@ -128,6 +132,8 @@ export interface DataTableMeta {
   selectionState?: DataTableSelectionState
   /** Total seleccionado real: ids.length o conteo/evaluación de operaciones. */
   selectedCount?: number
+  /** El conteo global está pendiente de confirmación remota. */
+  isSelectionCountPending?: boolean
   /** Conteo mostrado cuando el filtro visible es solo una intersección de la selección real. */
   displaySelectedCount?: number
   /** Total seleccionado dentro del scope/filtro activo de la tabla. */
@@ -136,6 +142,8 @@ export interface DataTableMeta {
   totalRowCount?: number
   /** Refresca datos cuando el usuario re-aplica el mismo ordenamiento remoto */
   refreshSorting?: () => void
+  /** Maneja la selección de filas con soporte para Shift+Clic (selección por rango) */
+  handleRowSelect?: (rowId: string, value: boolean, isShift: boolean) => void
 }
 
 export interface HistoryDetail {

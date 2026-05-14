@@ -11,6 +11,7 @@ interface UseInfiniteSelectionOptions {
   columnFilters: ColumnFiltersState
   sorting: SortingState
   totalRowCount: number
+  unfilteredTotalRowCount?: number
   date?: string
   loadedRowIds: string[]
   loadedRowsById?: Record<string, Record<string, unknown>>
@@ -35,6 +36,28 @@ function operationKey(operation: DataTableSelectionOperation): string {
 
 function scopeKey(scope: DataTableSelectionScope): string {
   return JSON.stringify(normalizeScope(scope))
+}
+
+function scopeContains(parent: DataTableSelectionScope, child: DataTableSelectionScope): boolean {
+  const normalizedParent = normalizeScope(parent)
+  const normalizedChild = normalizeScope(child)
+
+  if (normalizedParent.search && normalizedParent.search !== normalizedChild.search) return false
+  if (normalizedParent.date && normalizedParent.date !== normalizedChild.date) return false
+
+  const childFilters = new Map(normalizedChild.filters.map((filter) => [filter.id, filterValues(filter)]))
+  for (const parentFilter of normalizedParent.filters) {
+    const parentValues = filterValues(parentFilter)
+    if (parentValues.length === 0) continue
+
+    const childValues = childFilters.get(parentFilter.id)
+    if (!childValues || childValues.length === 0) return false
+
+    const parentSet = new Set(parentValues)
+    if (!childValues.every((value) => parentSet.has(value))) return false
+  }
+
+  return true
 }
 
 function dedupeOperations(operations: DataTableSelectionOperation[]): DataTableSelectionOperation[] {
@@ -62,25 +85,49 @@ function exactScopeSelectionCount(
 
   for (const operation of operations) {
     if (operation.type === "select" || operation.type === "deselect") {
-      if (scopeKey(operation.scope) === currentKey) {
+      if (scopeKey(operation.scope) === currentKey || scopeContains(operation.scope, currentScope)) {
+        // Operation scope covers the target entirely
         count = operation.type === "select" ? totalRowCount : 0
+      } else if (scopeContains(currentScope, operation.scope)) {
+        // Operation scope is a subset of the target — use operation.total
+        if (operation.type === "deselect" && count !== null) {
+          count = Math.max(0, count - operation.total)
+        } else if (operation.type === "select" && count === null) {
+          // First select on a subset — exact
+          count = operation.total
+        } else if (count !== null) {
+          // select-subset when prior count exists — can't determine overlap
+          return null
+        }
       } else if (count !== null) {
         return null
       }
       continue
     }
 
-    if (count === null) continue
-
     const matchingIds = operation.ids.filter((id) => rowMatchesScope(loadedRowsById[id], currentScope))
     if (operation.type === "selectIds") {
-      count = Math.min(totalRowCount, count + matchingIds.length)
-    } else {
+      count = Math.min(totalRowCount, (count ?? 0) + matchingIds.length)
+    } else if (count !== null) {
       count = Math.max(0, count - matchingIds.length)
     }
   }
 
   return count
+}
+
+function exactGlobalSelectionCount(
+  operations: DataTableSelectionOperation[],
+  totalRowCount: number,
+  unfilteredTotalRowCount: number | undefined,
+  loadedRowsById: Record<string, Record<string, unknown>>
+): number | null {
+  return exactScopeSelectionCount(
+    operations,
+    { search: "", filters: [], sorting: [] },
+    unfilteredTotalRowCount ?? totalRowCount,
+    loadedRowsById
+  )
 }
 
 function idsToRowSelection(ids: string[]): RowSelectionState {
@@ -151,6 +198,7 @@ export function useInfiniteSelection({
   columnFilters,
   sorting,
   totalRowCount,
+  unfilteredTotalRowCount,
   date,
   loadedRowIds,
   loadedRowsById = {},
@@ -173,10 +221,13 @@ export function useInfiniteSelection({
   const lastScopeCountKeyRef = useRef<string | null>(null)
 
   const operations = selectionState.mode === "operations" ? selectionState.operations : []
+  const maxSelectedCount = unfilteredTotalRowCount ?? Number.MAX_SAFE_INTEGER
+  const clampSelectedCount = useCallback((count: number) => Math.min(maxSelectedCount, Math.max(0, count)), [maxSelectedCount])
   const selectionCountKey = useMemo(
-    () => JSON.stringify({ selectionState, totalRowCount }),
-    [selectionState, totalRowCount]
+    () => JSON.stringify({ selectionState, totalRowCount, unfilteredTotalRowCount }),
+    [selectionState, totalRowCount, unfilteredTotalRowCount]
   )
+
   const scopeCountKey = useMemo(
     () => JSON.stringify({ selectionState, currentScope, totalRowCount }),
     [currentScope, selectionState, totalRowCount]
@@ -205,40 +256,66 @@ export function useInfiniteSelection({
     [loadedRowIds, loadedRowsById, selectionState]
   )
 
+  const exactGlobalSelectedCount = selectionState.mode === "operations"
+    ? exactGlobalSelectionCount(selectionState.operations, totalRowCount, unfilteredTotalRowCount, loadedRowsById)
+    : null
+  const exactCurrentScopeSelectedCount = selectionState.mode === "operations"
+    ? exactScopeSelectionCount(selectionState.operations, currentScope, totalRowCount, loadedRowsById)
+    : null
+
   useEffect(() => {
     if (!enabled || !countBySelection || selectionState.mode !== "operations") return
     if (lastCountKeyRef.current === selectionCountKey) return
-    lastCountKeyRef.current = selectionCountKey
+    if (exactGlobalSelectedCount !== null) {
+      lastCountKeyRef.current = selectionCountKey
+      return
+    }
     const requestId = ++countRequestRef.current
     const key = selectionCountKey
-    void countBySelection(selectionState).then((count) => {
-      if (countRequestRef.current === requestId) setSelectedCountOverride({ key, count })
-    }).catch(() => {
-      if (countRequestRef.current === requestId) setSelectedCountOverride(null)
-    })
-  }, [countBySelection, enabled, selectionCountKey, selectionState])
+    const timeout = setTimeout(() => {
+      lastCountKeyRef.current = key
+      void countBySelection(selectionState).then((count) => {
+        if (countRequestRef.current === requestId) setSelectedCountOverride({ key, count })
+      }).catch(() => {
+        if (countRequestRef.current === requestId) setSelectedCountOverride(null)
+      })
+    }, 300)
+    return () => clearTimeout(timeout)
+  }, [countBySelection, enabled, exactGlobalSelectedCount, selectionCountKey, selectionState])
 
   useEffect(() => {
     if (!enabled || !countBySelection || selectionState.mode !== "operations") return
     if (lastScopeCountKeyRef.current === scopeCountKey) return
-    lastScopeCountKeyRef.current = scopeCountKey
+    if (exactCurrentScopeSelectedCount !== null) {
+      lastScopeCountKeyRef.current = scopeCountKey
+      return
+    }
     const requestId = ++scopeCountRequestRef.current
     const key = scopeCountKey
-    void countBySelection(selectionState, currentScope).then((count) => {
-      if (scopeCountRequestRef.current === requestId) setScopeSelectedCountOverride({ key, count })
-    }).catch(() => {
-      if (scopeCountRequestRef.current === requestId) setScopeSelectedCountOverride(null)
-    })
-  }, [countBySelection, currentScope, enabled, scopeCountKey, selectionState])
+    const timeout = setTimeout(() => {
+      lastScopeCountKeyRef.current = key
+      void countBySelection(selectionState, currentScope).then((count) => {
+        if (scopeCountRequestRef.current === requestId) setScopeSelectedCountOverride({ key, count })
+      }).catch(() => {
+        if (scopeCountRequestRef.current === requestId) setScopeSelectedCountOverride(null)
+      })
+    }, 300)
+    return () => clearTimeout(timeout)
+  }, [countBySelection, currentScope, enabled, exactCurrentScopeSelectedCount, scopeCountKey, selectionState])
 
-  const selectedCount = selectedCountOverride?.key === selectionCountKey ? selectedCountOverride.count : (
-    selectionState.mode === "operations" ? selectionState.selectedCount : localSelectedCount
-  )
-  const exactCurrentScopeSelectedCount = selectionState.mode === "operations"
-    ? exactScopeSelectionCount(selectionState.operations, currentScope, totalRowCount, loadedRowsById)
-    : null
+  const hasRemoteSelectedCount = selectedCountOverride?.key === selectionCountKey
+  const isSelectionCountPending = !!enabled
+    && !!countBySelection
+    && selectionState.mode === "operations"
+    && exactGlobalSelectedCount === null
+    && !hasRemoteSelectedCount
+  const rawSelectedCount = selectionState.mode === "ids"
+    ? localSelectedCount
+    : exactGlobalSelectedCount ?? (hasRemoteSelectedCount ? selectedCountOverride.count : localSelectedCount)
+  const selectedCount = clampSelectedCount(rawSelectedCount)
+  const hasRemoteScopeSelectedCount = scopeSelectedCountOverride?.key === scopeCountKey
   const currentScopeSelectedCount = exactCurrentScopeSelectedCount
-    ?? (scopeSelectedCountOverride?.key === scopeCountKey
+    ?? (hasRemoteScopeSelectedCount
       ? scopeSelectedCountOverride.count
       : visibleSelectedIds.length)
   const displaySelectedCount = currentScopeSelectedCount
@@ -258,17 +335,14 @@ export function useInfiniteSelection({
         : previous.mode === "ids" && previous.ids.length > 0
           ? [{ type: "selectIds", ids: previous.ids }]
           : []
-      const previousCount = previous.mode === "operations" ? selectedCount : previous.mode === "ids" ? previous.ids.length : 0
-      const addedCount = Math.max(0, totalRowCount - currentScopeSelectedCount)
       const nextSelection: DataTableSelectionState = {
         mode: "operations",
         operations: dedupeOperations([...nextOperations, { type: "select", scope: currentScope, total: totalRowCount }]),
-        selectedCount: previousCount + addedCount,
       }
       return nextSelection
     })
     setIsSelectingAll(false)
-  }, [currentScope, currentScopeSelectedCount, enabled, selectedCount, totalRowCount])
+  }, [currentScope, enabled, totalRowCount])
 
   const deselectAll = useCallback(async () => {
     if (!enabled) return
@@ -279,15 +353,13 @@ export function useInfiniteSelection({
         : previous.mode === "ids" && previous.ids.length > 0
           ? [{ type: "selectIds", ids: previous.ids }]
           : []
-      const previousCount = previous.mode === "operations" ? selectedCount : previous.mode === "ids" ? previous.ids.length : 0
       return {
         mode: "operations",
         operations: dedupeOperations([...nextOperations, { type: "deselect", scope: currentScope, total: totalRowCount }]),
-        selectedCount: Math.max(0, previousCount - currentScopeSelectedCount),
       }
     })
     setIsSelectingAll(false)
-  }, [currentScope, currentScopeSelectedCount, enabled, selectedCount, totalRowCount])
+  }, [currentScope, enabled, totalRowCount])
 
   const setRowSelection = useCallback((updater: Updater<RowSelectionState>) => {
     setSelectionState((previous) => {
@@ -314,7 +386,6 @@ export function useInfiniteSelection({
       return {
         mode: "operations",
         operations: dedupeOperations(operations),
-        selectedCount: Math.max(0, (previous.mode === "operations" ? previous.selectedCount : 0) + selectedIds.length - deselectedIds.length),
       }
     })
   }, [loadedRowIds, loadedRowsById])
@@ -326,6 +397,7 @@ export function useInfiniteSelection({
     currentScope,
     selectionState,
     selectedCount,
+    isSelectionCountPending,
     displaySelectedCount,
     currentScopeSelectedCount,
     visibleSelectedIds,

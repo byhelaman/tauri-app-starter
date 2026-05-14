@@ -7,6 +7,7 @@ import type { DataTableSelectionState } from "./data-table-types"
 interface DataTableSelectionBarProps<TData> {
   table: Table<TData>
   selectedCount: number
+  isSelectionCountPending: boolean
   displaySelectedCount: number
   currentScopeTotal: number
   visibleSelectedIds: string[]
@@ -16,13 +17,15 @@ interface DataTableSelectionBarProps<TData> {
     selectedLoadedRows: TData[],
     clearSelection: () => void,
     selectedIds: string[],
-    selection: DataTableSelectionState
+    selection: DataTableSelectionState,
+    meta: { selectedCount: number; isSelectionCountPending: boolean }
   ) => ReactNode
 }
 
 export function DataTableSelectionBar<TData>({
   table,
   selectedCount,
+  isSelectionCountPending,
   displaySelectedCount,
   currentScopeTotal,
   visibleSelectedIds,
@@ -44,7 +47,9 @@ export function DataTableSelectionBar<TData>({
           </div>
         )}
         <div className="flex items-center gap-3 rounded-lg border bg-background p-2 shadow-lg">
-          <span className="pl-2 text-sm">{selectedCount.toLocaleString()} selected</span>
+          <span className="pl-2 text-sm">
+            {selectedCount.toLocaleString()} selected
+          </span>
           {bulkActions && (
             <>
               <div className="h-4 w-px bg-border" />
@@ -52,7 +57,8 @@ export function DataTableSelectionBar<TData>({
                 selectedLoadedRows.map((row) => row.original),
                 clearSelection,
                 visibleSelectedIds,
-                selectionState
+                selectionState,
+                { selectedCount, isSelectionCountPending }
               )}
             </>
           )}

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table"
 import { DataTable } from "./data-table"
@@ -96,16 +96,25 @@ async function countBySelection(selection: DataTableSelectionState, scope?: Data
 
 function renderOrdersTable({
   filters = [],
+  loadedIds,
+  totalRowCount,
+  unfilteredTotalRowCount,
+  countBySelectionFn = countBySelection,
   onBulkAction,
 }: {
   filters?: ColumnFiltersState
+  loadedIds?: string[]
+  totalRowCount?: number
+  unfilteredTotalRowCount?: number
+  countBySelectionFn?: typeof countBySelection
   onBulkAction?: (payload: {
     selectedLoadedRows: TestOrder[]
     selectedIds: string[]
     selection: DataTableSelectionState
+    meta: { selectedCount: number; isSelectionCountPending: boolean }
   }) => void
 } = {}) {
-  const data = filteredRows(filters)
+  const data = filteredRows(filters).filter((row) => !loadedIds || loadedIds.includes(row.id))
   return render(
     <DataTable
       tableId="orders-integration-test"
@@ -120,24 +129,24 @@ function renderOrdersTable({
         fetchNextPage: vi.fn(),
         hasNextPage: false,
         isFetchingNextPage: false,
-        totalRowCount: data.length,
+        totalRowCount: totalRowCount ?? data.length,
+        unfilteredTotalRowCount: unfilteredTotalRowCount ?? rows.length,
         currentScope: {
           search: "",
           filters,
           sorting: [],
         },
-        countBySelection,
+        countBySelection: countBySelectionFn,
       }}
       toolbar={{
         searchable: true,
-        searchDebounceMs: 0,
         selectionMode: "server",
         showViewOptions: false,
       }}
-      bulkActions={(selectedLoadedRows, _clearSelection, selectedIds, selection) => (
+      bulkActions={(selectedLoadedRows, _clearSelection, selectedIds, selection, meta) => (
         <button
           type="button"
-          onClick={() => onBulkAction?.({ selectedLoadedRows, selectedIds, selection })}
+          onClick={() => onBulkAction?.({ selectedLoadedRows, selectedIds, selection, meta })}
         >
           Copy
         </button>
@@ -150,17 +159,26 @@ function rerenderOrdersTable(
   view: ReturnType<typeof renderOrdersTable>,
   {
     filters = [],
+    loadedIds,
+    totalRowCount,
+    unfilteredTotalRowCount,
+    countBySelectionFn = countBySelection,
     onBulkAction,
   }: {
     filters?: ColumnFiltersState
+    loadedIds?: string[]
+    totalRowCount?: number
+    unfilteredTotalRowCount?: number
+    countBySelectionFn?: typeof countBySelection
     onBulkAction?: (payload: {
       selectedLoadedRows: TestOrder[]
       selectedIds: string[]
       selection: DataTableSelectionState
+      meta: { selectedCount: number; isSelectionCountPending: boolean }
     }) => void
   } = {}
 ) {
-  const data = filteredRows(filters)
+  const data = filteredRows(filters).filter((row) => !loadedIds || loadedIds.includes(row.id))
   view.rerender(
     <DataTable
       tableId="orders-integration-test"
@@ -175,20 +193,20 @@ function rerenderOrdersTable(
         fetchNextPage: vi.fn(),
         hasNextPage: false,
         isFetchingNextPage: false,
-        totalRowCount: data.length,
+        totalRowCount: totalRowCount ?? data.length,
+        unfilteredTotalRowCount: unfilteredTotalRowCount ?? rows.length,
         currentScope: { search: "", filters, sorting: [] },
-        countBySelection,
+        countBySelection: countBySelectionFn,
       }}
       toolbar={{
         searchable: true,
-        searchDebounceMs: 0,
         selectionMode: "server",
         showViewOptions: false,
       }}
-      bulkActions={(selectedLoadedRows, _clearSelection, selectedIds, selection) => (
+      bulkActions={(selectedLoadedRows, _clearSelection, selectedIds, selection, meta) => (
         <button
           type="button"
-          onClick={() => onBulkAction?.({ selectedLoadedRows, selectedIds, selection })}
+          onClick={() => onBulkAction?.({ selectedLoadedRows, selectedIds, selection, meta })}
         >
           Copy
         </button>
@@ -260,7 +278,7 @@ describe("DataTable integration", () => {
     expect(payload.selectedIds).toEqual(["d", "e"])
     expect(payload.selectedLoadedRows.map((row: TestOrder) => row.id)).toEqual(["d", "e"])
     expect(payload.selection.mode).toBe("operations")
-    expect(payload.selection.selectedCount).toBe(3)
+    expect(payload.meta.selectedCount).toBe(3)
   })
 
   it("deselects only the active filtered scope after a global select-all", async () => {
@@ -306,7 +324,7 @@ describe("DataTable integration", () => {
     expect(payload.selectedIds).toEqual(["b", "c"])
     expect(payload.selectedLoadedRows.map((row: TestOrder) => row.id)).toEqual(["b", "c"])
     expect(payload.selection.mode).toBe("operations")
-    expect(payload.selection.selectedCount).toBe(6)
+    expect(payload.meta.selectedCount).toBe(6)
   })
 
   it("does not drift counts when toggling the same filtered scope repeatedly", async () => {
@@ -381,5 +399,80 @@ describe("DataTable integration", () => {
     rerenderOrdersTable(view)
     await screen.findByText("6 selected")
     expect(selectAllCheckbox()).toHaveAttribute("aria-checked", "true")
+  })
+
+  it("does not inflate the total selection counter while remote counts are pending", async () => {
+    const pendingCounts: Array<(count: number) => void> = []
+    const delayedCount = () => new Promise<number>((resolve) => {
+      pendingCounts.push(resolve)
+    })
+    const view = renderOrdersTable({
+      loadedIds: ["a", "b", "c"],
+      totalRowCount: 100,
+      unfilteredTotalRowCount: 100,
+      countBySelectionFn: delayedCount,
+    })
+
+    // Select all globally — exact derivation: 100
+    fireEvent.click(selectAllCheckbox())
+    await screen.findByText("100 selected")
+
+    // Filter to processingRetail and deselect-all —
+    // exact derivation via subset-deselect: 100 - 10 = 90
+    const processingRetailFilter = [
+      { id: "status", value: ["processing"] },
+      { id: "channel", value: ["Retail"] },
+    ]
+    rerenderOrdersTable(view, {
+      filters: processingRetailFilter,
+      loadedIds: ["b"],
+      totalRowCount: 10,
+      unfilteredTotalRowCount: 100,
+      countBySelectionFn: delayedCount,
+    })
+
+    fireEvent.click(selectAllCheckbox())
+    await screen.findByText("90 selected")
+    expect(screen.queryByText("110 selected")).not.toBeInTheDocument()
+
+    // Filter to processingOnline and select-all —
+    // can't derive overlap locally, falls to local count (no inflation)
+    const processingOnlineFilter = [
+      { id: "status", value: ["processing"] },
+      { id: "channel", value: ["Online"] },
+    ]
+    rerenderOrdersTable(view, {
+      filters: processingOnlineFilter,
+      loadedIds: ["c"],
+      totalRowCount: 12,
+      unfilteredTotalRowCount: 100,
+      countBySelectionFn: delayedCount,
+    })
+
+    fireEvent.click(selectAllCheckbox())
+    // No inflation — never shows 102 or more
+    expect(screen.queryByText("102 selected")).not.toBeInTheDocument()
+    expect(screen.queryByText("110 selected")).not.toBeInTheDocument()
+
+    // Return to unfiltered — select all: exact derivation: 100
+    rerenderOrdersTable(view, {
+      loadedIds: ["a", "b", "c"],
+      totalRowCount: 100,
+      unfilteredTotalRowCount: 100,
+      countBySelectionFn: delayedCount,
+    })
+
+    fireEvent.click(selectAllCheckbox())
+    await screen.findByText("100 selected")
+
+    // Deselect all — should not show 200 or leave 100
+    fireEvent.click(selectAllCheckbox())
+    await waitFor(() => expect(screen.queryByText("100 selected")).not.toBeInTheDocument())
+    expect(screen.queryByText("200 selected")).not.toBeInTheDocument()
+
+    await act(async () => {
+      pendingCounts.splice(0).forEach((resolve) => resolve(0))
+      await Promise.resolve()
+    })
   })
 })
