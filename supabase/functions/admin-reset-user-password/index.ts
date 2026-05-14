@@ -9,15 +9,15 @@ Deno.serve(async (req: Request) => {
     const newPassword = String(payload.newPassword ?? "")
 
     if (!newPassword) {
-        return json(400, { success: false, message: "newPassword is required" }, origin)
+        return json(200, { success: false, message: "newPassword is required" }, origin)
     }
 
     if (newPassword.length < 8) {
-        return json(400, { success: false, message: "Password must be at least 8 characters" }, origin)
+        return json(200, { success: false, message: "Password must be at least 8 characters" }, origin)
     }
 
     if (targetUserId === actorUserId) {
-        return json(400, { success: false, message: "You cannot reset your own password from this action" }, origin)
+        return json(200, { success: false, message: "You cannot reset your own password from this action" }, origin)
     }
 
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(targetUserId, {
@@ -30,7 +30,7 @@ Deno.serve(async (req: Request) => {
 
     if (updateError) {
         console.error("Password update failed:", updateError.message)
-        return json(500, { success: false, message: "Could not reset password" }, origin)
+        return json(200, { success: false, message: "Could not reset password" }, origin)
     }
 
     // Best-effort: invalida todas las sesiones activas para que una cuenta comprometida quede bloqueada de inmediato.

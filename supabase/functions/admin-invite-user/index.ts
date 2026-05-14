@@ -11,7 +11,7 @@ Deno.serve(async (req: Request) => {
     const role  = String(payload.role ?? "guest").trim()
 
     if (!email) {
-        return json(400, { success: false, message: "email is required" }, origin)
+        return json(200, { success: false, message: "email is required" }, origin)
     }
 
     const { data, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
@@ -20,7 +20,7 @@ Deno.serve(async (req: Request) => {
 
     if (inviteError) {
         console.error("Invite failed:", inviteError.message)
-        return json(500, { success: false, message: "Could not send invitation" }, origin)
+        return json(200, { success: false, message: "Could not send invitation" }, origin)
     }
 
     const invitedUserId = data.user.id
@@ -33,19 +33,17 @@ Deno.serve(async (req: Request) => {
 
         if (roleError) {
             console.error("Role assignment failed:", roleError.message)
-            const { error: rollbackError } = await supabaseAdmin.rpc("delete_user", {
-                target_user_id: invitedUserId,
-            })
+            const { error: rollbackError } = await supabaseAdmin.auth.admin.deleteUser(invitedUserId)
 
             if (rollbackError) {
                 console.error("Rollback failed after role assignment error:", rollbackError.message)
-                return json(500, {
+                return json(200, {
                     success: false,
                     message: "Could not assign role, and rollback failed. Please remove the invited user manually.",
                 }, origin)
             }
 
-            return json(500, { success: false, message: "Could not assign role - invitation cancelled" }, origin)
+            return json(200, { success: false, message: "Could not assign role - invitation cancelled" }, origin)
         }
     }
 

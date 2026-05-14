@@ -9,21 +9,21 @@ Deno.serve(async (req: Request) => {
     const newEmail = String(payload.newEmail ?? "").trim().toLowerCase()
 
     if (!newEmail) {
-        return json(400, { success: false, message: "newEmail is required" }, origin)
+        return json(200, { success: false, message: "newEmail is required" }, origin)
     }
 
     if (targetUserId === actorUserId) {
-        return json(400, { success: false, message: "Use your account settings to change your own email" }, origin)
+        return json(200, { success: false, message: "Use your account settings to change your own email" }, origin)
     }
 
     // Obtiene el usuario para leer el email anterior y verificar que no tenga invite pendiente.
     const { data: targetUser, error: fetchError } = await supabaseAdmin.auth.admin.getUserById(targetUserId)
     if (fetchError || !targetUser.user) {
-        return json(404, { success: false, message: "Target user not found" }, origin)
+        return json(200, { success: false, message: "Target user not found" }, origin)
     }
 
     if (!targetUser.user.last_sign_in_at) {
-        return json(400, { success: false, message: "Cannot change email while invitation is pending" }, origin)
+        return json(200, { success: false, message: "Cannot change email while invitation is pending" }, origin)
     }
 
     const oldEmail = targetUser.user.email ?? ""
@@ -34,7 +34,7 @@ Deno.serve(async (req: Request) => {
 
     if (updateError) {
         console.error("Email update failed:", updateError.message)
-        return json(500, { success: false, message: "Could not update email" }, origin)
+        return json(200, { success: false, message: "Could not update email" }, origin)
     }
 
     // profiles.email se sincroniza automáticamente via el trigger on_auth_user_email_updated.
