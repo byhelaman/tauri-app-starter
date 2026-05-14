@@ -14,7 +14,7 @@ import {
   DialogBody,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { InputGroup, InputGroupInput, InputGroupAddon } from "@/components/ui/input-group"
+import { InputGroup, InputGroupInput, InputGroupAddon, InputGroupText } from "@/components/ui/input-group"
 import { DatePickerInput } from "@/components/ui/date-picker"
 import {
   Select,
@@ -44,7 +44,7 @@ function getDefaultTimes() {
   const pad = (n: number) => String(n).padStart(2, "0")
   return {
     start_time: `${pad(h)}:00`,
-    end_time:   `${pad((h + 1) % 24)}:00`,
+    end_time: `${pad((h + 1) % 24)}:00`,
   }
 }
 
@@ -56,20 +56,20 @@ function generateOrderCode(): string {
 }
 
 const orderSchema = z.object({
-  customer:   z.string().min(1, "Customer name is required"),
-  code:       z.string().optional(),
-  product:    z.string().min(1, "Product name is required"),
-  category:   z.string().min(1, "Category is required"),
-  region:     z.string().min(1, "Region is required"),
-  payment:    z.string().min(1, "Payment method is required"),
-  quantity:   z.number().min(1, "Quantity must be at least 1"),
-  status:     z.enum(["pending", "processing", "shipped", "delivered", "cancelled"]),
-  priority:   z.string().min(1, "Priority is required"),
-  channel:    z.string().min(1, "Channel is required"),
-  amount:     z.number().positive("Amount must be greater than 0"),
-  date:       z.string().min(1, "Date is required"),
+  customer: z.string().min(1, "Customer name is required"),
+  code: z.string().optional(),
+  product: z.string().min(1, "Product name is required"),
+  category: z.string().min(1, "Category is required"),
+  region: z.string().min(1, "Region is required"),
+  payment: z.string().min(1, "Payment method is required"),
+  quantity: z.number().min(1, "Quantity must be at least 1"),
+  status: z.enum(["pending", "processing", "shipped", "delivered", "cancelled"]),
+  priority: z.string().min(1, "Priority is required"),
+  channel: z.string().min(1, "Channel is required"),
+  amount: z.number().positive("Amount must be greater than 0"),
+  date: z.string().min(1, "Date is required"),
   start_time: z.string().min(1, "Start time is required"),
-  end_time:   z.string().min(1, "End time is required"),
+  end_time: z.string().min(1, "End time is required"),
 })
 
 type OrderFormValues = z.infer<typeof orderSchema>
@@ -81,19 +81,19 @@ interface OrderDialogProps {
 }
 
 const DEFAULT_VALUES: OrderFormValues = {
-  status:     "pending",
-  channel:    "Online",
-  priority:   "Medium",
-  region:     "North America",
-  payment:    "Credit Card",
-  date:       new Date().toISOString().split("T")[0],
+  status: "pending",
+  channel: "Online",
+  priority: "Medium",
+  region: "North America",
+  payment: "Credit Card",
+  date: new Date().toISOString().split("T")[0],
   ...getDefaultTimes(),
-  quantity:   1,
-  amount:     1,
-  customer:   "",
-  code:       "",
-  product:    "",
-  category:   "",
+  quantity: 1,
+  amount: 1,
+  customer: "",
+  code: "",
+  product: "",
+  category: "",
 }
 
 export function OrderDialog({ open, onOpenChange, onSubmit }: OrderDialogProps) {
@@ -127,7 +127,7 @@ export function OrderDialog({ open, onOpenChange, onSubmit }: OrderDialogProps) 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg"
-      onInteractOutside={(event) => event.preventDefault()}>
+        onInteractOutside={(event) => event.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Add New Order</DialogTitle>
           <DialogDescription>
@@ -137,20 +137,20 @@ export function OrderDialog({ open, onOpenChange, onSubmit }: OrderDialogProps) 
         <form className="contents" onSubmit={handleSubmit(onFormSubmit)}>
           <DialogBody className="mt-1 py-1">
             <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="date">Date</FieldLabel>
-                  <Controller
-                    name="date"
-                    control={control}
-                    render={({ field }) => (
-                      <DatePickerInput
-                        value={field.value}
-                        onChange={field.onChange}
-                      />
-                    )}
-                  />
-                  <FieldError errors={[errors.date]} />
-                </Field>
+              <Field>
+                <FieldLabel htmlFor="date">Date</FieldLabel>
+                <Controller
+                  name="date"
+                  control={control}
+                  render={({ field }) => (
+                    <DatePickerInput
+                      value={field.value?.replace(/-/g, "/")}
+                      onChange={(v) => field.onChange(v.replace(/\//g, "-"))}
+                    />
+                  )}
+                />
+                <FieldError errors={[errors.date]} />
+              </Field>
               <div className="grid grid-cols-2 gap-4">
                 <Field>
                   <FieldLabel htmlFor="start_time">Start Time</FieldLabel>
@@ -183,15 +183,15 @@ export function OrderDialog({ open, onOpenChange, onSubmit }: OrderDialogProps) 
                   <FieldError errors={[errors.end_time]} />
                 </Field>
               </div>
-                <Field>
-                  <FieldLabel>Customer</FieldLabel>
-                  <Input
-                    {...register("customer")}
-                    placeholder="Customer name"
-                    aria-invalid={!!errors.customer}
-                  />
-                  <FieldError errors={[errors.customer]} />
-                </Field>
+              <Field>
+                <FieldLabel>Customer</FieldLabel>
+                <Input
+                  {...register("customer")}
+                  placeholder="Customer name"
+                  aria-invalid={!!errors.customer}
+                />
+                <FieldError errors={[errors.customer]} />
+              </Field>
               <div className="grid grid-cols-2 gap-4">
                 <Field>
                   <FieldLabel>Code</FieldLabel>
@@ -281,10 +281,10 @@ export function OrderDialog({ open, onOpenChange, onSubmit }: OrderDialogProps) 
                         <SelectContent>
                           <SelectGroup>
                             {PRIORITIES.map((p) => (
-                            <SelectItem key={p} value={p}>
-                              {p}
-                            </SelectItem>
-                          ))}
+                              <SelectItem key={p} value={p}>
+                                {p}
+                              </SelectItem>
+                            ))}
                           </SelectGroup>
                         </SelectContent>
                       </Select>
@@ -324,13 +324,18 @@ export function OrderDialog({ open, onOpenChange, onSubmit }: OrderDialogProps) 
                 </Field>
                 <Field>
                   <FieldLabel>Amount</FieldLabel>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    className="font-mono"
-                    {...register("amount", { valueAsNumber: true })}
-                    aria-invalid={!!errors.amount}
-                  />
+                  <InputGroup>
+                    <InputGroupAddon>
+                      <InputGroupText>$</InputGroupText>
+                    </InputGroupAddon>
+                    <InputGroupInput
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      {...register("amount", { valueAsNumber: true })}
+                      aria-invalid={!!errors.amount}
+                    />
+                  </InputGroup>
                   <FieldError errors={[errors.amount]} />
                 </Field>
               </div>

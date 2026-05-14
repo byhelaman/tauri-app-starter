@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { format } from "date-fns"
 import { toast } from "sonner"
 import type { SortingState } from "@tanstack/react-table"
@@ -32,9 +32,9 @@ import {
 export function OrdersPage() {
   const { hasPermission } = useAuth()
   const canExportOrders = hasPermission("orders.export")
-  const canCopyOrders = hasPermission("orders.copy")
+  const canCopyOrders = hasPermission("orders.export")
   const canDeleteOrders = hasPermission("orders.delete")
-  const canBulkDeleteOrders = hasPermission("orders.bulk_delete")
+  const canBulkDeleteOrders = hasPermission("orders.delete")
   const canViewTrash = hasPermission("orders.trash.view")
   const canEmptyTrash = hasPermission("orders.trash.empty")
   const [bulkDeleteOp, setBulkDeleteOp] = useState<BulkDeleteRequest | null>(null)
@@ -58,6 +58,34 @@ export function OrdersPage() {
     queryFn: fetchOrdersStartHours,
     staleTime: 5 * 60_000, // 5 min — no cambia frecuentemente
   })
+
+  // Detectar archivos arrastrados a la ventana (HTML5) para abrir el modal automáticamente
+  useEffect(() => {
+    const handleDragEnter = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes("Files")) {
+        e.preventDefault()
+        setIsImportDialogOpen(true)
+      }
+    }
+
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault() // Evita que el navegador bloquee el drop
+    }
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault() // Evita abrir el archivo en el navegador si cae fuera del dropzone
+    }
+
+    window.addEventListener("dragenter", handleDragEnter)
+    window.addEventListener("dragover", handleDragOver)
+    window.addEventListener("drop", handleDrop)
+
+    return () => {
+      window.removeEventListener("dragenter", handleDragEnter)
+      window.removeEventListener("dragover", handleDragOver)
+      window.removeEventListener("drop", handleDrop)
+    }
+  }, [])
 
   const handleDeleteRequest = useCallback((order: Order) => {
     setOrderToDelete(order)

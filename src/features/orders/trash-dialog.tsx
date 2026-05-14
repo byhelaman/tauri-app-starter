@@ -110,7 +110,6 @@ export function TrashDialog({
                   { columnId: "channel", title: "Channel", options: CHANNEL_FILTER_OPTIONS },
                 ],
                 intervalFilter: { columnId: "time", title: "Interval", hours: deletedStartHours },
-                searchDebounceMs: 300,
                 viewActionsMode: "view",
               }}
               rowContextMenu={(order) => (

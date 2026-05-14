@@ -64,7 +64,7 @@ export function OrderDeleteDialog({
 interface OrdersBulkDeleteDialogProps {
   request: BulkDeleteRequest | null
   onOpenChange: (open: boolean) => void
-  onDelete: (selection: DataTableSelectionState) => Promise<void>
+  onDelete: (selection: DataTableSelectionState, expectedCount: number) => Promise<void>
 }
 
 export function OrdersBulkDeleteDialog({
@@ -105,7 +105,7 @@ export function OrdersBulkDeleteDialog({
               const toastId = "bulk-delete-orders"
               toast.loading(`Deleting ${request.count.toLocaleString()} orders...`, { id: toastId })
               try {
-                await onDelete(request.selection)
+                await onDelete(request.selection, request.count)
                 toast.success(`${request.count.toLocaleString()} orders deleted`, { id: toastId })
                 request.clearSelection()
                 onOpenChange(false)

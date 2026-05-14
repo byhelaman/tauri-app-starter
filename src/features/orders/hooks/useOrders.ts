@@ -37,7 +37,7 @@ function orderMatchesActiveQuery(order: Order, {
 
   const hours = pickNormalizedHourFilter(filters) ?? []
   if (hours.length > 0) {
-    const startHour = String(order.start_time ?? "").split(":")[0]
+    const startHour = String(Number.parseInt(String(order.start_time ?? "").split(":")[0] ?? "", 10))
     if (!hours.includes(startHour)) return false
   }
 
@@ -106,10 +106,10 @@ export function useOrders({
     setGlobalFilter(prev => typeof updater === "function" ? updater(prev) : updater)
   }, [])
 
-  // Clave de query — incluye filtros para que al cambiar se refetche desde chunk 0
+  // Clave de query unificada — la caché se comparte si los filtros coinciden
   const ordersQueryKey = useMemo(
-    () => ["orders", "infinite", queryScope, columnFilters, globalFilter, dateFilter, sorting] as const,
-    [columnFilters, dateFilter, globalFilter, queryScope, sorting]
+    () => ["orders", "infinite", columnFilters, globalFilter, dateFilter, sorting] as const,
+    [columnFilters, dateFilter, globalFilter, sorting]
   )
 
   const {
@@ -251,8 +251,9 @@ export function useOrders({
 
   // ── Bulk delete mutation con rollback ─────────────────────────────────
   const deleteBulkOrdersMutation = useMutation({
-    mutationFn: api.bulkDeleteOrdersBySelection,
-    onMutate: async (selection) => {
+    mutationFn: ({ selection, expectedCount }: { selection: DataTableSelectionState; expectedCount?: number }) =>
+      api.bulkDeleteOrdersBySelection(selection, expectedCount),
+    onMutate: async ({ selection }) => {
       const selectedIds = selection.mode === "ids" ? selection.ids : []
       const idSet = new Set(selectedIds)
       await queryClient.cancelQueries({ queryKey: ordersQueryKey })
@@ -261,7 +262,7 @@ export function useOrders({
         if (!old) return old
         const deletedCount = selection.mode === "ids"
           ? selection.ids.length
-          : selection.selectedCount
+          : 0
         return {
           ...old,
           pages: old.pages.map(page => {
@@ -281,7 +282,7 @@ export function useOrders({
       queryClient.invalidateQueries({ queryKey: ["orders"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard", "history"] })
     },
-    onError: (_err, _ids, context) => {
+    onError: (_err, _request, context) => {
       if (context?.previous) queryClient.setQueryData(ordersQueryKey, context.previous)
       toast.error("Failed to delete orders")
     },
@@ -335,8 +336,8 @@ export function useOrders({
     doDeleteOrder(id)
   }, [doDeleteOrder])
 
-  const deleteBulkOrders = useCallback(async (selection: DataTableSelectionState) => {
-    await doBulkDeleteAsync(selection)
+  const deleteBulkOrders = useCallback(async (selection: DataTableSelectionState, expectedCount?: number) => {
+    await doBulkDeleteAsync({ selection, expectedCount })
   }, [doBulkDeleteAsync])
 
   const refreshCurrentOrderSort = useCallback(() => {

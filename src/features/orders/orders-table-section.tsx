@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import type { OnChangeFn, SortingState } from "@tanstack/react-table"
 import { Copy, Trash2 } from "lucide-react"
@@ -13,6 +13,7 @@ import { createColumns, type Order } from "@/features/orders/columns"
 import type { BulkDeleteRequest } from "@/features/orders/orders-delete-dialogs"
 import type { useOrders } from "@/features/orders/hooks/useOrders"
 import { useTableHighlights } from "@/features/orders/table-highlights"
+import { useSearchAutocomplete } from "@/features/orders/hooks/useSearchAutocomplete"
 import {
   CHANNEL_FILTER_OPTIONS,
   ORDER_COPY_FIELDS,
@@ -62,6 +63,21 @@ export function OrdersTableSection({
     [orders.actions.deleteOrder, orders.actions.handleCellChange, orders.actions.handleStatusChange]
   )
 
+  // ── Autocomplete con debounce ──────────────────────────────────────────
+  const [searchInput, setSearchInput] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchInput), 300)
+    return () => clearTimeout(timer)
+  }, [searchInput])
+
+  const { data: suggestions = [] } = useSearchAutocomplete(debouncedSearch)
+  const autocompleteOptions = useMemo(
+    () => suggestions.map((s) => ({ label: s.label, value: s.value })),
+    [suggestions]
+  )
+
   return (
     <DataTable
       columns={columns}
@@ -96,13 +112,14 @@ export function OrdersTableSection({
         ],
         intervalFilter: { columnId: "time", title: "Interval", hours: startHours },
         actions: toolbarActions,
+        searchAutocomplete: autocompleteOptions,
+        onSearchInputChange: setSearchInput,
         viewMenuItems: canViewTrash ? (
           <DropdownMenuItem onSelect={onOpenTrash}>
             <Trash2 />
             Trash
           </DropdownMenuItem>
         ) : undefined,
-        searchDebounceMs: 300,
       }}
       rowContextMenu={(order) => (
         <>
@@ -132,7 +149,7 @@ export function OrdersTableSection({
           )}
         </>
       )}
-      bulkActions={(_selectedLoadedRows, clearSelection, selectedIds, selection) => (
+      bulkActions={(_selectedLoadedRows, clearSelection, selectedIds, selection, selectionMeta) => (
         <>
           {canCopyOrders && (
             <Button
@@ -173,9 +190,10 @@ export function OrdersTableSection({
               variant="destructive"
               size="sm"
               aria-label="Delete"
+              disabled={selectionMeta.isSelectionCountPending}
               onClick={() => {
                 onRequestBulkDelete({
-                  count: selection.mode === "operations" ? selection.selectedCount : selectedIds.length,
+                  count: selectionMeta.selectedCount,
                   selection,
                   clearSelection,
                 })

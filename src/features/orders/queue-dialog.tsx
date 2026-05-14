@@ -103,7 +103,6 @@ export function QueueDialog({
                 { columnId: "channel", title: "Channel", options: CHANNEL_FILTER_OPTIONS },
                 { columnId: "priority", title: "Priority", options: PRIORITY_FILTER_OPTIONS },
               ],
-              searchDebounceMs: 300,
               viewActionsMode: "bulk-copy",
             }}
             bulkActions={(_selectedLoadedRows, _clearSelection, selectedIds, selection) => (

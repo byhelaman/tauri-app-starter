@@ -261,14 +261,14 @@ function operationsRpcParam(operations: DataTableSelectionOperation[] = []) {
   })
 }
 
-export const bulkDeleteOrdersBySelection = async (selection: DataTableSelectionState) => {
+export const bulkDeleteOrdersBySelection = async (selection: DataTableSelectionState, expectedCount?: number) => {
   if (selection.mode === "ids") {
     return bulkDeleteOrders(selection.ids)
   }
   const db = assertSupabase()
   const { data, error } = await db.rpc("bulk_delete_orders_by_selection", {
     p_operations: operationsRpcParam(selection.operations),
-    p_expected_count: selection.selectedCount,
+    p_expected_count: expectedCount ?? null,
   })
   if (error) throw new Error(error.message)
   return (data as number) ?? 0
