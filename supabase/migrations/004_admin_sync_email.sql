@@ -25,6 +25,8 @@ CREATE TRIGGER on_auth_user_email_updated
     AFTER UPDATE OF email ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.sync_profile_email();
 
+REVOKE EXECUTE ON FUNCTION public.sync_profile_email() FROM PUBLIC, anon, authenticated;
+
 -- 2. RPC: write audit entry for an admin email change
 --    Called from the edge function which provides full actor context.
 --    SECURITY DEFINER so it can call log_audit_event (restricted to postgres owner).

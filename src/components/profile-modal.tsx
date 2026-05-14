@@ -103,9 +103,16 @@ export function ProfileModal({ open, onOpenChange }: ProfileModalProps) {
 
   async function handleDeleteAccount() {
     if (!supabase) return
-    const { error } = await supabase.rpc("delete_own_account")
+    const { data, error } = await supabase.functions.invoke("admin-users", {
+      body: { action: "delete_own_account" },
+    })
     if (error) {
       toast.error(error.message)
+      return
+    }
+    const res = (data ?? {}) as { success?: boolean; message?: string }
+    if (!res.success) {
+      toast.error(res.message ?? "Could not delete account")
       return
     }
     await signOut()

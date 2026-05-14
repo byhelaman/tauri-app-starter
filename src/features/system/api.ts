@@ -52,7 +52,13 @@ export async function fetchSystemData(canViewUsers: boolean): Promise<SystemData
   const client = supabase
 
   const usersPromise = canViewUsers
-    ? client.rpc("get_all_users")
+    ? client.functions.invoke("admin-users", { body: { action: "list" } })
+        .then(({ data, error }) => {
+          if (error) return { data: null, error }
+          const res = (data ?? {}) as { success?: boolean; data?: RpcUser[]; message?: string }
+          if (!res.success) return { data: null, error: { message: res.message ?? "Failed to fetch users" } }
+          return { data: res.data ?? [], error: null }
+        })
     : Promise.resolve({ data: [] as RpcUser[], error: null })
 
   const [usersRes, rolesRes, permissionsRes, matrixRes, auditRes] = await Promise.all([
@@ -128,19 +134,30 @@ export async function fetchSystemData(canViewUsers: boolean): Promise<SystemData
 
 export async function updateUserRole(userId: string, role: string) {
   if (!supabase) return { error: "Supabase is not configured" }
-  const { error } = await supabase.rpc("update_user_role", { target_user_id: userId, new_role: role })
+
+  const { data, error } = await supabase.functions.invoke("admin-users", {
+    body: { action: "update_role", targetUserId: userId, newRole: role },
+  })
+
   if (error) return { error: error.message }
+  const res = (data ?? {}) as { success?: boolean; message?: string }
+  if (!res.success) return { error: res.message ?? "Role update failed" }
+
   toast.success("User role updated")
   return { error: null }
 }
 
 export async function updateUserDisplayName(userId: string, displayName: string) {
   if (!supabase) return { error: "Supabase is not configured" }
-  const { error } = await supabase.rpc("update_user_display_name", {
-    target_user_id: userId,
-    new_display_name: displayName,
+
+  const { data, error } = await supabase.functions.invoke("admin-users", {
+    body: { action: "update_display_name", targetUserId: userId, newDisplayName: displayName },
   })
+
   if (error) return { error: error.message }
+  const res = (data ?? {}) as { success?: boolean; message?: string }
+  if (!res.success) return { error: res.message ?? "Display name update failed" }
+
   toast.success("User profile updated")
   return { error: null }
 }
@@ -162,8 +179,15 @@ export async function updateUserEmail(userId: string, newEmail: string) {
 
 export async function removeUser(userId: string) {
   if (!supabase) return { error: "Supabase is not configured" }
-  const { error } = await supabase.rpc("delete_user", { target_user_id: userId })
+
+  const { data, error } = await supabase.functions.invoke("admin-users", {
+    body: { action: "delete", targetUserId: userId },
+  })
+
   if (error) return { error: error.message }
+  const res = (data ?? {}) as { success?: boolean; message?: string }
+  if (!res.success) return { error: res.message ?? "User deletion failed" }
+
   toast.success("User removed")
   return { error: null }
 }

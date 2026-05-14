@@ -3,6 +3,7 @@ import { toast } from "sonner"
 import { MoreHorizontalIcon, SearchIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
     InputGroup,
     InputGroupAddon,
@@ -236,7 +237,20 @@ export function UsersTab({ users, roles, actorLevel, onUpdateRole, onUpdateDispl
                         </ContextMenuContent>
                     </ContextMenu>
                 ))}
-                {filtered.length === 0 && (
+                {loading && users.length === 0 && (
+                    Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+                            <div className="flex-1 min-w-0">
+                                <Skeleton className="h-5 w-32 mb-1" />
+                                <Skeleton className="h-4 w-48" />
+                            </div>
+                            <Skeleton className="h-5 w-16 shrink-0 rounded-full" />
+                            <Skeleton className="h-7 w-28 rounded-md" />
+                            <Skeleton className="h-6 w-6 rounded-md" />
+                        </div>
+                    ))
+                )}
+                {!loading && filtered.length === 0 && (
                     <p className="px-3 py-6 text-center text-sm text-muted-foreground">No users found.</p>
                 )}
             </div>

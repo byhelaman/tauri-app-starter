@@ -71,16 +71,16 @@ ALTER TABLE public.notifications FORCE ROW LEVEL SECURITY;
 -- Cada usuario solo ve sus propias notificaciones
 CREATE POLICY "notifications_select_own"
 ON public.notifications FOR SELECT TO authenticated
-USING (user_id = auth.uid());
+USING (user_id = (SELECT auth.uid()));
 
 CREATE POLICY "notifications_update_own"
 ON public.notifications FOR UPDATE TO authenticated
-USING (user_id = auth.uid())
-WITH CHECK (user_id = auth.uid());
+USING (user_id = (SELECT auth.uid()))
+WITH CHECK (user_id = (SELECT auth.uid()));
 
 CREATE POLICY "notifications_delete_own"
 ON public.notifications FOR DELETE TO authenticated
-USING (user_id = auth.uid());
+USING (user_id = (SELECT auth.uid()));
 
 -- Insert solo via funciones SECURITY DEFINER
 CREATE POLICY "notifications_deny_insert"

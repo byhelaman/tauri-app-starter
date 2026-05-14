@@ -53,6 +53,18 @@ export function json(status: number, body: JsonObject, origin: string | null): R
     })
 }
 
+// Lightweight auth context — validates JWT and resolves actor profile without permission checks.
+// Use when the Edge Function needs to check different permissions per action (router pattern).
+export type AuthContext = {
+    supabaseAdmin: SupabaseClient
+    actorUserId: string
+    actorEmail: string
+    actorRole: string
+    actorLevel: number
+    payload: JsonObject
+    origin: string | null
+}
+
 // Actor-only context — use for operations on new/non-existing users (e.g. invite)
 export type ActorContext = {
     supabaseAdmin: SupabaseClient
@@ -67,6 +79,87 @@ export type ActorContext = {
 export type AdminContext = ActorContext & {
     targetUserId: string
     targetLevel: number
+}
+
+/**
+ * Validates request and authenticates the actor WITHOUT checking any specific permission.
+ * Use for router-style Edge Functions where each action has its own permission requirements.
+ */
+export async function buildAuthContext(req: Request): Promise<AuthContext | Response> {
+    const origin = req.headers.get("Origin")
+
+    if (!isAllowedOrigin(origin)) {
+        return json(403, { success: false, message: "Origin not allowed" }, null)
+    }
+
+    if (req.method === "OPTIONS") {
+        return new Response("ok", { headers: corsHeaders(origin) })
+    }
+
+    if (req.method !== "POST") {
+        return json(405, { success: false, message: "Method not allowed" }, origin)
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+
+    if (!supabaseUrl || !serviceRoleKey) {
+        return json(500, { success: false, message: "Missing Supabase service configuration" }, origin)
+    }
+
+    const authHeader = req.headers.get("Authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
+        return json(401, { success: false, message: "Missing bearer token" }, origin)
+    }
+
+    const accessToken = authHeader.slice("Bearer ".length)
+
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+        },
+    })
+
+    const {
+        data: { user: actorUser },
+        error: actorError,
+    } = await supabaseAdmin.auth.getUser(accessToken)
+
+    if (actorError || !actorUser) {
+        return json(401, { success: false, message: "Invalid session" }, origin)
+    }
+
+    let payload: JsonObject
+    try {
+        payload = (await req.json()) as JsonObject
+    } catch {
+        return json(400, { success: false, message: "Invalid JSON body" }, origin)
+    }
+
+    const { data: actorProfile, error: actorProfileError } = await supabaseAdmin
+        .from("profiles")
+        .select("id, email, role, roles!inner(hierarchy_level)")
+        .eq("id", actorUser.id)
+        .single()
+
+    if (actorProfileError || !actorProfile) {
+        return json(403, { success: false, message: "Could not resolve actor profile" }, origin)
+    }
+
+    const actorRole = String(actorProfile.role)
+    const actorRoleRow = (actorProfile as { roles?: { hierarchy_level?: number } }).roles
+    const actorLevel = Number(actorRoleRow?.hierarchy_level ?? 0)
+
+    return {
+        supabaseAdmin,
+        actorUserId: actorUser.id,
+        actorEmail: actorProfile.email as string ?? actorUser.email ?? "",
+        actorRole,
+        actorLevel,
+        payload,
+        origin,
+    }
 }
 
 /**

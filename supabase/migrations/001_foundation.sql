@@ -149,6 +149,8 @@ CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
+
 -- ============================================================
 -- 6. AUTH HOOK — Inyectar rol + permisos en el JWT
 -- ============================================================
@@ -438,7 +440,7 @@ ALTER TABLE public.profiles FORCE ROW LEVEL SECURITY;
 CREATE POLICY "roles_select" ON public.roles
     FOR SELECT TO authenticated
     USING (
-        name = (SELECT auth.jwt() ->> 'user_role')
+        name = ((SELECT auth.jwt()) ->> 'user_role')
         OR (SELECT public.get_current_user_level()) >= 80
     );
 
@@ -448,7 +450,7 @@ CREATE POLICY "permissions_select" ON public.permissions
         EXISTS (
             SELECT 1 FROM public.role_permissions rp
             WHERE rp.permission = permissions.name
-              AND rp.role = (SELECT auth.jwt() ->> 'user_role')
+              AND rp.role = ((SELECT auth.jwt()) ->> 'user_role')
         )
         OR (SELECT public.get_current_user_level()) >= 80
     );
@@ -456,7 +458,7 @@ CREATE POLICY "permissions_select" ON public.permissions
 CREATE POLICY "role_permissions_select" ON public.role_permissions
     FOR SELECT TO authenticated
     USING (
-        role = (SELECT auth.jwt() ->> 'user_role')
+        role = ((SELECT auth.jwt()) ->> 'user_role')
         OR (SELECT public.get_current_user_level()) >= 80
     );
 
@@ -510,6 +512,8 @@ CREATE TRIGGER check_email_update
     BEFORE UPDATE ON public.profiles
     FOR EACH ROW EXECUTE FUNCTION public.prevent_email_modification();
 
+REVOKE EXECUTE ON FUNCTION public.prevent_email_modification() FROM PUBLIC, anon, authenticated;
+
 -- Bloquea el auto-cambio de rol y hace cumplir las reglas de jerarquía.
 -- Si auth.uid() es NULL (contexto service_role / migración), permite el cambio.
 CREATE OR REPLACE FUNCTION public.prevent_role_self_update()
@@ -561,6 +565,8 @@ $$;
 CREATE TRIGGER check_role_update
     BEFORE UPDATE ON public.profiles
     FOR EACH ROW EXECUTE FUNCTION public.prevent_role_self_update();
+
+REVOKE EXECUTE ON FUNCTION public.prevent_role_self_update() FROM PUBLIC, anon, authenticated;
 
 -- ============================================================
 -- 10. GRANTS (UTILITARIAS)

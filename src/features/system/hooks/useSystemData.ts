@@ -4,7 +4,15 @@ import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/contexts/use-auth"
 import * as api from "@/features/system/api"
-import type { RoleDefinition } from "@/features/system/types"
+import type { RoleDefinition, SystemUser, PermissionDefinition, AuditEntry } from "@/features/system/types"
+
+type SystemDataType = {
+    users: SystemUser[]
+    roles: RoleDefinition[]
+    permissions: PermissionDefinition[]
+    matrix: Record<string, Record<string, boolean>>
+    auditEntries: AuditEntry[]
+}
 
 export function useSystemData(open: boolean) {
     const { hasPermission, claims } = useAuth()
@@ -60,29 +68,80 @@ export function useSystemData(open: boolean) {
     }
 
     const updateUserRole = async (userId: string, role: string) => {
+        const queryKey = ["system-data", canViewUsers]
+        const previousData = queryClient.getQueryData<SystemDataType>(queryKey)
+        if (previousData) {
+            queryClient.setQueryData<SystemDataType>(queryKey, {
+                ...previousData,
+                users: previousData.users.map((u) => u.id === userId ? { ...u, role } : u),
+            })
+        }
         const result = await api.updateUserRole(userId, role)
-        if (result.error) toast.error(result.error)
-        else invalidate()
+        if (result.error) {
+            toast.error(result.error)
+            if (previousData) queryClient.setQueryData(queryKey, previousData)
+        } else {
+            invalidate()
+        }
     }
 
     const updateUserDisplayName = async (userId: string, displayName: string) => {
+        const queryKey = ["system-data", canViewUsers]
+        const previousData = queryClient.getQueryData<SystemDataType>(queryKey)
+        if (previousData) {
+            queryClient.setQueryData<SystemDataType>(queryKey, {
+                ...previousData,
+                users: previousData.users.map((u) => u.id === userId ? { ...u, displayName } : u),
+            })
+        }
         const result = await api.updateUserDisplayName(userId, displayName)
-        if (result.error) toast.error(result.error)
-        else invalidate()
+        if (result.error) {
+            toast.error(result.error)
+            if (previousData) queryClient.setQueryData(queryKey, previousData)
+        } else {
+            invalidate()
+        }
     }
 
     const removeUser = async (userId: string) => {
+        const queryKey = ["system-data", canViewUsers]
+        const previousData = queryClient.getQueryData<SystemDataType>(queryKey)
+        if (previousData) {
+            queryClient.setQueryData<SystemDataType>(queryKey, {
+                ...previousData,
+                users: previousData.users.filter((u) => u.id !== userId),
+            })
+        }
         const result = await api.removeUser(userId)
-        if (result.error) toast.error(result.error)
-        else invalidate()
+        if (result.error) {
+            toast.error(result.error)
+            if (previousData) queryClient.setQueryData(queryKey, previousData)
+        } else {
+            invalidate()
+        }
     }
 
     const togglePermission = async (role: string, permission: string, enabled: boolean) => {
+        const queryKey = ["system-data", canViewUsers]
+        const previousData = queryClient.getQueryData<SystemDataType>(queryKey)
+        if (previousData) {
+            queryClient.setQueryData<SystemDataType>(queryKey, {
+                ...previousData,
+                matrix: {
+                    ...previousData.matrix,
+                    [role]: {
+                        ...(previousData.matrix[role] || {}),
+                        [permission]: enabled,
+                    }
+                }
+            })
+        }
         try {
             await api.togglePermission(role, permission, enabled)
             invalidate()
         } catch (err) {
             toast.error(err instanceof Error ? err.message : "Failed to toggle permission")
+            if (previousData) queryClient.setQueryData(queryKey, previousData)
         }
     }
 
