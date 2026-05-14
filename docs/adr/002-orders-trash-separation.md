@@ -1,26 +1,32 @@
-# ADR 002: Orders Trash Separation
+# ADR 002: Separación de Papelera de Órdenes
 
-## Status
+**Estado:** Aceptado  
+**Fecha:** 2026-05-14
 
-Accepted.
+## Contexto
 
-## Context
+La app necesita operaciones de eliminación con auditabilidad, pero las consultas de órdenes activas deben mantenerse enfocadas en registros activos. Mantener filas eliminadas en `orders` mediante un campo `deleted_at` complica las consultas activas y puede generar conflictos en la reutilización de códigos de orden.
 
-The app needs delete operations with auditability, but active order queries should stay focused on active records.
-Keeping deleted rows in `orders` via `deleted_at` complicates active queries and can create code reuse conflicts.
+## Decisión
 
-## Decision
+Las filas eliminadas se mueven de `orders` a `orders_deleted`.
 
-Deleted rows are moved from `orders` into `orders_deleted`.
+- `orders` contiene únicamente registros activos.
+- `orders_deleted` alimenta la UI de Papelera.
 
-`orders` contains only active records.
-`orders_deleted` powers the Trash UI.
+La eliminación permanente desde la Papelera requiere el permiso `orders.trash.empty` (nivel mínimo: owner).
 
-Permanent removal from Trash requires the `orders.trash.empty` permission.
+Las operaciones de eliminación (individual y masiva) requieren el permiso `orders.delete` (nivel mínimo: admin). Los permisos `orders.bulk_delete` y `orders.copy` fueron consolidados en `orders.delete` y `orders.export` respectivamente.
 
-## Consequences
+## Consecuencias
 
-Active orders remain simple to query.
-New active rows can reuse codes from deleted records because deleted rows no longer occupy the active table.
+Las órdenes activas son simples de consultar.
 
-Restore is not implemented yet. When restore is added, it must define a conflict policy for codes that already exist in `orders`.
+Las nuevas filas activas pueden reutilizar códigos de registros eliminados porque las filas eliminadas ya no ocupan la tabla activa.
+
+La **restauración no está implementada**. Cuando se añada, deberá definir una política de conflictos para códigos que ya existen en `orders`.
+
+## Archivos relacionados
+
+- `supabase/migrations/007_orders_schema.sql` — definición de tablas y permisos
+- `supabase/migrations/008_orders_rpcs.sql` — RPCs de eliminación y papelera
