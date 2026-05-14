@@ -19,6 +19,10 @@ export interface AutocompleteProps {
   onFocus?: React.FocusEventHandler<HTMLInputElement>
   onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>
   wrapperClassName?: string
+  /** Callback invocado en cada cambio del texto del input (útil para server-side search). */
+  onInputValueChange?: (value: string) => void
+  /** Si es false, no filtra las opciones localmente (el servidor ya las filtra). Default: true. */
+  filterClientSide?: boolean
 }
 
 export function Autocomplete({
@@ -35,26 +39,42 @@ export function Autocomplete({
   onFocus,
   onKeyDown,
   wrapperClassName,
+  onInputValueChange,
+  filterClientSide = true,
 }: AutocompleteProps) {
   const [open, setOpen] = React.useState(false)
   const [inputValue, setInputValue] = React.useState(value)
   const [activeItem, setActiveItem] = React.useState("")
+  const [hasNavigated, setHasNavigated] = React.useState(false)
+  const hasNavigatedRef = React.useRef(false)
+
+  const markNavigated = React.useCallback(() => {
+    hasNavigatedRef.current = true
+    setHasNavigated(true)
+  }, [])
+
+  const clearNavigated = React.useCallback(() => {
+    hasNavigatedRef.current = false
+    setHasNavigated(false)
+  }, [])
 
   React.useEffect(() => {
     setInputValue(value)
   }, [value])
 
   const filteredOptions = React.useMemo(() => {
+    if (!filterClientSide) return options
     if (!inputValue) return options
     const lowerValue = inputValue.toLowerCase()
     return options.filter(
       (opt) => opt.label.toLowerCase().includes(lowerValue) || opt.value.toLowerCase().includes(lowerValue)
     )
-  }, [inputValue, options])
+  }, [inputValue, options, filterClientSide])
 
-  // Cuando no es restrictivo, mostrar el valor tecleado como opción seleccionable
-  // si no coincide exactamente con una opción existente
-  const isCustom = !restrictive && inputValue.trim() !== "" && !options.some(
+  // Cuando no es restrictivo y es client-side, mostrar el valor tecleado como opción seleccionable
+  // si no coincide exactamente con una opción existente.
+  // En modo server-side no se muestra: las sugerencias vienen del servidor.
+  const isCustom = filterClientSide && !restrictive && inputValue.trim() !== "" && !options.some(
     (opt) => opt.value.toLowerCase() === inputValue.trim().toLowerCase()
   )
 
@@ -74,26 +94,68 @@ export function Autocomplete({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") {
+      e.preventDefault()
+      setOpen(false)
+      clearNavigated()
+      return
+    }
+
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
       if (!open) {
         e.preventDefault()
         setOpen(true)
       }
+      markNavigated()
       // Dejar que cmdk maneje la navegación del dropdown
       return
     }
 
-    if (e.key === "Enter" && open) {
-      // Dejar que cmdk maneje Enter → onSelect del CommandItem activo
+    if (e.key === "Tab" && open && !filterClientSide && hasNavigated && activeItem) {
+      // Tab solo rellena el input sin lanzar la búsqueda final (onChange)
+      e.preventDefault()
+      setInputValue(activeItem)
+      onInputValueChange?.(activeItem)
+      setOpen(false)
+      clearNavigated()
       return
+    }
+
+    if (e.key === "Enter" && open && !filterClientSide && hasNavigated && activeItem) {
+      // Enter rellena y lanza la búsqueda final
+      e.preventDefault()
+      handleSelect(activeItem)
+      clearNavigated()
+      return
+    }
+
+    if (e.key === "Enter" && open && filterClientSide) {
+      // Modo client-side: dejar que cmdk maneje Enter → onSelect del CommandItem activo.
+      return
+    }
+
+    if (e.key === "Enter" && open && !filterClientSide) {
+      // No navegó con flechas → cerrar popover y dejar que el handler externo maneje Enter.
+      setOpen(false)
+      clearNavigated()
     }
 
     onKeyDown?.(e)
   }
 
+  // En modo server-side, no mostrar el popover si no hay opciones
+  const hasVisibleOptions = filteredOptions.length > 0 || isCustom
+  const effectiveOpen = !filterClientSide ? (open && hasVisibleOptions) : open
+
   return (
-    <CommandPrimitive shouldFilter={false} value={activeItem} onValueChange={setActiveItem}>
-      <Popover open={open} onOpenChange={setOpen}>
+    <CommandPrimitive
+      shouldFilter={false}
+      value={hasNavigated ? activeItem : "__none__"}
+      onValueChange={(val) => {
+        if (hasNavigated) setActiveItem(val)
+      }}
+    >
+      <Popover open={effectiveOpen} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <div className={cn("relative w-full", wrapperClassName)}>
             <CommandPrimitive.Input
@@ -103,8 +165,11 @@ export function Autocomplete({
             >
               <Input
                 value={inputValue}
+                onClick={(e) => e.stopPropagation()}
                 onChange={(e) => {
                   setInputValue(e.target.value)
+                  onInputValueChange?.(e.target.value)
+                  clearNavigated()
                   if (!open) setOpen(true)
                 }}
                 onBlur={handleBlur}
@@ -127,7 +192,11 @@ export function Autocomplete({
           onOpenAutoFocus={(e) => e.preventDefault()}
           onMouseDown={(e) => e.preventDefault()}
         >
-        <CommandList>
+        <CommandList
+          className={!hasNavigated ? "[&_[cmdk-item][data-selected=true]]:bg-transparent [&_[cmdk-item][data-selected=true]]:text-inherit" : ""}
+          onPointerMove={markNavigated}
+          onPointerLeave={clearNavigated}
+        >
             {filteredOptions.length === 0 && !isCustom ? (
               <CommandEmpty className="py-2">{emptyMessage}</CommandEmpty>
             ) : (
