@@ -20,13 +20,16 @@ INSERT INTO public.permissions (name, description, min_role_level) VALUES
     ('orders.view',        'Ver listado y detalle de órdenes',          10),
     ('orders.create',      'Crear órdenes',                             10),
     ('orders.update',      'Editar órdenes',                            10),
-    ('orders.delete',      'Eliminar una orden',                        80),
-    ('orders.bulk_delete', 'Eliminar órdenes masivamente',              80),
-    ('orders.export',      'Exportar datos de órdenes',                 80),
-    ('orders.copy',        'Copiar datos de órdenes',                   80),
+    ('orders.delete',      'Eliminar órdenes',                          80),
+    ('orders.export',      'Exportar y copiar datos de órdenes',        80),
     ('orders.trash.view',  'Ver papelera de órdenes',                   80),
     ('orders.trash.empty', 'Vaciar papelera de órdenes',                100)
-ON CONFLICT (name) DO NOTHING;
+ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, min_role_level = EXCLUDED.min_role_level;
+
+-- Eliminar permisos granulares obsoletos (consolidados en orders.delete y orders.export).
+-- Seguro de ejecutar múltiples veces; las FK en role_permissions se limpian en cascada.
+DELETE FROM public.role_permissions WHERE permission IN ('orders.bulk_delete', 'orders.copy');
+DELETE FROM public.permissions       WHERE name         IN ('orders.bulk_delete', 'orders.copy');
 
 -- member puede ver/crear/editar; admin puede ejecutar acciones destructivas/export.
 INSERT INTO public.role_permissions (role, permission) VALUES
@@ -37,9 +40,7 @@ INSERT INTO public.role_permissions (role, permission) VALUES
     ('admin',  'orders.create'),
     ('admin',  'orders.update'),
     ('admin',  'orders.delete'),
-    ('admin',  'orders.bulk_delete'),
     ('admin',  'orders.export'),
-    ('admin',  'orders.copy'),
     ('admin',  'orders.trash.view')
 ON CONFLICT DO NOTHING;
 
@@ -270,6 +271,8 @@ $$;
 CREATE TRIGGER on_order_audit
     AFTER INSERT OR UPDATE OR DELETE ON public.orders
     FOR EACH ROW EXECUTE FUNCTION public.orders_audit_trigger();
+
+REVOKE EXECUTE ON FUNCTION public.orders_audit_trigger() FROM PUBLIC, anon, authenticated;
 
 -- Realtime agregado por sentencia: una carga SQL de 500k filas produce un solo
 -- evento en order_change_events, no 500k eventos en el WebSocket.

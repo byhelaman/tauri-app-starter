@@ -565,8 +565,8 @@ AS $$
 DECLARE
     v_count INT;
 BEGIN
-    IF NOT (SELECT public.has_current_permission('orders.bulk_delete')) THEN
-        RAISE EXCEPTION 'Permission denied: requires orders.bulk_delete';
+    IF NOT (SELECT public.has_current_permission('orders.delete')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.delete';
     END IF;
 
     DROP TABLE IF EXISTS pg_temp.selected_order_ids;
@@ -781,9 +781,7 @@ BEGIN
         RAISE EXCEPTION 'Invalid export purpose: %', p_purpose;
     END IF;
 
-    IF v_purpose = 'copy' AND NOT (SELECT public.has_current_permission('orders.copy')) THEN
-        RAISE EXCEPTION 'Permission denied: requires orders.copy';
-    ELSIF v_purpose = 'export' AND NOT (SELECT public.has_current_permission('orders.export')) THEN
+    IF NOT (SELECT public.has_current_permission('orders.export')) THEN
         RAISE EXCEPTION 'Permission denied: requires orders.export';
     END IF;
 
@@ -921,13 +919,8 @@ DECLARE
     v_single_id UUID;
     v_single_code TEXT;
 BEGIN
-    IF v_requested_count = 1 THEN
-        IF NOT (SELECT public.has_current_permission('orders.delete'))
-           AND NOT (SELECT public.has_current_permission('orders.bulk_delete')) THEN
-            RAISE EXCEPTION 'Permission denied: requires orders.delete';
-        END IF;
-    ELSIF NOT (SELECT public.has_current_permission('orders.bulk_delete')) THEN
-        RAISE EXCEPTION 'Permission denied: requires orders.bulk_delete';
+    IF NOT (SELECT public.has_current_permission('orders.delete')) THEN
+        RAISE EXCEPTION 'Permission denied: requires orders.delete';
     END IF;
 
     IF v_requested_count > 10000 THEN
