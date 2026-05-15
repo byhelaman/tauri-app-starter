@@ -90,13 +90,29 @@ export function activateGridCell(cell: HTMLTableCellElement, key: "Enter" | "F2"
   const interactive = findGridInteractiveControl(cell)
   if (!interactive) return null
 
-  interactive.focus()
   if (key === "Enter" && interactive instanceof HTMLButtonElement) {
-    interactive.click()
+    activateGridButton(interactive)
+  } else {
+    interactive.focus()
   }
   return interactive
 }
 
 export function findGridInteractiveControl(cell: HTMLTableCellElement) {
   return cell.querySelector<HTMLElement>(GRID_INTERACTIVE_SELECTOR)
+}
+
+function activateGridButton(button: HTMLButtonElement) {
+  if (button.dataset.slot === "dropdown-menu-trigger") {
+    button.dispatchEvent(new PointerEvent("pointerdown", {
+      bubbles: true,
+      button: 0,
+      ctrlKey: false,
+      pointerType: "mouse",
+    }))
+    return
+  }
+
+  button.focus()
+  button.click()
 }

@@ -13,6 +13,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 vi.mock("@tanstack/react-virtual", () => ({
   useVirtualizer: ({ count }: { count: number }) => ({
@@ -616,6 +622,43 @@ describe("DataTable integration", () => {
 
     fireEvent.keyDown(statusCell, { key: "Enter" })
     await waitFor(() => expect(trigger).toHaveAttribute("aria-expanded", "true"))
+  })
+
+  it("opens a dropdown menu from the idle grid cell with Enter", async () => {
+    const dropdownColumns: ColumnDef<TestOrder>[] = [
+      {
+        id: "actions",
+        header: "Actions",
+        cell: () => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button">Open menu</button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem>View details</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ),
+      },
+    ]
+
+    render(
+      <DataTable
+        tableId="grid-dropdown-enter-test"
+        columns={dropdownColumns}
+        data={rows.slice(0, 1)}
+        getRowId={(row) => row.id}
+        toolbar={{ showViewOptions: false }}
+      />
+    )
+
+    const trigger = screen.getByText("Open menu")
+    const cell = trigger.closest("[data-grid-cell='true']") as HTMLTableCellElement
+    cell.focus()
+
+    fireEvent.keyDown(cell, { key: "Enter" })
+
+    await screen.findByText("View details")
   })
 
   it("delegates a background click in an interactive cell to its control", () => {
