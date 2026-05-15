@@ -26,7 +26,6 @@ import {
 import {
   FORMAT_META,
   formatRows,
-  getExportFieldIds,
   getScopeRows,
   type CopyFormat,
   type ExportFormat,
@@ -34,6 +33,7 @@ import {
 } from "./table-formats"
 import { BulkCopyDialog } from "./bulk-copy-dialog"
 import type { DataTableMeta, InfiniteScrollConfig } from "./data-table-types"
+import { buildServerDataActionRequest, resolveDataActionState } from "./data-actions"
 
 interface DataTableViewOptionsProps<TData> {
   table: Table<TData>
@@ -114,82 +114,30 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
   const canUseBulkCopy = allowDataCopy && (mode === "full" || mode === "bulk-copy")
   const showScopeControls = canUseDataActions || canUseCopyActions || canUseBulkCopy
   const tableMeta = table.options.meta as DataTableMeta | undefined
-  const usesServerScope = tableMeta?.isInfiniteScroll === true
-  const selectedCount = usesServerScope && tableMeta?.selectionState?.mode === "operations"
-    ? tableMeta.selectedCount ?? 0
-    : tableMeta?.visibleSelectedCount ?? table.getSelectedRowModel().rows.length
-  const hasSelection = tableMeta?.selectionState?.mode === "operations"
-    ? tableMeta.selectionState.operations.length > 0
-    : tableMeta?.selectionState?.mode === "ids"
-      ? tableMeta.selectionState.ids.length > 0
-      : selectedCount > 0
-  const selectedIds = tableMeta?.visibleSelectedIds
-    ?? Object.keys(table.getState().rowSelection).filter((id) => table.getState().rowSelection[id])
-  const filteredCount = table.getFilteredRowModel().rows.length
-  const totalCount = table.getCoreRowModel().rows.length
-
-  // Solo las tablas con selección server-side usan totales reales del backend.
-  // El modal puede recibir infiniteScroll para render/carga, pero su scope es local.
-  const serverTotal = usesServerScope ? infiniteScroll?.totalRowCount : undefined
-  const serverUnfilteredTotal = usesServerScope ? infiniteScroll?.unfilteredTotalRowCount : undefined
-  const effectiveFilteredCount = serverTotal ?? filteredCount
-  const effectiveTotalCount = serverUnfilteredTotal ?? totalCount
-
-  const effectiveScope: Scope = scope === "selected" && !hasSelection ? "filtered" : scope
-
-  const scopeCounts: Record<Scope, number> = {
-    selected: selectedCount,
-    filtered: effectiveFilteredCount,
-    all: effectiveTotalCount,
-  }
-  const selectedScopeCount = scopeCounts[effectiveScope]
-
-  function selectedFilterExportRequest(format: ExportFormat, purpose: "copy" | "export") {
-    const selection = tableMeta?.selectionState
-    if (!usesServerScope) return null
-    if (effectiveScope !== "selected" || !selection) return null
-    if (selection.mode === "operations") {
-      return {
-        scope: infiniteScroll?.currentScope ?? { search: "", filters: [] },
-        operations: selection.operations,
-        purpose,
-        format,
-        fields: getExportFieldIds(table),
-      }
-    }
-    return {
-      scope: infiniteScroll?.currentScope ?? { search: "", filters: [] },
-      operations: [{ type: "selectIds" as const, ids: selectedIds }],
-      purpose,
-      format,
-      fields: getExportFieldIds(table),
-    }
-  }
-
-  function scopeExportRequest(format: ExportFormat, purpose: "copy" | "export") {
-    if (!usesServerScope) return null
-    const scope = effectiveScope === "filtered"
-      ? infiniteScroll?.currentScope
-      : effectiveScope === "all" && infiniteScroll?.currentScope
-        ? {
-          ...infiniteScroll.currentScope,
-          search: "",
-          filters: [],
-          date: undefined,
-        }
-        : undefined
-    if (!scope) return null
-    return {
-      scope,
-      purpose,
-      format,
-      fields: getExportFieldIds(table),
-    }
-  }
+  const {
+    hasSelection,
+    selectedIds,
+    effectiveScope,
+    scopeCounts,
+    selectedScopeCount,
+  } = resolveDataActionState({
+    table,
+    tableMeta,
+    infiniteScroll,
+    scope,
+  })
 
   async function exportAs(format: ExportFormat) {
     const meta = FORMAT_META[format]
-    const serverExportRequest = selectedFilterExportRequest(format, "export") ?? scopeExportRequest(format, "export")
+    const serverExportRequest = buildServerDataActionRequest({
+      table,
+      tableMeta,
+      infiniteScroll,
+      effectiveScope,
+      selectedIds,
+      purpose: "export",
+      format,
+    })
     if (serverExportRequest && infiniteScroll?.exportByScope) {
       const toastId = "export-scope"
       toast.loading(`Generating ${scopeCounts[effectiveScope].toLocaleString()} rows...`, { id: toastId })
@@ -210,7 +158,15 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
   }
 
   async function copyAs(format: CopyFormat) {
-    const serverExportRequest = selectedFilterExportRequest(format, "copy") ?? scopeExportRequest(format, "copy")
+    const serverExportRequest = buildServerDataActionRequest({
+      table,
+      tableMeta,
+      infiniteScroll,
+      effectiveScope,
+      selectedIds,
+      purpose: "copy",
+      format,
+    })
     if (serverExportRequest && infiniteScroll?.exportByScope) {
       const toastId = "copy-scope"
       toast.loading(`Generating ${scopeCounts[effectiveScope].toLocaleString()} rows...`, { id: toastId })
