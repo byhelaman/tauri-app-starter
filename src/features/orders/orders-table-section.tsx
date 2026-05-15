@@ -2,7 +2,6 @@ import { useMemo } from "react"
 import { toast } from "sonner"
 import type { OnChangeFn, SortingState } from "@tanstack/react-table"
 import { Copy, Trash2 } from "lucide-react"
-import { DataTable } from "@/components/data-table/data-table"
 import { resolveBulkCopySettings } from "@/components/data-table/bulk-copy"
 import { TableHistoryCard } from "@/components/data-table/table-history-card"
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu"
@@ -19,6 +18,7 @@ import {
   ORDER_COPY_FIELDS,
   STATUS_FILTER_OPTIONS,
 } from "@/features/orders/orders-table-config"
+import { OrdersDataTable } from "@/features/orders/orders-data-tables"
 
 type OrdersModel = ReturnType<typeof useOrders>
 
@@ -64,7 +64,7 @@ export function OrdersTableSection({
   )
 
   return (
-    <DataTable
+    <OrdersDataTable
       columns={columns}
       data={orders.pageData}
       isLoading={orders.isPageLoading}
@@ -79,7 +79,6 @@ export function OrdersTableSection({
       onSortingChange={onSortingChange}
       onSortingRefresh={orders.refreshCurrentOrderSort}
       onResetView={onResetDateFilter}
-      tableId="orders"
       sidePanel={(onClose) => (
         <TableHistoryCard
           tableId="orders"
@@ -190,8 +189,6 @@ export function OrdersTableSection({
         </>
       )}
       rowClassName={rowClassName}
-      getRowId={(row) => row.id}
-      defaultPageSize={25}
     />
   )
 }

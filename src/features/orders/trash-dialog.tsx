@@ -11,7 +11,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { DataTable } from "@/components/data-table/data-table"
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu"
 import {
   Dialog,
@@ -30,6 +29,7 @@ import {
   CHANNEL_FILTER_OPTIONS,
   STATUS_FILTER_OPTIONS,
 } from "@/features/orders/orders-table-config"
+import { TrashDataTable } from "@/features/orders/orders-data-tables"
 
 interface TrashDialogProps {
   open: boolean
@@ -87,13 +87,11 @@ export function TrashDialog({
             <DialogDescription>Deleted orders kept outside the active orders table.</DialogDescription>
           </DialogHeader>
           <DialogBody className="py-1 overflow-y-hidden">
-            <DataTable
+            <TrashDataTable
               columns={trashColumns}
               data={trashPageData}
               isLoading={isTrashPageLoading}
               infiniteScroll={trashInfiniteScroll}
-              allowDataExport={false}
-              allowDataCopy={false}
               columnFilters={trashColumnFilters}
               onColumnFiltersChange={setTrashColumnFilters}
               globalFilter={trashGlobalFilter}
@@ -101,7 +99,6 @@ export function TrashDialog({
               sorting={trashSorting}
               onSortingChange={setTrashSorting}
               onSortingRefresh={refreshCurrentTrashSort}
-              tableId="orders-trash"
               toolbar={{
                 searchable: true,
                 filterPlaceholder: "Search trash...",
@@ -151,10 +148,6 @@ export function TrashDialog({
                   </ContextMenuItem>
                 </>
               )}
-              getRowId={(row) => row.id}
-              layout={{
-                scrollAreaClassName: "max-h-[min(calc(100svh-22rem),30rem)] [--table-bg:var(--color-popover)]",
-              }}
             />
           </DialogBody>
           <DialogFooter showCloseButton>

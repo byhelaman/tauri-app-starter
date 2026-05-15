@@ -2,7 +2,6 @@ import { useMemo, useState } from "react"
 import type { SortingState } from "@tanstack/react-table"
 import { Copy } from "lucide-react"
 import { toast } from "sonner"
-import { DataTable } from "@/components/data-table/data-table"
 import { buildBulkCopyText, resolveBulkCopySettings } from "@/components/data-table/bulk-copy"
 import { ContextMenuItem } from "@/components/ui/context-menu"
 import {
@@ -23,6 +22,7 @@ import {
   QUEUE_COPY_FIELDS,
   STATUS_FILTER_OPTIONS,
 } from "@/features/orders/orders-table-config"
+import { QueueDataTable } from "@/features/orders/orders-data-tables"
 
 interface QueueDialogProps {
   open: boolean
@@ -80,12 +80,11 @@ export function QueueDialog({
           <DialogDescription>Queue view linked to your current orders.</DialogDescription>
         </DialogHeader>
         <DialogBody className="py-1 overflow-y-hidden">
-          <DataTable
+          <QueueDataTable
             columns={queueColumns}
             data={queueRows}
             isLoading={isQueuePageLoading}
             infiniteScroll={queueInfiniteScroll}
-            allowDataExport={false}
             allowDataCopy={canCopyOrders}
             columnFilters={queueColumnFilters}
             onColumnFiltersChange={setQueueColumnFilters}
@@ -94,7 +93,6 @@ export function QueueDialog({
             sorting={queueSorting}
             onSortingChange={setQueueSorting}
             onSortingRefresh={refreshCurrentQueueSort}
-            tableId="orders-queue"
             toolbar={{
               searchable: true,
               filterPlaceholder: "Search queue...",
@@ -160,10 +158,6 @@ export function QueueDialog({
                 </ContextMenuItem>
               </>
             )}
-            getRowId={(row) => row.id}
-            layout={{
-              scrollAreaClassName: "max-h-[min(calc(100svh-22rem),30rem)] [--table-bg:var(--color-popover)]",
-            }}
           />
         </DialogBody>
         <DialogFooter showCloseButton />
