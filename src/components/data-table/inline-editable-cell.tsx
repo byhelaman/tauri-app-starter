@@ -1,4 +1,4 @@
-import { startTransition, useRef, useState } from "react"
+import { startTransition, useReducer, useRef } from "react"
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { Autocomplete } from "@/components/ui/autocomplete"
@@ -21,6 +21,76 @@ export interface InlineEditableCellOptions {
   onCommit?: (value: string, isValid: boolean) => void
   autocompleteOptions?: { label: string; value: string }[]
   restrictive?: boolean
+}
+
+type EditMode = "idle" | "editing" | "invalid"
+
+type EditState = {
+  mode: EditMode
+  draftValue: string
+  hasError: boolean
+  initialEditValue: string | null
+}
+
+type EditAction =
+  | { type: "start"; value: string; initialEditValue: string | null }
+  | { type: "change"; value: string }
+  | { type: "valid" }
+  | { type: "invalid" }
+  | { type: "retry" }
+  | { type: "cancel"; value: string }
+
+const initialEditState: EditState = {
+  mode: "idle",
+  draftValue: "",
+  hasError: false,
+  initialEditValue: null,
+}
+
+function editReducer(state: EditState, action: EditAction): EditState {
+  switch (action.type) {
+    case "start":
+      return {
+        mode: "editing",
+        draftValue: action.value,
+        hasError: false,
+        initialEditValue: action.initialEditValue,
+      }
+    case "change":
+      return {
+        ...state,
+        draftValue: action.value,
+        hasError: false,
+      }
+    case "valid":
+      return {
+        ...state,
+        mode: "idle",
+        hasError: false,
+        initialEditValue: null,
+      }
+    case "invalid":
+      return {
+        ...state,
+        mode: "invalid",
+        hasError: true,
+      }
+    case "retry":
+      return {
+        ...state,
+        mode: "editing",
+        hasError: true,
+      }
+    case "cancel":
+      return {
+        mode: "idle",
+        draftValue: action.value,
+        hasError: false,
+        initialEditValue: null,
+      }
+    default:
+      return state
+  }
 }
 
 function moveFocus(element: HTMLElement, direction: "up" | "down" | "left" | "right") {
@@ -56,18 +126,24 @@ export function InlineEditableCell({
 }: {
   value: string | number
 } & InlineEditableCellOptions) {
-  const [isEditing, setIsEditing] = useState(false)
-  const [hasError, setHasError] = useState(false)
-  const [wasBlurred, setWasBlurred] = useState(false)
-  const [showErrorDialog, setShowErrorDialog] = useState(false)
-
   const propValue = String(value ?? "")
   const nextValue = propValue
 
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const editContainerRef = useRef<HTMLDivElement>(null)
-  const [initialEditValue, setInitialEditValue] = useState<string | null>(null)
+  const skipNextBlurRef = useRef(false)
+  const [editState, dispatchEdit] = useReducer(editReducer, initialEditState)
+  const isEditing = editState.mode !== "idle"
+
+  function beginEditing(initialValue: string | null = null) {
+    skipNextBlurRef.current = false
+    dispatchEdit({
+      type: "start",
+      value: initialValue ?? nextValue,
+      initialEditValue: initialValue,
+    })
+  }
 
   function scheduleFocus(action: "current" | "up" | "down" | "left" | "right") {
     requestAnimationFrame(() => {
@@ -82,7 +158,7 @@ export function InlineEditableCell({
 
   function handleCommit(currentValue: string, focusAction?: "current" | "up" | "down" | "left" | "right") {
     if (!enableEditing) {
-      setIsEditing(false)
+      dispatchEdit({ type: "cancel", value: nextValue })
       if (focusAction) scheduleFocus(focusAction)
       return
     }
@@ -90,30 +166,33 @@ export function InlineEditableCell({
     const isValid = validate ? validate(currentValue) : true
 
     if (!isValid) {
-      setShowErrorDialog(true)
+      skipNextBlurRef.current = true
+      dispatchEdit({ type: "invalid" })
       return
     }
 
-    setWasBlurred(true)
-    setHasError(false)
+    dispatchEdit({ type: "valid" })
 
     if (currentValue !== propValue) {
       startTransition(() => {
         onCommit?.(currentValue, true)
       })
     }
-    setIsEditing(false)
     if (focusAction) scheduleFocus(focusAction)
   }
 
   const handleRetry = () => {
-    setShowErrorDialog(false)
+    skipNextBlurRef.current = false
+    dispatchEdit({ type: "retry" })
+    requestAnimationFrame(() => {
+      const input = editContainerRef.current?.querySelector("input")
+      input?.focus()
+    })
   }
 
   const handleCancelEdit = () => {
-    setShowErrorDialog(false)
-    setIsEditing(false)
-    setInitialEditValue(null)
+    skipNextBlurRef.current = false
+    dispatchEdit({ type: "cancel", value: nextValue })
     scheduleFocus("current")
   }
 
@@ -140,22 +219,19 @@ export function InlineEditableCell({
 
     if (enableEditing && (e.key === "Delete" || e.key === "Backspace")) {
       e.preventDefault()
-      setInitialEditValue("")
-      setIsEditing(true)
+      beginEditing("")
       return
     }
 
     if (e.key === "Enter" || e.key === "F2") {
       if (enableEditing) {
-        setInitialEditValue(null)
-        setIsEditing(true)
+        beginEditing()
       }
     }
 
     if (enableEditing && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault()
-      setInitialEditValue(e.key)
-      setIsEditing(true)
+      beginEditing(e.key)
     }
   }
 
@@ -173,7 +249,7 @@ export function InlineEditableCell({
 
     if (e.key === "Enter") {
       direction = "down"
-    } else if (initialEditValue !== null) {
+    } else if (editState.initialEditValue !== null) {
       if (e.key === "ArrowUp") direction = "up"
       else if (e.key === "ArrowDown") direction = "down"
       else if (e.key === "ArrowLeft") direction = "left"
@@ -182,10 +258,10 @@ export function InlineEditableCell({
 
     if (direction) {
       e.preventDefault()
-      handleCommit(e.currentTarget.value, direction)
+      handleCommit(editState.draftValue, direction)
     } else if (e.key === "Escape") {
       e.preventDefault()
-      setIsEditing(false)
+      dispatchEdit({ type: "cancel", value: nextValue })
       scheduleFocus("current")
     }
   }
@@ -196,12 +272,11 @@ export function InlineEditableCell({
         ref={containerRef}
         tabIndex={0}
         onDoubleClick={() => {
-          setInitialEditValue(null)
-          setIsEditing(true)
+          beginEditing()
         }}
         onKeyDown={handleGridKeyDown}
         onPaste={handlePaste}
-        aria-invalid={(wasBlurred && hasError) || undefined}
+        aria-invalid={editState.hasError || undefined}
         className={cn(
           "flex h-8 w-full min-w-0 items-center rounded-lg border border-transparent bg-transparent px-2.5 py-1 text-base transition-colors outline-none md:text-sm",
           "hover:bg-input/30",
@@ -227,20 +302,19 @@ export function InlineEditableCell({
       {autocompleteOptions ? (
         <Autocomplete
           options={autocompleteOptions}
-          value={initialEditValue !== null ? initialEditValue : nextValue}
+          value={editState.draftValue}
           restrictive={restrictive}
           onChange={(val) => {
+            dispatchEdit({ type: "change", value: val })
             handleCommit(val, "current")
           }}
+          onInputValueChange={(value) => dispatchEdit({ type: "change", value })}
           onBlur={(committedValue) => {
+            if (skipNextBlurRef.current) return
             if (committedValue !== undefined) {
-              if (initialEditValue === "" && committedValue === "") {
-                setIsEditing(false)
-              } else {
-                handleCommit(committedValue)
-              }
+              handleCommit(committedValue)
             } else {
-              setIsEditing(false)
+              dispatchEdit({ type: "cancel", value: nextValue })
             }
           }}
           onKeyDown={handleInputKeyDown}
@@ -252,22 +326,26 @@ export function InlineEditableCell({
         <Input
           ref={inputRef}
           readOnly={!enableEditing}
-          defaultValue={initialEditValue !== null ? initialEditValue : nextValue}
+          value={editState.draftValue}
+          onChange={(e) => dispatchEdit({ type: "change", value: e.target.value })}
           autoFocus
           onBlur={(e) => {
             if (enableEditing) {
               handleCommit(e.currentTarget.value)
             } else {
-              setIsEditing(false)
+              dispatchEdit({ type: "cancel", value: nextValue })
             }
           }}
           onKeyDown={handleInputKeyDown}
-          aria-invalid={(wasBlurred && hasError) || undefined}
+          aria-invalid={editState.hasError || undefined}
           className={cn("absolute inset-0 h-8 w-full bg-background shadow-sm", className)}
         />
       )}
 
-      <AlertDialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+      <AlertDialog
+        open={editState.mode === "invalid"}
+        onOpenChange={() => undefined}
+      >
         <AlertDialogContent
           onCloseAutoFocus={(e) => {
             if (isEditing) {
