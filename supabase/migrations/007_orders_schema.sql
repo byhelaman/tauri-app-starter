@@ -5,7 +5,7 @@
 -- Ejecutar después de 006_rate_limiting.sql.
 --
 -- Qué configura:
---   1. Permisos RBAC para orders (granulares: view/create/update/delete/bulk_delete/export/copy/trash)
+--   1. Permisos RBAC para orders (granulares: view/create/update/delete/export/trash)
 --   2. Tablas: orders, orders_deleted, order_history
 --   3. Triggers: updated_at, set_updated_by (para realtime skip-own)
 --   4. RLS granular basada en has_current_permission()
@@ -165,6 +165,39 @@ CREATE TRIGGER orders_updated_at
     BEFORE UPDATE ON public.orders
     FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
+-- Impide que orders.update se convierta en una vía para alterar identidad/historial.
+-- Los campos updated_at y updated_by siguen siendo gestionados por sus triggers dedicados.
+CREATE OR REPLACE FUNCTION public.guard_order_immutable_fields()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+    IF NEW.id IS DISTINCT FROM OLD.id THEN
+        RAISE EXCEPTION 'orders.id is immutable';
+    END IF;
+
+    IF NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+        RAISE EXCEPTION 'orders.created_at is immutable';
+    END IF;
+
+    IF NEW.updated_at IS DISTINCT FROM OLD.updated_at THEN
+        RAISE EXCEPTION 'orders.updated_at is managed by the database';
+    END IF;
+
+    IF NEW.updated_by IS DISTINCT FROM OLD.updated_by THEN
+        RAISE EXCEPTION 'orders.updated_by is managed by the database';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER orders_guard_immutable_fields
+    BEFORE UPDATE ON public.orders
+    FOR EACH ROW EXECUTE FUNCTION public.guard_order_immutable_fields();
+
 -- set_updated_by — para que realtime pueda filtrar cambios propios
 CREATE OR REPLACE FUNCTION public.set_updated_by()
 RETURNS TRIGGER
@@ -273,6 +306,7 @@ CREATE TRIGGER on_order_audit
     FOR EACH ROW EXECUTE FUNCTION public.orders_audit_trigger();
 
 REVOKE EXECUTE ON FUNCTION public.orders_audit_trigger() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.guard_order_immutable_fields() FROM PUBLIC, anon, authenticated;
 
 -- Realtime agregado por sentencia: una carga SQL de 500k filas produce un solo
 -- evento en order_change_events, no 500k eventos en el WebSocket.

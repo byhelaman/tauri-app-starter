@@ -128,26 +128,27 @@ async function notifyAdmins(
 
 // ─── Require helpers ─────────────────────────────────────────
 
-function requirePermission(ctx: AuthContext, permission: string): Response | null {
-    // Owner (level >= 100) has all permissions
+async function requirePermission(ctx: AuthContext, permission: string): Promise<Response | null> {
     if (ctx.actorLevel >= 100) return null
 
-    // For simplicity, map known permissions to level checks
-    // since we can't call has_current_permission from TypeScript
-    const permLevelMap: Record<string, number> = {
-        "users.view": 80,
-        "users.manage": 80,
-        "system.view": 80,
+    const { data, error } = await ctx.supabaseAdmin
+        .from("role_permissions")
+        .select("permission")
+        .eq("role", ctx.actorRole)
+        .eq("permission", permission)
+        .maybeSingle()
+
+    if (error) {
+        console.error(`Could not resolve live permission ${permission}:`, error.message)
+        return json(500, {
+            success: false,
+            message: "Could not resolve actor permissions",
+        }, ctx.origin)
     }
 
-    const requiredLevel = permLevelMap[permission]
-    if (requiredLevel !== undefined) {
-        if (ctx.actorLevel >= requiredLevel) return null
-    }
+    if (data) return null
 
-    // Check explicit role_permissions as fallback
-    // (done synchronously via the resolved actorRole — for router EFs we trust the JWT level)
-    return json(200, {
+    return json(403, {
         success: false,
         message: `Permission denied: requires ${permission}`,
     }, ctx.origin)
@@ -156,7 +157,7 @@ function requirePermission(ctx: AuthContext, permission: string): Response | nul
 // ─── Action handlers ─────────────────────────────────────────
 
 async function handleList(ctx: AuthContext): Promise<Response> {
-    const err = requirePermission(ctx, "users.view")
+    const err = await requirePermission(ctx, "users.view")
     if (err) return err
 
     const { supabaseAdmin, origin } = ctx
@@ -211,7 +212,7 @@ async function handleList(ctx: AuthContext): Promise<Response> {
 }
 
 async function handleUpdateRole(ctx: AuthContext): Promise<Response> {
-    const err = requirePermission(ctx, "users.manage")
+    const err = await requirePermission(ctx, "users.manage")
     if (err) return err
 
     const { supabaseAdmin, actorUserId, actorEmail, actorLevel, payload, origin } = ctx
@@ -269,7 +270,7 @@ async function handleUpdateRole(ctx: AuthContext): Promise<Response> {
 }
 
 async function handleUpdateDisplayName(ctx: AuthContext): Promise<Response> {
-    const err = requirePermission(ctx, "users.manage")
+    const err = await requirePermission(ctx, "users.manage")
     if (err) return err
 
     const { supabaseAdmin, actorUserId, actorEmail, actorLevel, payload, origin } = ctx
@@ -317,7 +318,7 @@ async function handleUpdateDisplayName(ctx: AuthContext): Promise<Response> {
 }
 
 async function handleDelete(ctx: AuthContext): Promise<Response> {
-    const err = requirePermission(ctx, "users.manage")
+    const err = await requirePermission(ctx, "users.manage")
     if (err) return err
 
     const { supabaseAdmin, actorUserId, actorEmail, actorLevel, payload, origin } = ctx

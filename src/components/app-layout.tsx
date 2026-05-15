@@ -5,11 +5,6 @@ import { useInfiniteQuery } from "@tanstack/react-query"
 import { notificationsQueryOptions } from "@/features/notifications/api"
 import { UserNav } from "@/components/user-nav"
 import { CommandPalette } from "@/components/command-palette"
-import { NotificationsModal } from "@/components/notifications-modal"
-import { ProfileModal } from "@/components/profile-modal"
-import { SettingsModal } from "@/components/settings-modal"
-import { SystemModal } from "@/features/system/system-modal"
-import { ShortcutsModal } from "@/components/shortcuts-modal"
 import { useAuth } from "@/contexts/use-auth"
 import { type AppSettings, SETTINGS_STORAGE_KEY, loadSettings, syncGeneralSettings } from "@/lib/settings"
 import { Titlebar } from "@/components/window-controls"
@@ -22,6 +17,21 @@ import { AppStatusBanner } from "@/components/app-status-banner"
 // Solo se carga cuando el usuario tiene el permiso ai.chat, y se monta al primer render.
 const ChatWidget = lazy(() =>
   import("@/features/chat/chat-widget").then((m) => ({ default: m.ChatWidget }))
+)
+const NotificationsModal = lazy(() =>
+  import("@/components/notifications-modal").then((m) => ({ default: m.NotificationsModal }))
+)
+const ProfileModal = lazy(() =>
+  import("@/components/profile-modal").then((m) => ({ default: m.ProfileModal }))
+)
+const SettingsModal = lazy(() =>
+  import("@/components/settings-modal").then((m) => ({ default: m.SettingsModal }))
+)
+const SystemModal = lazy(() =>
+  import("@/features/system/system-modal").then((m) => ({ default: m.SystemModal }))
+)
+const ShortcutsModal = lazy(() =>
+  import("@/components/shortcuts-modal").then((m) => ({ default: m.ShortcutsModal }))
 )
 
 const NAV_ITEMS = [
@@ -152,28 +162,40 @@ export function AppLayout() {
         <Outlet />
       </div>
 
-      <ProfileModal
-        open={modal === "profile"}
-        onOpenChange={(open) => setModal(open ? "profile" : null)}
-      />
-      <SettingsModal
-        open={modal === "settings"}
-        onOpenChange={(open) => setModal(open ? "settings" : null)}
-        settings={settings}
-        onSettingsChange={setSettings}
-      />
-      <NotificationsModal
-        open={modal === "notifications"}
-        onOpenChange={(open) => setModal(open ? "notifications" : null)}
-      />
-      <SystemModal
-        open={canOpenSystem && modal === "system"}
-        onOpenChange={(open) => setModal(open && canOpenSystem ? "system" : null)}
-      />
-      <ShortcutsModal
-        open={modal === "shortcuts"}
-        onOpenChange={(open) => setModal(open ? "shortcuts" : null)}
-      />
+      <Suspense fallback={null}>
+        {modal === "profile" && (
+          <ProfileModal
+            open
+            onOpenChange={(open) => setModal(open ? "profile" : null)}
+          />
+        )}
+        {modal === "settings" && (
+          <SettingsModal
+            open
+            onOpenChange={(open) => setModal(open ? "settings" : null)}
+            settings={settings}
+            onSettingsChange={setSettings}
+          />
+        )}
+        {modal === "notifications" && (
+          <NotificationsModal
+            open
+            onOpenChange={(open) => setModal(open ? "notifications" : null)}
+          />
+        )}
+        {canOpenSystem && modal === "system" && (
+          <SystemModal
+            open
+            onOpenChange={(open) => setModal(open && canOpenSystem ? "system" : null)}
+          />
+        )}
+        {modal === "shortcuts" && (
+          <ShortcutsModal
+            open
+            onOpenChange={(open) => setModal(open ? "shortcuts" : null)}
+          />
+        )}
+      </Suspense>
       {/* U-02: Suspense con fallback null — el botón no aparece hasta que el chunk carga */}
       {hasPermission("ai.chat") && (
         <Suspense fallback={null}>

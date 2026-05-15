@@ -266,10 +266,12 @@ Las acciones masivas operan en backend:
 Permisos:
 
 - `orders.view`: lectura y contadores.
-- `orders.copy`: copiar datos.
-- `orders.export`: exportar datos.
-- `orders.delete`: borrar una fila.
-- `orders.bulk_delete`: borrar masivamente.
+- `orders.create`: crear órdenes.
+- `orders.update`: editar campos de negocio de órdenes.
+- `orders.delete`: eliminar órdenes, tanto individuales como masivas.
+- `orders.export`: copiar y exportar datos.
+- `orders.trash.view`: ver la papelera.
+- `orders.trash.empty`: vaciar la papelera.
 
 `export_orders_by_selection` tiene límite directo de 10k filas. Para datasets
 mayores se debe usar un job asíncrono que genere el archivo en Storage desde una
