@@ -254,6 +254,10 @@ function rowCheckboxes() {
 describe("DataTable integration", () => {
   beforeAll(() => {
     Element.prototype.scrollIntoView = vi.fn()
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: vi.fn() },
+    })
   })
 
   it("keeps arrow navigation moving across checkbox, text, select-like button, and badge cells", () => {
@@ -332,6 +336,97 @@ describe("DataTable integration", () => {
     fireEvent.keyDown(cell, { key: "Enter" })
 
     expect(screen.getByRole("textbox")).toHaveValue("ORD-A")
+  })
+
+  it("renders read-only cells with the same idle affordance but without edit mode", () => {
+    const readonlyColumns: ColumnDef<TestOrder>[] = [
+      {
+        accessorKey: "code",
+        header: "Code",
+        cell: ({ row }) => renderCell(row.original.code),
+      },
+    ]
+
+    render(
+      <DataTable
+        tableId="grid-readonly-cell-test"
+        columns={readonlyColumns}
+        data={rows.slice(0, 1)}
+        getRowId={(row) => row.id}
+        toolbar={{ showViewOptions: false }}
+      />
+    )
+
+    const valueContainer = screen.getByText("ORD-A").parentElement as HTMLElement
+    const cell = valueContainer.closest("[data-grid-cell='true']") as HTMLTableCellElement
+    expect(valueContainer).not.toHaveAttribute("data-grid-editable")
+    expect(valueContainer).toHaveAttribute("data-grid-readonly", "true")
+    expect(valueContainer).toHaveAttribute("data-grid-copy-value", "ORD-A")
+    expect(valueContainer).toHaveClass("hover:bg-input/30")
+    expect(valueContainer).not.toHaveClass("select-text")
+
+    fireEvent.mouseDown(valueContainer)
+    expect(cell).toHaveFocus()
+    fireEvent.keyDown(cell, { key: "Enter" })
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument()
+  })
+
+  it("copies read-only and editable cell values from the idle grid cell", () => {
+    const mixedColumns: ColumnDef<TestOrder>[] = [
+      {
+        accessorKey: "code",
+        header: "Code",
+        cell: ({ row }) => renderCell(row.original.code),
+      },
+      {
+        accessorKey: "channel",
+        header: "Channel",
+        cell: ({ row }) => renderCell(row.original.channel, { enableEditing: true }),
+      },
+    ]
+
+    render(
+      <DataTable
+        tableId="grid-copy-cell-test"
+        columns={mixedColumns}
+        data={rows.slice(0, 1)}
+        getRowId={(row) => row.id}
+        toolbar={{ showViewOptions: false }}
+      />
+    )
+
+    const readonlyCell = screen.getByText("ORD-A").closest("[data-grid-cell='true']") as HTMLTableCellElement
+    readonlyCell.focus()
+    fireEvent.keyDown(readonlyCell, { key: "c", ctrlKey: true })
+    expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith("ORD-A")
+
+    const editableCell = screen.getByText("Online").closest("[data-grid-cell='true']") as HTMLTableCellElement
+    editableCell.focus()
+    fireEvent.keyDown(editableCell, { key: "c", ctrlKey: true })
+    expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith("Online")
+  })
+
+  it("copies the cell value even when the key event originates from cell content", () => {
+    const readonlyColumns: ColumnDef<TestOrder>[] = [
+      {
+        accessorKey: "code",
+        header: "Code",
+        cell: ({ row }) => renderCell(row.original.code),
+      },
+    ]
+
+    render(
+      <DataTable
+        tableId="grid-copy-content-test"
+        columns={readonlyColumns}
+        data={rows.slice(0, 1)}
+        getRowId={(row) => row.id}
+        toolbar={{ showViewOptions: false }}
+      />
+    )
+
+    fireEvent.keyDown(screen.getByText("ORD-A"), { key: "C", ctrlKey: true })
+    expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith("ORD-A")
   })
 
   it("keeps the grid cell as the only idle tab stop for editable cells", () => {

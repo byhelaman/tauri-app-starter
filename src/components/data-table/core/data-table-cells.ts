@@ -3,6 +3,7 @@ import type { ColumnDef, FilterFn } from "@tanstack/react-table"
 import type { DataTableMeta } from "./data-table-types"
 import { Checkbox } from "@/components/ui/checkbox"
 import { InlineEditableCell, type InlineEditableCellOptions } from "../editing/inline-editable-cell"
+import { cn } from "@/lib/utils"
 
 function normalizeCellOptions(classNameOrOptions?: string | InlineEditableCellOptions): InlineEditableCellOptions {
   if (typeof classNameOrOptions === "string") {
@@ -13,6 +14,20 @@ function normalizeCellOptions(classNameOrOptions?: string | InlineEditableCellOp
 
 export function renderCell(value: string | number, classNameOrOptions?: string | InlineEditableCellOptions) {
   const options = normalizeCellOptions(classNameOrOptions)
+  if (!options.enableEditing) {
+    return createElement(
+      "div",
+      {
+        "data-grid-readonly": "true",
+        "data-grid-copy-value": String(value ?? ""),
+        className: cn(
+          "flex h-8 w-full min-w-0 items-center rounded-lg bg-transparent px-2.5 py-1 text-base transition-colors hover:bg-input/30 md:text-sm",
+          options.className,
+        ),
+      },
+      createElement("span", { className: "truncate" }, String(value ?? "")),
+    )
+  }
   return createElement(InlineEditableCell, { value, ...options })
 }
 

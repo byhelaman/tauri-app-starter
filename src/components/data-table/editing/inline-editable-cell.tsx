@@ -268,6 +268,7 @@ export function InlineEditableCell({
           }
         }}
         data-grid-editable={enableEditing || undefined}
+        data-grid-copy-value={nextValue}
         onMouseDown={(event) => {
           const cell = gridCell()
           if (!cell) return

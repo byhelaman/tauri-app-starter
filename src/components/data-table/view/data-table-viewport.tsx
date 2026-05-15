@@ -92,6 +92,19 @@ export function DataTableViewport<TData, TValue>({
   }
 
   function handleGridKeyDownCapture(event: React.KeyboardEvent<HTMLTableSectionElement>) {
+    const gridCell = event.target instanceof HTMLElement
+      ? event.target.closest<HTMLTableCellElement>("[data-grid-cell='true']")
+      : null
+
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c" && gridCell) {
+      const copyValue = gridCell.querySelector<HTMLElement>("[data-grid-copy-value]")?.dataset.gridCopyValue
+      if (copyValue !== undefined) {
+        event.preventDefault()
+        void navigator.clipboard.writeText(copyValue)
+      }
+      return
+    }
+
     if ((event.key === "Enter" || event.key === "F2") && event.target instanceof HTMLTableCellElement) {
       event.preventDefault()
       activateGridCell(event.target, event.key)
