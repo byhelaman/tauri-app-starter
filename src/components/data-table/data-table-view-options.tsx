@@ -25,15 +25,15 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {
   FORMAT_META,
-  formatRows,
-  getScopeRows,
   type CopyFormat,
   type ExportFormat,
   type Scope,
 } from "./table-formats"
 import { BulkCopyDialog } from "./bulk-copy-dialog"
 import type { DataTableMeta, InfiniteScrollConfig } from "./data-table-types"
-import { buildServerDataActionRequest, resolveDataActionState } from "./data-actions"
+import { resolveDataActionState } from "./data-actions"
+import { executeCopyAction, executeExportAction } from "./data-action-executor"
+import { saveDataFile } from "./data-file-save"
 
 interface DataTableViewOptionsProps<TData> {
   table: Table<TData>
@@ -48,45 +48,6 @@ interface DataTableViewOptionsProps<TData> {
   mode?: "full" | "bulk-copy" | "view" | "none"
   onResetTable?: () => void
   menuItems?: ReactNode
-}
-
-const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
-
-function readAskExportLocation(): boolean {
-  try {
-    const raw = localStorage.getItem("app-settings")
-    if (!raw) return true
-    const parsed = JSON.parse(raw) as { askExportLocation?: boolean }
-    return parsed.askExportLocation !== false
-  } catch {
-    return true
-  }
-}
-
-async function saveFile(content: string, filename: string, mime: string, ext: string) {
-  if (isTauri && readAskExportLocation()) {
-    try {
-      const { save } = await import("@tauri-apps/plugin-dialog")
-      const { writeTextFile } = await import("@tauri-apps/plugin-fs")
-      const path = await save({
-        defaultPath: filename,
-        filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
-      })
-      if (!path) return false
-      await writeTextFile(path, content)
-      return true
-    } catch (err) {
-      console.error("Tauri save failed, falling back to browser download", err)
-    }
-  }
-  const blob = new Blob([content], { type: mime })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement("a")
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-  return true
 }
 
 const SCOPE_LABEL: Record<Scope, string> = {
@@ -128,61 +89,43 @@ export function DataTableViewOptions<TData>({ table, tableId, onSidePanelToggle,
   })
 
   async function exportAs(format: ExportFormat) {
-    const meta = FORMAT_META[format]
-    const serverExportRequest = buildServerDataActionRequest({
+    await executeExportAction({
       table,
+      tableId,
       tableMeta,
       infiniteScroll,
       effectiveScope,
       selectedIds,
-      purpose: "export",
+      scopeCount: scopeCounts[effectiveScope],
+      notifier: {
+        loading: (message, id) => toast.loading(message, { id }),
+        success: (message, id) => toast.success(message, id ? { id } : undefined),
+        error: (message, id) => toast.error(message, id ? { id } : undefined),
+        dismiss: (id) => toast.dismiss(id),
+      },
       format,
+      saveFile: saveDataFile,
     })
-    if (serverExportRequest && infiniteScroll?.exportByScope) {
-      const toastId = "export-scope"
-      toast.loading(`Generating ${scopeCounts[effectiveScope].toLocaleString()} rows...`, { id: toastId })
-      try {
-        const result = await infiniteScroll.exportByScope(serverExportRequest)
-        const ok = await saveFile(result.content, `${tableId}-${effectiveScope}.${meta.ext}`, meta.mime, meta.ext)
-        if (ok) toast.success(`Exported ${result.rowCount.toLocaleString()} rows as ${meta.label}`, { id: toastId })
-        else toast.dismiss(toastId)
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to export rows", { id: toastId })
-      }
-      return
-    }
-    const rows = getScopeRows(table, effectiveScope)
-    const content = formatRows(table, rows, format, true)
-    const ok = await saveFile(content, `${tableId}-${effectiveScope}.${meta.ext}`, meta.mime, meta.ext)
-    if (ok) toast.success(`Exported ${rows.length} rows as ${meta.label}`)
   }
 
   async function copyAs(format: CopyFormat) {
-    const serverExportRequest = buildServerDataActionRequest({
+    await executeCopyAction({
       table,
+      tableId,
       tableMeta,
       infiniteScroll,
       effectiveScope,
       selectedIds,
-      purpose: "copy",
+      scopeCount: scopeCounts[effectiveScope],
+      notifier: {
+        loading: (message, id) => toast.loading(message, { id }),
+        success: (message, id) => toast.success(message, id ? { id } : undefined),
+        error: (message, id) => toast.error(message, id ? { id } : undefined),
+        dismiss: (id) => toast.dismiss(id),
+      },
       format,
+      writeClipboard: (content) => navigator.clipboard.writeText(content),
     })
-    if (serverExportRequest && infiniteScroll?.exportByScope) {
-      const toastId = "copy-scope"
-      toast.loading(`Generating ${scopeCounts[effectiveScope].toLocaleString()} rows...`, { id: toastId })
-      try {
-        const result = await infiniteScroll.exportByScope(serverExportRequest)
-        await navigator.clipboard.writeText(result.content)
-        toast.success(`Copied ${result.rowCount.toLocaleString()} rows as ${FORMAT_META[format].label}`, { id: toastId })
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to copy rows", { id: toastId })
-      }
-      return
-    }
-    const rows = getScopeRows(table, effectiveScope)
-    const content = formatRows(table, rows, format, false)
-    await navigator.clipboard.writeText(content)
-    toast.success(`Copied ${rows.length} rows as ${FORMAT_META[format].label}`)
   }
 
   return (
