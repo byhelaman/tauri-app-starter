@@ -1,5 +1,20 @@
 import type { ReactNode } from "react"
-import type { ColumnFiltersState, SortingState, Table } from "@tanstack/react-table"
+import type { ColumnFiltersState, RowData, SortingState, Table } from "@tanstack/react-table"
+
+declare module "@tanstack/react-table" {
+  // Must keep TanStack's exact generic signature for declaration merging.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData extends RowData, TValue> {
+    grid?: DataTableGridCellMeta
+  }
+}
+
+export type DataTableGridCellInteraction = "readonly" | "editable" | "control"
+
+export interface DataTableGridCellMeta {
+  /** Interacción primaria que la grilla debe aplicar al enfocar/activar la celda. */
+  interaction: DataTableGridCellInteraction
+}
 
 export interface FacetedFilterOption {
   label: string

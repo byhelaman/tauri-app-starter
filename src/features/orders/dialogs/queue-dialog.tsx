@@ -50,7 +50,6 @@ export function QueueDialog({
     actions: queueActions,
   } = useOrders({
     sorting: queueSorting,
-    queryScope: "orders-queue",
     realtime: false,
     enabled: open,
   })

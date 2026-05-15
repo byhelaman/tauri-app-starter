@@ -11,13 +11,11 @@ const ORDER_CHUNK = 1000
 export function useOrders({
   dateFilter,
   sorting = [],
-  queryScope: _queryScope = "orders",
   realtime = true,
   enabled = true,
 }: {
   dateFilter?: string
   sorting?: SortingState
-  queryScope?: string
   realtime?: boolean
   enabled?: boolean
 } = {}) {

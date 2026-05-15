@@ -45,12 +45,12 @@ function ControlledPlainGrid() {
     <table>
       <tbody>
         <tr>
-          <td>
+          <td data-grid-cell="true" tabIndex={0}>
             <InlineEditableCell value={value} enableEditing onCommit={setValue} />
           </td>
         </tr>
         <tr>
-          <td>
+          <td data-grid-cell="true" tabIndex={0}>
             <InlineEditableCell value="Second" enableEditing />
           </td>
         </tr>
@@ -184,8 +184,7 @@ describe("InlineEditableCell", () => {
   it("moves focus to the next row after committing a controlled plain input with Enter", async () => {
     render(<ControlledPlainGrid />)
 
-    const firstCell = screen.getByText("First").closest("[tabindex='0']") as HTMLElement
-    fireEvent.doubleClick(firstCell)
+    fireEvent.doubleClick(screen.getByText("First").parentElement as HTMLElement)
 
     const input = screen.getByRole("textbox")
     fireEvent.change(input, { target: { value: "First updated" } })

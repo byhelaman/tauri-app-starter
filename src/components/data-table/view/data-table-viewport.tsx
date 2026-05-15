@@ -15,11 +15,16 @@ import { DataTableSkeleton } from "./data-table-skeleton"
 import { getColumnSizeStyle, getPinnedColumnStyle } from "../core/data-table-utils"
 import {
   activateGridCell,
-  findGridInteractiveControl,
   gridDirectionFromKey,
   isGridEditingTarget,
   moveGridFocus,
 } from "../core/grid-navigation"
+import {
+  findGridInteractiveControl,
+  gridCellCopyValue,
+  gridCellFromElement,
+  shouldDelegateCellBackgroundClick,
+} from "../core/grid-cell-model"
 
 interface DataTableViewportProps<TData, TValue> {
   table: ReactTable<TData>
@@ -77,9 +82,8 @@ export function DataTableViewport<TData, TValue>({
     if (isGridEditingTarget(event.target)) return
     if (event.target.closest("button, [role='checkbox'], input, textarea, select, [data-radix-collection-item]")) return
 
-    const hasEditableCell = event.currentTarget.querySelector("[data-grid-editable='true']")
     const interactive = findGridInteractiveControl(event.currentTarget)
-    if (!hasEditableCell && interactive) {
+    if (shouldDelegateCellBackgroundClick(event.currentTarget) && interactive) {
       event.preventDefault()
       interactive.focus()
       if (interactive instanceof HTMLButtonElement) {
@@ -92,12 +96,10 @@ export function DataTableViewport<TData, TValue>({
   }
 
   function handleGridKeyDownCapture(event: React.KeyboardEvent<HTMLTableSectionElement>) {
-    const gridCell = event.target instanceof HTMLElement
-      ? event.target.closest<HTMLTableCellElement>("[data-grid-cell='true']")
-      : null
+    const gridCell = event.target instanceof HTMLElement ? gridCellFromElement(event.target) : null
 
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c" && gridCell) {
-      const copyValue = gridCell.querySelector<HTMLElement>("[data-grid-copy-value]")?.dataset.gridCopyValue
+      const copyValue = gridCellCopyValue(gridCell)
       if (copyValue !== undefined) {
         event.preventDefault()
         void navigator.clipboard.writeText(copyValue)
@@ -114,7 +116,7 @@ export function DataTableViewport<TData, TValue>({
     const direction = gridDirectionFromKey(event.key)
     if (!direction || isGridEditingTarget(event.target)) return
     if (!(event.target instanceof HTMLElement)) return
-    if (!event.target.closest("[data-grid-cell='true']")) return
+    if (!gridCellFromElement(event.target)) return
 
     event.preventDefault()
     event.stopPropagation()
@@ -123,7 +125,7 @@ export function DataTableViewport<TData, TValue>({
 
   function handleGridDoubleClickCapture(event: React.MouseEvent<HTMLTableSectionElement>) {
     if (!(event.target instanceof HTMLElement)) return
-    const cell = event.target.closest<HTMLTableCellElement>("[data-grid-cell='true']")
+    const cell = gridCellFromElement(event.target)
     if (!cell || event.target !== cell) return
     activateGridCell(cell, "F2")
   }
@@ -183,6 +185,7 @@ export function DataTableViewport<TData, TValue>({
                       <TableCell
                         key={cell.id}
                         data-grid-cell="true"
+                        data-grid-cell-interaction={cell.column.columnDef.meta?.grid?.interaction ?? "readonly"}
                         tabIndex={0}
                         onMouseDown={handleGridCellMouseDown}
                         className={cn(

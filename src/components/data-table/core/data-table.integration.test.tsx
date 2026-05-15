@@ -276,6 +276,7 @@ describe("DataTable integration", () => {
       },
       {
         accessorKey: "status",
+        meta: { grid: { interaction: "control" } },
         header: "Status",
         cell: ({ row }) => <button type="button">{row.original.status}</button>,
       },
@@ -322,6 +323,7 @@ describe("DataTable integration", () => {
     const editableColumns: ColumnDef<TestOrder>[] = [
       {
         accessorKey: "code",
+        meta: { grid: { interaction: "editable" } },
         header: "Code",
         cell: ({ row }) => renderCell(row.original.code, { enableEditing: true }),
       },
@@ -338,6 +340,7 @@ describe("DataTable integration", () => {
     )
 
     const cell = screen.getByText("ORD-A").closest("[data-grid-cell='true']") as HTMLTableCellElement
+    expect(cell).toHaveAttribute("data-grid-cell-interaction", "editable")
     cell.focus()
     fireEvent.keyDown(cell, { key: "Enter" })
 
@@ -348,6 +351,7 @@ describe("DataTable integration", () => {
     const readonlyColumns: ColumnDef<TestOrder>[] = [
       {
         accessorKey: "code",
+        meta: { grid: { interaction: "editable" } },
         header: "Code",
         cell: ({ row }) => renderCell(row.original.code),
       },
@@ -365,8 +369,7 @@ describe("DataTable integration", () => {
 
     const valueContainer = screen.getByText("ORD-A").parentElement as HTMLElement
     const cell = valueContainer.closest("[data-grid-cell='true']") as HTMLTableCellElement
-    expect(valueContainer).not.toHaveAttribute("data-grid-editable")
-    expect(valueContainer).toHaveAttribute("data-grid-readonly", "true")
+    expect(valueContainer).toHaveAttribute("data-grid-cell-kind", "readonly")
     expect(valueContainer).toHaveAttribute("data-grid-copy-value", "ORD-A")
     expect(valueContainer).toHaveClass("hover:bg-input/30")
     expect(valueContainer).not.toHaveClass("select-text")
@@ -386,6 +389,7 @@ describe("DataTable integration", () => {
       },
       {
         accessorKey: "channel",
+        meta: { grid: { interaction: "editable" } },
         header: "Channel",
         cell: ({ row }) => renderCell(row.original.channel, { enableEditing: true }),
       },
@@ -416,6 +420,7 @@ describe("DataTable integration", () => {
     const readonlyColumns: ColumnDef<TestOrder>[] = [
       {
         accessorKey: "code",
+        meta: { grid: { interaction: "editable" } },
         header: "Code",
         cell: ({ row }) => renderCell(row.original.code),
       },
@@ -439,6 +444,7 @@ describe("DataTable integration", () => {
     const editableColumns: ColumnDef<TestOrder>[] = [
       {
         accessorKey: "code",
+        meta: { grid: { interaction: "editable" } },
         header: "Code",
         cell: ({ row }) => renderCell(row.original.code, { enableEditing: true }),
       },
@@ -455,7 +461,7 @@ describe("DataTable integration", () => {
     )
 
     const cell = screen.getByText("ORD-A").closest("[data-grid-cell='true']") as HTMLTableCellElement
-    const idleContent = screen.getByText("ORD-A").closest("[data-grid-editable='true']") as HTMLElement
+    const idleContent = screen.getByText("ORD-A").closest("[data-grid-cell-kind='editable']") as HTMLElement
     expect(cell).toHaveAttribute("tabindex", "0")
     expect(idleContent).not.toHaveAttribute("tabindex")
     expect(idleContent).toHaveClass("rounded-lg")
@@ -470,6 +476,7 @@ describe("DataTable integration", () => {
     const editableColumns: ColumnDef<TestOrder>[] = [
       {
         accessorKey: "code",
+        meta: { grid: { interaction: "editable" } },
         header: "Code",
         cell: ({ row }) => renderCell(row.original.code, { enableEditing: true }),
       },
@@ -497,6 +504,7 @@ describe("DataTable integration", () => {
     const editableColumns: ColumnDef<TestOrder>[] = [
       {
         accessorKey: "code",
+        meta: { grid: { interaction: "editable" } },
         header: "Code",
         cell: ({ row }) => renderCell(row.original.code, { enableEditing: true }),
       },
@@ -525,6 +533,7 @@ describe("DataTable integration", () => {
     const interactiveColumns: ColumnDef<TestOrder>[] = [
       {
         accessorKey: "status",
+        meta: { grid: { interaction: "control" } },
         header: "Status",
         cell: ({ row }) => (
           <button type="button" onClick={() => onActivate(row.original.id)}>
@@ -556,6 +565,7 @@ describe("DataTable integration", () => {
     const selectColumns: ColumnDef<TestOrder>[] = [
       {
         accessorKey: "status",
+        meta: { grid: { interaction: "control" } },
         header: "Status",
         cell: ({ row }) => <SelectStatusCell initialValue={row.original.status} />,
       },
@@ -584,6 +594,7 @@ describe("DataTable integration", () => {
     const selectColumns: ColumnDef<TestOrder>[] = [
       {
         accessorKey: "status",
+        meta: { grid: { interaction: "control" } },
         header: "Status",
         cell: ({ row }) => <SelectStatusCell initialValue={row.original.status} />,
       },
@@ -628,6 +639,7 @@ describe("DataTable integration", () => {
     const dropdownColumns: ColumnDef<TestOrder>[] = [
       {
         id: "actions",
+        meta: { grid: { interaction: "control" } },
         header: "Actions",
         cell: () => (
           <DropdownMenu>
@@ -666,6 +678,7 @@ describe("DataTable integration", () => {
     const interactiveColumns: ColumnDef<TestOrder>[] = [
       {
         accessorKey: "status",
+        meta: { grid: { interaction: "control" } },
         header: "Status",
         cell: ({ row }) => <button type="button" onClick={() => onActivate(row.original.id)}>{row.original.status}</button>,
       },

@@ -1,15 +1,6 @@
 export type GridDirection = "up" | "down" | "left" | "right"
 
-const GRID_CELL_SELECTOR = "[data-grid-cell='true']"
-const GRID_INTERACTIVE_SELECTOR = "button, [role='checkbox'], input, textarea, select, [tabindex='0']"
-
-function cellFromElement(element: Element | null) {
-  return element?.closest<HTMLTableCellElement>(GRID_CELL_SELECTOR) ?? null
-}
-
-function legacyCellFromElement(element: Element | null) {
-  return element?.closest<HTMLTableCellElement>("td") ?? null
-}
+import { findGridInteractiveControl, gridCellFromElement, gridCellInteraction, GRID_CELL_SELECTOR } from "./grid-cell-model"
 
 function rowCells(row: HTMLTableRowElement | null) {
   return row
@@ -42,24 +33,10 @@ function nextGridCell(cell: HTMLTableCellElement, direction: GridDirection) {
 }
 
 export function moveGridFocus(element: Element, direction: GridDirection) {
-  const cell = cellFromElement(element)
-  if (cell) {
-    const target = nextGridCell(cell, direction)
-    target?.focus()
-    return target
-  }
+  const cell = gridCellFromElement(element)
+  if (!cell) return null
 
-  const legacyCell = legacyCellFromElement(element)
-  const legacyRow = legacyCell?.parentElement as HTMLTableRowElement | null
-  if (!legacyCell || !legacyRow) return null
-
-  let targetCell: Element | null | undefined = null
-  if (direction === "left") targetCell = legacyCell.previousElementSibling
-  if (direction === "right") targetCell = legacyCell.nextElementSibling
-  if (direction === "up") targetCell = legacyRow.previousElementSibling?.children[legacyCell.cellIndex]
-  if (direction === "down") targetCell = legacyRow.nextElementSibling?.children[legacyCell.cellIndex]
-
-  const target = targetCell?.querySelector<HTMLElement>('[tabindex="0"], input, button') ?? null
+  const target = nextGridCell(cell, direction)
   target?.focus()
   return target
 }
@@ -81,8 +58,9 @@ export function gridDirectionFromKey(key: string): GridDirection | null {
 }
 
 export function activateGridCell(cell: HTMLTableCellElement, key: "Enter" | "F2") {
-  const editable = cell.querySelector<HTMLElement>("[data-grid-editable='true']")
-  if (editable) {
+  if (gridCellInteraction(cell) === "editable") {
+    const editable = cell.querySelector<HTMLElement>("[data-grid-cell-kind='editable']")
+    if (!editable) return null
     editable.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }))
     return editable
   }
@@ -98,12 +76,8 @@ export function activateGridCell(cell: HTMLTableCellElement, key: "Enter" | "F2"
   return interactive
 }
 
-export function findGridInteractiveControl(cell: HTMLTableCellElement) {
-  return cell.querySelector<HTMLElement>(GRID_INTERACTIVE_SELECTOR)
-}
-
 function activateGridButton(button: HTMLButtonElement) {
-  if (button.dataset.slot === "dropdown-menu-trigger") {
+  if (button.getAttribute("aria-haspopup") === "menu") {
     button.dispatchEvent(new PointerEvent("pointerdown", {
       bubbles: true,
       button: 0,

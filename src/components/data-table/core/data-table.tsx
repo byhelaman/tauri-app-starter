@@ -4,7 +4,6 @@ import {
   type ColumnDef,
   type ColumnFiltersState,
   type SortingState,
-  type PaginationState,
   type OnChangeFn,
 } from "@tanstack/react-table"
 import { useVirtualizer } from "@tanstack/react-virtual"
@@ -43,11 +42,7 @@ interface DataTableProps<TData, TValue> {
   isLoading?: boolean
   getRowId?: (row: TData) => string
   sidePanel?: (onClose: () => void) => React.ReactNode
-  manualPagination?: boolean
-  pageCount?: number
   rowCount?: number
-  pagination?: PaginationState
-  onPaginationChange?: OnChangeFn<PaginationState>
   columnFilters?: ColumnFiltersState
   onColumnFiltersChange?: OnChangeFn<ColumnFiltersState>
   globalFilter?: string
@@ -84,11 +79,7 @@ export function DataTable<TData, TValue>({
   isLoading = false,
   getRowId,
   sidePanel,
-  manualPagination,
-  pageCount,
   rowCount,
-  pagination,
-  onPaginationChange,
   columnFilters: externalColumnFilters,
   onColumnFiltersChange: setExternalColumnFilters,
   globalFilter: externalGlobalFilter,
@@ -132,11 +123,7 @@ export function DataTable<TData, TValue>({
     toolbar,
     defaultPageSize,
     getRowId,
-    manualPagination,
-    pageCount,
     rowCount,
-    pagination,
-    onPaginationChange,
     externalColumnFilters,
     setExternalColumnFilters,
     externalGlobalFilter,
@@ -158,14 +145,18 @@ export function DataTable<TData, TValue>({
   const leftPinnedWidth = leftPinned.reduce((sum, id) => sum + (table.getColumn(id)?.getSize() ?? 0), 0) + cellPadding
   const rightPinnedWidth = rightPinned.reduce((sum, id) => sum + (table.getColumn(id)?.getSize() ?? 0), 0) + cellPadding
   const headerHeight = 2.5 * 16 + cellPadding // h-10 (2.5rem) sticky header
-  const leftEdgeId = leftPinned
-    .map(id => table.getColumn(id))
-    .filter(column => column?.getCanPin())
-    .sort((a, b) => (b?.getStart("left") ?? 0) - (a?.getStart("left") ?? 0))[0]?.id
-  const rightEdgeId = rightPinned
-    .map(id => table.getColumn(id))
-    .filter(column => column?.getCanPin())
-    .sort((a, b) => (b?.getAfter("right") ?? 0) - (a?.getAfter("right") ?? 0))[0]?.id
+  const leftEdgeId = leftPinned.reduce<{ id: string; offset: number } | null>((edge, id) => {
+    const column = table.getColumn(id)
+    if (!column?.getCanPin()) return edge
+    const offset = column.getStart("left")
+    return !edge || offset > edge.offset ? { id: column.id, offset } : edge
+  }, null)?.id
+  const rightEdgeId = rightPinned.reduce<{ id: string; offset: number } | null>((edge, id) => {
+    const column = table.getColumn(id)
+    if (!column?.getCanPin()) return edge
+    const offset = column.getAfter("right")
+    return !edge || offset > edge.offset ? { id: column.id, offset } : edge
+  }, null)?.id
 
   // ── Virtualizador de filas (solo en modo infinite scroll) ──────────────────
   const rows = table.getRowModel().rows

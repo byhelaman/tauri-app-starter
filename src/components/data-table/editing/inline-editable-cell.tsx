@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { Autocomplete } from "@/components/ui/autocomplete"
 import { moveGridFocus, type GridDirection } from "../core/grid-navigation"
+import { GridCellContent } from "../core/grid-cell-content"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -255,7 +256,7 @@ export function InlineEditableCell({
 
   if (!isEditing) {
     return (
-      <div
+      <GridCellContent
         ref={(node) => {
           containerRef.current = node
           if (!node) return
@@ -267,8 +268,8 @@ export function InlineEditableCell({
             node.tabIndex = 0
           }
         }}
-        data-grid-editable={enableEditing || undefined}
-        data-grid-copy-value={nextValue}
+        kind="editable"
+        value={nextValue}
         onMouseDown={(event) => {
           const cell = gridCell()
           if (!cell) return
@@ -280,15 +281,9 @@ export function InlineEditableCell({
         }}
         onKeyDown={handleGridKeyDown}
         onPaste={handlePaste}
-        aria-invalid={editState.hasError || undefined}
-        className={cn(
-          "flex h-8 w-full min-w-0 items-center rounded-lg bg-transparent px-2.5 py-1 text-base transition-colors md:text-sm",
-          "hover:bg-input/30",
-          className
-        )}
-      >
-        <span className="truncate">{nextValue}</span>
-      </div>
+        ariaInvalid={editState.hasError}
+        className={className}
+      />
     )
   }
 

@@ -6,7 +6,6 @@ import {
   type ColumnPinningState,
   type FilterFn,
   type OnChangeFn,
-  type PaginationState,
   type RowSelectionState,
   type SortingState,
   type VisibilityState,
@@ -34,11 +33,7 @@ interface UseDataTableInstanceOptions<TData, TValue> {
   toolbar?: DataTableToolbarConfig<TData>
   defaultPageSize: number
   getRowId?: (row: TData) => string
-  manualPagination?: boolean
-  pageCount?: number
   rowCount?: number
-  pagination?: PaginationState
-  onPaginationChange?: OnChangeFn<PaginationState>
   externalColumnFilters?: ColumnFiltersState
   setExternalColumnFilters?: OnChangeFn<ColumnFiltersState>
   externalGlobalFilter?: string
@@ -58,11 +53,7 @@ export function useDataTableInstance<TData, TValue>({
   toolbar,
   defaultPageSize,
   getRowId,
-  manualPagination,
-  pageCount,
   rowCount,
-  pagination,
-  onPaginationChange,
   externalColumnFilters,
   setExternalColumnFilters,
   externalGlobalFilter,
@@ -173,12 +164,9 @@ export function useDataTableInstance<TData, TValue>({
     onRowSelectionChange: selection.setRowSelection as OnChangeFn<RowSelectionState>,
     autoResetPageIndex: false,
     autoResetAll: false,
-    manualPagination,
-    manualFiltering: !!infiniteScroll || !!manualPagination,
+    manualFiltering: !!infiniteScroll,
     manualSorting: !!infiniteScroll,
-    pageCount,
     rowCount,
-    onPaginationChange,
     initialState: { pagination: { pageSize: defaultPageSize, pageIndex: 0 } },
     state: {
       sorting,
@@ -189,7 +177,7 @@ export function useDataTableInstance<TData, TValue>({
       rowSelection: selection.rowSelection,
       ...(infiniteScroll || !enablePagination
         ? { pagination: { pageIndex: 0, pageSize: VIRTUAL_PAGE_SIZE } }
-        : manualPagination ? { pagination } : {}
+        : {}
       ),
     },
     meta: {} satisfies DataTableMeta,

@@ -52,6 +52,7 @@ export function createQueueColumns(
     },
     {
       accessorKey: "status",
+      meta: { grid: { interaction: "control" } },
       enableGlobalFilter: true,
       minSize: 120,
       maxSize: 180,

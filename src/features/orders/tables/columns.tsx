@@ -48,6 +48,7 @@ export type EditableOrderField =
 
 const STATUSES: Status[] = ["pending", "processing", "shipped", "delivered", "cancelled"]
 const CHANNELS = ["Online", "Retail", "Partner", "Phone"] as const
+const USD_FORMATTER = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" })
 
 const CODE_PATTERN = /^ORD-[A-Z0-9]{5}$/i
 
@@ -76,6 +77,7 @@ export function createColumns(
     },
     {
       accessorKey: "customer",
+      meta: { grid: { interaction: "editable" } },
       enableGlobalFilter: true,
       minSize: 160,
       maxSize: 180,
@@ -89,6 +91,7 @@ export function createColumns(
     },
     {
       accessorKey: "product",
+      meta: { grid: { interaction: "editable" } },
       enableGlobalFilter: true,
       minSize: 240,
       maxSize: 600,
@@ -102,6 +105,7 @@ export function createColumns(
     },
     {
       accessorKey: "category",
+      meta: { grid: { interaction: "editable" } },
       enableGlobalFilter: true,
       minSize: 120,
       maxSize: 180,
@@ -130,6 +134,7 @@ export function createColumns(
     },
     {
       accessorKey: "code",
+      meta: { grid: { interaction: "editable" } },
       enableGlobalFilter: true,
       minSize: 120,
       maxSize: 180,
@@ -144,6 +149,7 @@ export function createColumns(
     },
     {
       accessorKey: "status",
+      meta: { grid: { interaction: "control" } },
       enableGlobalFilter: true,
       minSize: 120,
       maxSize: 180,
@@ -169,6 +175,7 @@ export function createColumns(
     },
     {
       accessorKey: "channel",
+      meta: { grid: { interaction: "editable" } },
       enableGlobalFilter: true,
       minSize: 120,
       maxSize: 180,
@@ -184,6 +191,7 @@ export function createColumns(
     },
     {
       accessorKey: "region",
+      meta: { grid: { interaction: "editable" } },
       enableGlobalFilter: true,
       minSize: 120,
       maxSize: 180,
@@ -198,6 +206,7 @@ export function createColumns(
     },
     {
       accessorKey: "payment",
+      meta: { grid: { interaction: "editable" } },
       enableGlobalFilter: true,
       minSize: 130,
       maxSize: 180,
@@ -228,6 +237,7 @@ export function createColumns(
     },
     {
       accessorKey: "quantity",
+      meta: { grid: { interaction: "editable" } },
       minSize: 120,
       maxSize: 180,
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Qty" />,
@@ -246,12 +256,13 @@ export function createColumns(
       header: ({ column, table }) => <DataTableColumnHeader table={table} column={column} title="Amount" />,
       cell: ({ row }) => {
         const value = row.getValue("amount") as number
-        const formatted = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
+        const formatted = USD_FORMATTER.format(value)
         return renderCell(formatted, { className: "font-mono" })
       },
     },
     {
       id: "actions",
+      meta: { grid: { interaction: "control" } },
       minSize: 44,
       maxSize: 44,
       enableHiding: false,
