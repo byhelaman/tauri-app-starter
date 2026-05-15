@@ -43,7 +43,7 @@ export function useOrders({
 
   const {
     data: infiniteData,
-    isFetching: isPageFetching,
+    isLoading: isPageLoading,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
@@ -97,7 +97,7 @@ export function useOrders({
   return {
     pageData,
     rowCount: cachedRowCount,
-    isPageLoading: isPageFetching,
+    isPageLoading,
     // Props para infinite scroll en DataTable
     infiniteScroll: {
       fetchNextPage,

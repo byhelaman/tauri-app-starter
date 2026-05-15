@@ -38,6 +38,27 @@ function ControlledChannelCell() {
   )
 }
 
+function ControlledPlainGrid() {
+  const [value, setValue] = useState("First")
+
+  return (
+    <table>
+      <tbody>
+        <tr>
+          <td>
+            <InlineEditableCell value={value} enableEditing onCommit={setValue} />
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <InlineEditableCell value="Second" enableEditing />
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  )
+}
+
 describe("InlineEditableCell", () => {
   beforeAll(() => {
     vi.stubGlobal("ResizeObserver", class ResizeObserver {
@@ -159,4 +180,21 @@ describe("InlineEditableCell", () => {
     const restoredCell = screen.getByText("Retail").closest("[tabindex='0']") as HTMLElement
     expect(restoredCell).not.toHaveAttribute("aria-invalid")
   })
+
+  it("moves focus to the next row after committing a controlled plain input with Enter", async () => {
+    render(<ControlledPlainGrid />)
+
+    const firstCell = screen.getByText("First").closest("[tabindex='0']") as HTMLElement
+    fireEvent.doubleClick(firstCell)
+
+    const input = screen.getByRole("textbox")
+    fireEvent.change(input, { target: { value: "First updated" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+
+    await waitFor(() => {
+      expect(screen.getByText("First updated")).toBeInTheDocument()
+      expect(screen.getByText("Second").closest("[tabindex='0']")).toHaveFocus()
+    })
+  })
+
 })

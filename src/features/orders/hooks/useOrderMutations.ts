@@ -20,6 +20,35 @@ interface UseOrderMutationsOptions {
   }
 }
 
+export function buildOrderFieldDelta(
+  field: EditableOrderField,
+  value: string,
+  isValid: boolean
+): Partial<Order> {
+  const trimmedValue = value.trim()
+
+  switch (field) {
+    case "date": return { date: trimmedValue }
+    case "customer": return { customer: trimmedValue }
+    case "product": return { product: trimmedValue }
+    case "category": return { category: trimmedValue }
+    case "start_time": return { start_time: trimmedValue }
+    case "end_time": return { end_time: trimmedValue }
+    case "code": return { code: trimmedValue }
+    case "channel": return { channel: trimmedValue }
+    case "priority": return { priority: trimmedValue }
+    case "region": return { region: trimmedValue }
+    case "payment": return { payment: trimmedValue }
+    case "quantity":
+      return { quantity: isValid ? Number.parseInt(trimmedValue, 10) : value }
+    default: {
+      const _exhaustive: never = field
+      console.warn(`Unhandled editable field: ${_exhaustive}`)
+      return {}
+    }
+  }
+}
+
 export function useOrderMutations({
   ordersQueryKey,
   activeQuery,
@@ -107,52 +136,34 @@ export function useOrderMutations({
     },
   })
 
+  const { mutate: mutateOrderUpdate } = updateOrderMutation
+  const { mutate: mutateOrderCreate } = createOrderMutation
+  const { mutate: mutateOrderDelete } = deleteOrderMutation
+  const { mutateAsync: mutateBulkOrderDelete } = deleteBulkOrdersMutation
+
   const updateOrderField = useCallback((orderId: string, delta: Partial<Order>) => {
-    updateOrderMutation.mutate({ id: orderId, ...delta })
-  }, [updateOrderMutation])
+    mutateOrderUpdate({ id: orderId, ...delta })
+  }, [mutateOrderUpdate])
 
   const handleStatusChange = useCallback((orderId: string, status: Status) => {
     updateOrderField(orderId, { status })
   }, [updateOrderField])
 
   const handleCellChange = useCallback((orderId: string, field: EditableOrderField, value: string, isValid: boolean) => {
-    let delta: Partial<Order>
-    switch (field) {
-      case "date": delta = { date: value }; break
-      case "customer": delta = { customer: value }; break
-      case "product": delta = { product: value }; break
-      case "category": delta = { category: value }; break
-      case "start_time": delta = { start_time: value }; break
-      case "end_time": delta = { end_time: value }; break
-      case "code": delta = { code: value }; break
-      case "channel": delta = { channel: value }; break
-      case "priority": delta = { priority: value }; break
-      case "region": delta = { region: value }; break
-      case "payment": delta = { payment: value }; break
-      case "quantity": {
-        const normalized = value.trim()
-        delta = { quantity: isValid ? Number.parseInt(normalized, 10) : value }
-        break
-      }
-      default: {
-        const _exhaustive: never = field
-        console.warn(`Unhandled editable field: ${_exhaustive}`)
-        return
-      }
-    }
+    const delta = buildOrderFieldDelta(field, value, isValid)
     updateOrderField(orderId, delta)
   }, [updateOrderField])
 
   const deleteOrder = useCallback((id: string) => {
-    deleteOrderMutation.mutate(id)
-  }, [deleteOrderMutation])
+    mutateOrderDelete(id)
+  }, [mutateOrderDelete])
 
   const deleteBulkOrders = useCallback(async (selection: DataTableSelectionState, expectedCount?: number) => {
-    await deleteBulkOrdersMutation.mutateAsync({ selection, expectedCount })
-  }, [deleteBulkOrdersMutation])
+    await mutateBulkOrderDelete({ selection, expectedCount })
+  }, [mutateBulkOrderDelete])
 
   return {
-    createOrder: createOrderMutation.mutate,
+    createOrder: mutateOrderCreate,
     deleteOrder,
     deleteBulkOrders,
     handleStatusChange,

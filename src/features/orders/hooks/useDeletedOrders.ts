@@ -32,7 +32,7 @@ export function useDeletedOrders({
 
   const {
     data: infiniteData,
-    isFetching: isPageFetching,
+    isLoading: isPageLoading,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
@@ -101,7 +101,7 @@ export function useDeletedOrders({
   return {
     pageData,
     rowCount: cachedRowCount,
-    isPageLoading: isPageFetching,
+    isPageLoading,
     infiniteScroll: {
       fetchNextPage,
       hasNextPage,
