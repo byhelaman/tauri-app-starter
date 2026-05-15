@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import type { DataTableSelectionState } from "@/components/data-table/data-table-types"
-import type { Order } from "../columns"
+import type { DataTableSelectionState } from "@/components/data-table/core/data-table-types"
+import type { Order } from "../tables/columns"
 import {
   applyOptimisticBulkDelete,
   applyOptimisticOrderDelete,

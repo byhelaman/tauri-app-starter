@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase"
-import type { Order, Status } from "@/features/orders/columns"
-import type { HistoryEntry } from "@/components/data-table/data-table-types"
+import type { Order, Status } from "@/features/orders/tables/columns"
+import type { HistoryEntry } from "@/components/data-table/core/data-table-types"
 import type {
   ColumnFiltersState,
   SortingState,
@@ -11,8 +11,8 @@ import type {
   DataTableSelectionState,
   ServerExportFormat,
   ServerScopeExportResult,
-} from "@/components/data-table/data-table-types"
-import { expandDataActionFields } from "@/components/data-table/data-action-fields"
+} from "@/components/data-table/core/data-table-types"
+import { expandDataActionFields } from "@/components/data-table/actions/data-action-fields"
 import { pickNormalizedFilter, pickNormalizedHourFilter } from "@/lib/table-filter-normalization"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

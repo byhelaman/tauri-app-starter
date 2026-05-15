@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { DataTableSearchAutocomplete } from "@/components/data-table/data-table-search-autocomplete"
+import { DataTableSearchAutocomplete } from "@/components/data-table/filters/data-table-search-autocomplete"
 import { useSearchAutocomplete } from "@/features/orders/hooks/useSearchAutocomplete"
 
 interface OrdersSearchAutocompleteProps {

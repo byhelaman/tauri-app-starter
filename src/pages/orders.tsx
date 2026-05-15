@@ -10,24 +10,24 @@ import {
 import { useOrders } from "@/features/orders/hooks/useOrders"
 import {
   type Order,
-} from "@/features/orders/columns"
+} from "@/features/orders/tables/columns"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Separator } from "@/components/ui/separator"
-import { ImportDialog } from "@/components/data-table/import-dialog"
+import { ImportDialog } from "@/components/data-table/actions/import-dialog"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
-import { OrderDialog } from "@/features/orders/order-dialog"
+import { OrderDialog } from "@/features/orders/dialogs/order-dialog"
 import { fetchOrdersStartHours } from "@/features/orders/api"
 import { useQuery } from "@tanstack/react-query"
 import { useAuth } from "@/contexts/use-auth"
-import { QueueDialog } from "@/features/orders/queue-dialog"
-import { TrashDialog } from "@/features/orders/trash-dialog"
-import { OrdersTableSection } from "@/features/orders/orders-table-section"
+import { QueueDialog } from "@/features/orders/dialogs/queue-dialog"
+import { TrashDialog } from "@/features/orders/dialogs/trash-dialog"
+import { OrdersTableSection } from "@/features/orders/tables/orders-table-section"
 import {
   OrderDeleteDialog,
   OrdersBulkDeleteDialog,
   type BulkDeleteRequest,
-} from "@/features/orders/orders-delete-dialogs"
+} from "@/features/orders/dialogs/orders-delete-dialogs"
 
 export function OrdersPage() {
   const { hasPermission } = useAuth()

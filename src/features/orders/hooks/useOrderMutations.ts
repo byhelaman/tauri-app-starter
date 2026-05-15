@@ -1,8 +1,8 @@
 import { useCallback } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import type { EditableOrderField, Order, Status } from "../columns"
-import type { DataTableSelectionState } from "@/components/data-table/data-table-types"
+import type { EditableOrderField, Order, Status } from "../tables/columns"
+import type { DataTableSelectionState } from "@/components/data-table/core/data-table-types"
 import * as api from "../api"
 import {
   applyOptimisticBulkDelete,

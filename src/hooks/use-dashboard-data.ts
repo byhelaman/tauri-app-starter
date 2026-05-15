@@ -4,7 +4,7 @@ import { PackageCheckIcon, PackageIcon, TruckIcon, PlusIcon, PencilIcon, TrashIc
 import { useOrdersStats } from "@/features/orders/hooks/useOrdersStats"
 import { fetchOrderHistory } from "@/features/orders/api"
 import { formatRelativeTime } from "@/lib/date-utils"
-import type { HistoryEntry } from "@/components/data-table/data-table-types"
+import type { HistoryEntry } from "@/components/data-table/core/data-table-types"
 import type { LucideIcon } from "lucide-react"
 
 interface DashboardStat {

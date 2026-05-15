@@ -4,9 +4,9 @@ import type {
   DataTableSelectionOperation,
   DataTableSelectionScope,
   DataTableSelectionState,
-} from "@/components/data-table/data-table-types"
+} from "@/components/data-table/core/data-table-types"
 import { pickNormalizedFilter, pickNormalizedHourFilter } from "@/lib/table-filter-normalization"
-import type { Order } from "../columns"
+import type { Order } from "../tables/columns"
 
 export type OrdersPage = { data: Order[]; total: number }
 export type OrdersInfiniteData = InfiniteData<OrdersPage>
