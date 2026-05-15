@@ -48,6 +48,12 @@ Bulk actions send intent to Supabase:
 
 The frontend does not download 20k/50k IDs to represent a selection.
 
+Exports currently use a synchronous server-side RPC for up to 10,000 rows.
+Larger exports are intentionally not implemented yet; the approved future design
+is an asynchronous server-side job that writes a file to Storage and exposes
+`pending/running/done/failed` status. The limit should not be bypassed by loading
+large datasets or large ID lists into the client.
+
 ## Trash
 
 Delete moves rows from `orders` to `orders_deleted`.
