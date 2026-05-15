@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 
 import { isSupabaseConfigured } from "@/lib/supabase"
 import { AuthProvider } from "@/contexts/auth-context"
+import { ConnectivityProvider } from "@/contexts/connectivity-context"
 import { AuthGuard } from "@/components/auth-guard"
 import { ThemeProvider } from "@/components/theme-provider"
 import { UpdaterProvider } from "@/components/updater-context"
@@ -35,6 +36,7 @@ function App() {
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
     <UpdaterProvider>
       <BrowserRouter>
+        <ConnectivityProvider>
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<Shell><SignInPage /></Shell>} />
@@ -50,6 +52,7 @@ function App() {
           <Toaster />
           <UpdateDialog />
         </AuthProvider>
+        </ConnectivityProvider>
       </BrowserRouter>
     </UpdaterProvider>
     </ThemeProvider>

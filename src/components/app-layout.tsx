@@ -16,6 +16,7 @@ import { Titlebar } from "@/components/window-controls"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useAppShortcuts } from "@/hooks/use-app-shortcuts"
+import { AppStatusBanner } from "@/components/app-status-banner"
 
 // U-02: Lazy-load ChatWidget — react-markdown y remark-gfm son pesados.
 // Solo se carga cuando el usuario tiene el permiso ai.chat, y se monta al primer render.
@@ -145,6 +146,7 @@ export function AppLayout() {
             />
         </div>
       </Titlebar>
+      <AppStatusBanner />
 
       <div className="flex-1 overflow-y-auto min-h-0">
         <Outlet />

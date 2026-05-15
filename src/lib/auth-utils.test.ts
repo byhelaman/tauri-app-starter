@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { parseClaims, EMPTY_CLAIMS } from "./auth-utils"
+import { parseClaims, EMPTY_CLAIMS, getSessionClockStatus } from "./auth-utils"
 import type { Session } from "@supabase/supabase-js"
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -82,5 +82,23 @@ describe("parseClaims", () => {
   it("preserva un array de permisos vacío sin agregar items", () => {
     const session = makeSession({ user_role: "guest", permissions: [] })
     expect(parseClaims(session).permissions).toHaveLength(0)
+  })
+})
+
+describe("getSessionClockStatus", () => {
+  it("detecta cuando el reloj local está atrasado respecto al JWT", () => {
+    const session = makeSession({ iat: 10_000, exp: 20_000 })
+    expect(getSessionClockStatus(session, 9_000, 300)).toBe("clock-behind")
+  })
+
+  it("detecta cuando el reloj local está adelantado respecto al JWT", () => {
+    const session = makeSession({ iat: 10_000, exp: 20_000 })
+    expect(getSessionClockStatus(session, 21_000, 300)).toBe("clock-ahead")
+  })
+
+  it("tolera pequeñas diferencias de reloj", () => {
+    const session = makeSession({ iat: 10_000, exp: 20_000 })
+    expect(getSessionClockStatus(session, 9_800, 300)).toBe("ok")
+    expect(getSessionClockStatus(session, 20_200, 300)).toBe("ok")
   })
 })

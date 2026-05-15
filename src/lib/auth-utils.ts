@@ -7,6 +7,8 @@ export type AuthClaims = {
   permissions: string[]
 }
 
+export type SessionClockStatus = "ok" | "clock-behind" | "clock-ahead" | "unknown"
+
 export const EMPTY_CLAIMS: AuthClaims = {
   userRole: "guest",
   hierarchyLevel: 0,
@@ -24,6 +26,20 @@ export const jwtClaimsSchema = z.object({
   permissions: z.array(z.string()).optional(),
 })
 
+const jwtTimingSchema = z.object({
+  iat: z.number().optional(),
+  exp: z.number().optional(),
+})
+
+function decodeJwtPayload(token: string): unknown {
+  const [, payload] = token.split(".")
+  if (!payload) throw new Error("Missing JWT payload")
+  const normalized = payload.replace(/-/g, "+").replace(/_/g, "/")
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4)
+  const bytes = Uint8Array.from(atob(padded), (c) => c.charCodeAt(0))
+  return JSON.parse(new TextDecoder().decode(bytes))
+}
+
 /**
  * Decodifica los custom claims del JWT de Supabase.
  * Devuelve EMPTY_CLAIMS en caso de token inválido, ausente o malformado.
@@ -34,21 +50,7 @@ export function parseClaims(session: Session | null): AuthClaims {
   if (!token) return EMPTY_CLAIMS
 
   try {
-    const [, payload] = token.split(".")
-    if (!payload) return EMPTY_CLAIMS
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/")
-    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4)
-    // atob puede lanzar DOMException si el string no es base64 válido.
-    // TextDecoder maneja correctamente caracteres UTF-8 no-ASCII en los claims.
-    let decoded: string
-    try {
-      const bytes = Uint8Array.from(atob(padded), (c) => c.charCodeAt(0))
-      decoded = new TextDecoder().decode(bytes)
-    } catch {
-      // JWT payload inválido — devolver claims vacíos sin contaminar la sesión
-      return EMPTY_CLAIMS
-    }
-    const raw: unknown = JSON.parse(decoded)
+    const raw = decodeJwtPayload(token)
     const parsed = jwtClaimsSchema.parse(raw)
 
     return {
@@ -58,5 +60,27 @@ export function parseClaims(session: Session | null): AuthClaims {
     }
   } catch {
     return EMPTY_CLAIMS
+  }
+}
+
+/**
+ * Detecta si el reloj local está fuera de la ventana temporal del JWT.
+ * No decide autorización; solo sirve para UX diagnóstica.
+ */
+export function getSessionClockStatus(
+  session: Session | null,
+  nowSeconds = Math.floor(Date.now() / 1000),
+  skewToleranceSeconds = 5 * 60
+): SessionClockStatus {
+  const token = session?.access_token
+  if (!token) return "unknown"
+
+  try {
+    const parsed = jwtTimingSchema.parse(decodeJwtPayload(token))
+    if (parsed.iat !== undefined && nowSeconds + skewToleranceSeconds < parsed.iat) return "clock-behind"
+    if (parsed.exp !== undefined && nowSeconds - skewToleranceSeconds > parsed.exp) return "clock-ahead"
+    return "ok"
+  } catch {
+    return "unknown"
   }
 }
