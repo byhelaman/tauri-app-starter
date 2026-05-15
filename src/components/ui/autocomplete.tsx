@@ -4,6 +4,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { Command as CommandPrimitive } from "cmdk"
+import {
+  autocompleteReducer,
+  createAutocompleteState,
+  filterAutocompleteOptions,
+  isCustomAutocompleteValue,
+} from "./autocomplete-model"
 
 export interface AutocompleteProps {
   value?: string
@@ -42,47 +48,40 @@ export function Autocomplete({
   onInputValueChange,
   filterClientSide = true,
 }: AutocompleteProps) {
-  const [open, setOpen] = React.useState(false)
-  const [inputValue, setInputValue] = React.useState(value)
-  const [activeItem, setActiveItem] = React.useState("")
-  // Modos: "none" (default), "keyboard" (usó flechas), "mouse" (usó scroll/cursor)
-  const [interactionMode, setInteractionMode] = React.useState<"none" | "keyboard" | "mouse">("none")
-  const interactionModeRef = React.useRef<"none" | "keyboard" | "mouse">("none")
-
-  const setMode = React.useCallback((mode: "none" | "keyboard" | "mouse") => {
-    interactionModeRef.current = mode
-    setInteractionMode(mode)
-  }, [])
+  const [state, dispatch] = React.useReducer(
+    autocompleteReducer,
+    value,
+    createAutocompleteState
+  )
+  const { open, inputValue, activeItem, interactionMode } = state
 
   React.useEffect(() => {
-    setInputValue(value)
+    dispatch({ type: "syncValue", value })
   }, [value])
 
   const filteredOptions = React.useMemo(() => {
-    if (!filterClientSide) return options
-    if (!inputValue) return options
-    const lowerValue = inputValue.toLowerCase()
-    return options.filter(
-      (opt) => opt.label.toLowerCase().includes(lowerValue) || opt.value.toLowerCase().includes(lowerValue)
-    )
+    return filterAutocompleteOptions(options, inputValue, filterClientSide)
   }, [inputValue, options, filterClientSide])
 
   // Cuando no es restrictivo y es client-side, mostrar el valor tecleado como opción seleccionable
   // si no coincide exactamente con una opción existente.
   // En modo server-side no se muestra: las sugerencias vienen del servidor.
-  const isCustom = filterClientSide && !restrictive && inputValue.trim() !== "" && !options.some(
-    (opt) => opt.value.toLowerCase() === inputValue.trim().toLowerCase()
-  )
+  const isCustom = isCustomAutocompleteValue({
+    filterClientSide,
+    restrictive,
+    inputValue,
+    options,
+  })
 
   const handleSelect = (selectedValue: string) => {
-    setInputValue(selectedValue)
+    dispatch({ type: "select", value: selectedValue })
     onChange?.(selectedValue)
-    setOpen(false)
   }
 
   const handleBlur = () => {
+    dispatch({ type: "close" })
     if (restrictive) {
-      setInputValue(value)
+      dispatch({ type: "setInputValue", value })
       onBlur?.()
     } else {
       onBlur?.(inputValue)
@@ -92,33 +91,31 @@ export function Autocomplete({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Escape") {
       e.preventDefault()
-      setOpen(false)
-      setMode("none")
+      dispatch({ type: "close" })
       return
     }
 
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
       if (!open) {
         e.preventDefault()
-        setOpen(true)
+        dispatch({ type: "setOpen", open: true })
       }
       
-      if (interactionModeRef.current !== "keyboard" && e.key === "ArrowDown") {
+      if (interactionMode !== "keyboard" && e.key === "ArrowDown") {
         e.preventDefault()
         const firstValue = isCustom ? inputValue.trim() : filteredOptions[0]?.value
-        if (firstValue) setActiveItem(firstValue)
+        if (firstValue) dispatch({ type: "setActiveItem", value: firstValue })
       }
       
-      setMode("keyboard")
+      dispatch({ type: "setInteractionMode", mode: "keyboard" })
       return
     }
 
     if (e.key === "Tab" && open && !filterClientSide && interactionMode === "keyboard" && activeItem) {
       e.preventDefault()
-      setInputValue(activeItem)
+      dispatch({ type: "setInputValue", value: activeItem })
       onInputValueChange?.(activeItem)
-      setOpen(false)
-      setMode("none")
+      dispatch({ type: "close" })
       return
     }
 
@@ -126,8 +123,7 @@ export function Autocomplete({
       // 1. Si no hay navegación ACTIVA POR TECLADO, el Enter va para el Input maestro, NO para sugerencias.
       if (interactionMode !== "keyboard") {
         e.preventDefault() // Detiene TODA acción interna de cmdk (onSelect)
-        setOpen(false)
-        setMode("none")
+        dispatch({ type: "close" })
         onKeyDown?.(e) // Avisa al padre (ej. Tabla/Celda) para que tome el valor limpio actual
         return
       }
@@ -136,7 +132,7 @@ export function Autocomplete({
       if (open && activeItem) {
         e.preventDefault()
         handleSelect(activeItem)
-        setMode("none")
+        dispatch({ type: "setInteractionMode", mode: "none" })
         return
       }
     }
@@ -152,28 +148,28 @@ export function Autocomplete({
     <CommandPrimitive
       shouldFilter={false}
       value={interactionMode === "none" ? "__none__" : activeItem}
-      onValueChange={setActiveItem}
+      onValueChange={(nextValue) => dispatch({ type: "setActiveItem", value: nextValue })}
     >
-      <Popover open={effectiveOpen} onOpenChange={setOpen}>
+      <Popover open={effectiveOpen} onOpenChange={(nextOpen) => dispatch({ type: "setOpen", open: nextOpen })}>
         <PopoverTrigger asChild>
           <div className={cn("relative w-full", wrapperClassName)}>
             <CommandPrimitive.Input
               asChild
               value={inputValue}
-              onValueChange={setInputValue}
+              onValueChange={(nextValue) => dispatch({ type: "setInputValue", value: nextValue })}
             >
               <Input
                 value={inputValue}
                 onClick={(e) => e.stopPropagation()}
                 onChange={(e) => {
-                  setInputValue(e.target.value)
+                  dispatch({ type: "setInputValue", value: e.target.value })
                   onInputValueChange?.(e.target.value)
-                  setMode("none")
-                  if (!open) setOpen(true)
+                  dispatch({ type: "setInteractionMode", mode: "none" })
+                  if (!open) dispatch({ type: "setOpen", open: true })
                 }}
                 onBlur={handleBlur}
                 onFocus={(e) => {
-                  if (!open) setOpen(true)
+                  if (!open) dispatch({ type: "setOpen", open: true })
                   onFocus?.(e)
                 }}
                 onKeyDown={handleKeyDown}
@@ -193,8 +189,8 @@ export function Autocomplete({
         >
         <CommandList
           className={interactionMode === "none" ? "[&_[cmdk-item][data-selected=true]]:bg-transparent [&_[cmdk-item][data-selected=true]]:text-inherit" : ""}
-          onPointerMove={() => setMode("mouse")}
-          onPointerLeave={() => setMode("none")}
+          onPointerMove={() => dispatch({ type: "setInteractionMode", mode: "mouse" })}
+          onPointerLeave={() => dispatch({ type: "setInteractionMode", mode: "none" })}
         >
             {filteredOptions.length === 0 && !isCustom ? (
               <CommandEmpty className="py-2">{emptyMessage}</CommandEmpty>
