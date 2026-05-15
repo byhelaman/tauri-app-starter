@@ -1,9 +1,18 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
-import { describe, expect, it, vi } from "vitest"
+import { useState } from "react"
+import { beforeAll, describe, expect, it, vi } from "vitest"
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table"
 import { DataTable } from "./data-table"
-import { createSelectColumn, multiValueFilter } from "./data-table-cells"
+import { createSelectColumn, multiValueFilter, renderCell } from "./data-table-cells"
 import type { DataTableSelectionOperation, DataTableSelectionScope, DataTableSelectionState } from "./data-table-types"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 vi.mock("@tanstack/react-virtual", () => ({
   useVirtualizer: ({ count }: { count: number }) => ({
@@ -25,6 +34,25 @@ type TestOrder = {
   code: string
   status: "pending" | "processing" | "shipped"
   channel: "Online" | "Retail"
+}
+
+function SelectStatusCell({ initialValue }: { initialValue: TestOrder["status"] }) {
+  const [value, setValue] = useState<TestOrder["status"]>(initialValue)
+
+  return (
+    <Select value={value} onValueChange={(nextValue) => setValue(nextValue as TestOrder["status"])}>
+      <SelectTrigger>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          <SelectItem value="pending">pending</SelectItem>
+          <SelectItem value="processing">processing</SelectItem>
+          <SelectItem value="shipped">shipped</SelectItem>
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  )
 }
 
 const rows: TestOrder[] = [
@@ -224,6 +252,341 @@ function rowCheckboxes() {
 }
 
 describe("DataTable integration", () => {
+  beforeAll(() => {
+    Element.prototype.scrollIntoView = vi.fn()
+  })
+
+  it("keeps arrow navigation moving across checkbox, text, select-like button, and badge cells", () => {
+    const mixedColumns: ColumnDef<TestOrder>[] = [
+      createSelectColumn<TestOrder>(),
+      {
+        accessorKey: "code",
+        header: "Code",
+        cell: ({ row }) => row.original.code,
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ row }) => <button type="button">{row.original.status}</button>,
+      },
+      {
+        accessorKey: "channel",
+        header: "Channel",
+        cell: ({ row }) => <span>{row.original.channel}</span>,
+      },
+    ]
+
+    render(
+      <DataTable
+        tableId="grid-navigation-test"
+        columns={mixedColumns}
+        data={rows.slice(0, 2)}
+        getRowId={(row) => row.id}
+        toolbar={{ showViewOptions: false }}
+      />
+    )
+
+    const firstRow = screen.getByText("ORD-A").closest("tr") as HTMLTableRowElement
+    const firstRowCells = Array.from(firstRow.querySelectorAll<HTMLTableCellElement>("[data-grid-cell='true']"))
+
+    firstRowCells[0].focus()
+    fireEvent.keyDown(firstRowCells[0], { key: "ArrowRight" })
+    expect(firstRowCells[1]).toHaveFocus()
+
+    fireEvent.keyDown(firstRowCells[1], { key: "ArrowRight" })
+    expect(firstRowCells[2]).toHaveFocus()
+
+    fireEvent.keyDown(firstRowCells[2], { key: "ArrowRight" })
+    expect(firstRowCells[3]).toHaveFocus()
+
+    fireEvent.keyDown(firstRowCells[3], { key: "ArrowLeft" })
+    expect(firstRowCells[2]).toHaveFocus()
+
+    fireEvent.keyDown(firstRowCells[2], { key: "ArrowDown" })
+    const secondRow = screen.getByText("ORD-B").closest("tr") as HTMLTableRowElement
+    const secondRowCells = Array.from(secondRow.querySelectorAll<HTMLTableCellElement>("[data-grid-cell='true']"))
+    expect(secondRowCells[2]).toHaveFocus()
+  })
+
+  it("enters inline edit mode from the focused grid cell with Enter", () => {
+    const editableColumns: ColumnDef<TestOrder>[] = [
+      {
+        accessorKey: "code",
+        header: "Code",
+        cell: ({ row }) => renderCell(row.original.code, { enableEditing: true }),
+      },
+    ]
+
+    render(
+      <DataTable
+        tableId="grid-edit-activation-test"
+        columns={editableColumns}
+        data={rows.slice(0, 1)}
+        getRowId={(row) => row.id}
+        toolbar={{ showViewOptions: false }}
+      />
+    )
+
+    const cell = screen.getByText("ORD-A").closest("[data-grid-cell='true']") as HTMLTableCellElement
+    cell.focus()
+    fireEvent.keyDown(cell, { key: "Enter" })
+
+    expect(screen.getByRole("textbox")).toHaveValue("ORD-A")
+  })
+
+  it("keeps the grid cell as the only idle tab stop for editable cells", () => {
+    const editableColumns: ColumnDef<TestOrder>[] = [
+      {
+        accessorKey: "code",
+        header: "Code",
+        cell: ({ row }) => renderCell(row.original.code, { enableEditing: true }),
+      },
+    ]
+
+    render(
+      <DataTable
+        tableId="grid-single-focus-test"
+        columns={editableColumns}
+        data={rows.slice(0, 1)}
+        getRowId={(row) => row.id}
+        toolbar={{ showViewOptions: false }}
+      />
+    )
+
+    const cell = screen.getByText("ORD-A").closest("[data-grid-cell='true']") as HTMLTableCellElement
+    const idleContent = screen.getByText("ORD-A").closest("[data-grid-editable='true']") as HTMLElement
+    expect(cell).toHaveAttribute("tabindex", "0")
+    expect(idleContent).not.toHaveAttribute("tabindex")
+    expect(idleContent).toHaveClass("rounded-lg")
+    expect(idleContent).not.toHaveClass("focus:border-ring")
+    expect(idleContent).not.toHaveClass("focus:ring-3")
+
+    fireEvent.mouseDown(idleContent)
+    expect(cell).toHaveFocus()
+  })
+
+  it("keeps the idle grid focus on the cell when clicking non-interactive content", () => {
+    const editableColumns: ColumnDef<TestOrder>[] = [
+      {
+        accessorKey: "code",
+        header: "Code",
+        cell: ({ row }) => renderCell(row.original.code, { enableEditing: true }),
+      },
+    ]
+
+    render(
+      <DataTable
+        tableId="grid-click-focus-test"
+        columns={editableColumns}
+        data={rows.slice(0, 1)}
+        getRowId={(row) => row.id}
+        toolbar={{ showViewOptions: false }}
+      />
+    )
+
+    const cell = screen.getByText("ORD-A").closest("[data-grid-cell='true']") as HTMLTableCellElement
+    expect(cell).toHaveClass("focus:after:border-ring")
+    expect(cell).not.toHaveClass("focus-visible:after:border-ring")
+
+    fireEvent.mouseDown(cell)
+    expect(cell).toHaveFocus()
+  })
+
+  it("returns focus to the grid cell after cancelling inline edit with Escape", async () => {
+    const editableColumns: ColumnDef<TestOrder>[] = [
+      {
+        accessorKey: "code",
+        header: "Code",
+        cell: ({ row }) => renderCell(row.original.code, { enableEditing: true }),
+      },
+    ]
+
+    render(
+      <DataTable
+        tableId="grid-edit-cancel-focus-test"
+        columns={editableColumns}
+        data={rows.slice(0, 1)}
+        getRowId={(row) => row.id}
+        toolbar={{ showViewOptions: false }}
+      />
+    )
+
+    const cell = screen.getByText("ORD-A").closest("[data-grid-cell='true']") as HTMLTableCellElement
+    cell.focus()
+    fireEvent.keyDown(cell, { key: "Enter" })
+    fireEvent.keyDown(screen.getByRole("textbox"), { key: "Escape" })
+
+    await waitFor(() => expect(cell).toHaveFocus())
+  })
+
+  it("activates a nested interactive control from the focused grid cell with Enter", () => {
+    const onActivate = vi.fn()
+    const interactiveColumns: ColumnDef<TestOrder>[] = [
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ row }) => (
+          <button type="button" onClick={() => onActivate(row.original.id)}>
+            {row.original.status}
+          </button>
+        ),
+      },
+    ]
+
+    render(
+      <DataTable
+        tableId="grid-interactive-activation-test"
+        columns={interactiveColumns}
+        data={rows.slice(0, 1)}
+        getRowId={(row) => row.id}
+        toolbar={{ showViewOptions: false }}
+      />
+    )
+
+    const cell = screen.getByText("pending").closest("[data-grid-cell='true']") as HTMLTableCellElement
+    cell.focus()
+    fireEvent.keyDown(cell, { key: "Enter" })
+
+    expect(screen.getByText("pending")).toHaveFocus()
+    expect(onActivate).toHaveBeenCalledWith("a")
+  })
+
+  it("opens a select from the idle grid cell with Enter instead of only moving focus into the trigger", async () => {
+    const selectColumns: ColumnDef<TestOrder>[] = [
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ row }) => <SelectStatusCell initialValue={row.original.status} />,
+      },
+    ]
+
+    render(
+      <DataTable
+        tableId="grid-select-enter-test"
+        columns={selectColumns}
+        data={rows.slice(0, 1)}
+        getRowId={(row) => row.id}
+        toolbar={{ showViewOptions: false }}
+      />
+    )
+
+    const cell = screen.getByText("pending").closest("[data-grid-cell='true']") as HTMLTableCellElement
+    const trigger = within(cell).getByRole("combobox")
+    cell.focus()
+
+    fireEvent.keyDown(cell, { key: "Enter" })
+
+    await waitFor(() => expect(trigger).toHaveAttribute("aria-expanded", "true"))
+  })
+
+  it("reopens the same select with Enter after choosing a value and returning by grid navigation", async () => {
+    const selectColumns: ColumnDef<TestOrder>[] = [
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ row }) => <SelectStatusCell initialValue={row.original.status} />,
+      },
+      {
+        accessorKey: "code",
+        header: "Code",
+        cell: ({ row }) => row.original.code,
+      },
+    ]
+
+    render(
+      <DataTable
+        tableId="grid-select-reopen-test"
+        columns={selectColumns}
+        data={rows.slice(0, 1)}
+        getRowId={(row) => row.id}
+        toolbar={{ showViewOptions: false }}
+      />
+    )
+
+    const statusCell = screen.getByText("pending").closest("[data-grid-cell='true']") as HTMLTableCellElement
+    const trigger = within(statusCell).getByRole("combobox")
+    statusCell.focus()
+    fireEvent.keyDown(statusCell, { key: "Enter" })
+    await waitFor(() => expect(trigger).toHaveAttribute("aria-expanded", "true"))
+
+    fireEvent.click(await screen.findByRole("option", { name: "processing" }))
+    await waitFor(() => expect(trigger).toHaveAttribute("aria-expanded", "false"))
+
+    fireEvent.keyDown(trigger, { key: "ArrowRight" })
+    const codeCell = screen.getByText("ORD-A").closest("[data-grid-cell='true']") as HTMLTableCellElement
+    expect(codeCell).toHaveFocus()
+
+    fireEvent.keyDown(codeCell, { key: "ArrowLeft" })
+    expect(statusCell).toHaveFocus()
+
+    fireEvent.keyDown(statusCell, { key: "Enter" })
+    await waitFor(() => expect(trigger).toHaveAttribute("aria-expanded", "true"))
+  })
+
+  it("delegates a background click in an interactive cell to its control", () => {
+    const onActivate = vi.fn()
+    const interactiveColumns: ColumnDef<TestOrder>[] = [
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ row }) => <button type="button" onClick={() => onActivate(row.original.id)}>{row.original.status}</button>,
+      },
+    ]
+
+    render(
+      <DataTable
+        tableId="grid-interactive-cell-click-test"
+        columns={interactiveColumns}
+        data={rows.slice(0, 1)}
+        getRowId={(row) => row.id}
+        toolbar={{ showViewOptions: false }}
+      />
+    )
+
+    const control = screen.getByText("pending")
+    const cell = control.closest("[data-grid-cell='true']") as HTMLTableCellElement
+
+    fireEvent.mouseDown(cell)
+
+    expect(control).toHaveFocus()
+    expect(onActivate).toHaveBeenCalledWith("a")
+    expect(cell).not.toHaveFocus()
+    expect(cell).not.toHaveClass("focus-within:after:border-ring")
+  })
+
+  it("navigates by the rendered pinned-column order", () => {
+    window.localStorage.setItem(
+      "table-pinning-grid-pinned-test",
+      JSON.stringify({ left: ["channel"], right: ["code"] }),
+    )
+
+    render(
+      <DataTable
+        tableId="grid-pinned-test"
+        columns={columns.slice(1)}
+        data={rows.slice(0, 1)}
+        getRowId={(row) => row.id}
+        toolbar={{ showViewOptions: false }}
+      />
+    )
+
+    const row = screen.getByText("ORD-A").closest("tr") as HTMLTableRowElement
+    const cells = Array.from(row.querySelectorAll<HTMLTableCellElement>("[data-grid-cell='true']"))
+    expect(cells.map((cell) => cell.textContent)).toEqual(["Online", "pending", "ORD-A"])
+    expect(cells[0]).toHaveClass("focus:z-40")
+    expect(cells[2]).toHaveClass("focus:z-40")
+    expect(cells[0]).toHaveClass("focus:after:border-ring")
+    expect(cells[2]).toHaveClass("focus:after:border-ring")
+    expect(cells[0]).not.toHaveClass("after:rounded-lg")
+    expect(cells[2]).not.toHaveClass("after:rounded-lg")
+
+    cells[0].focus()
+    fireEvent.keyDown(cells[0], { key: "ArrowRight" })
+    expect(cells[1]).toHaveFocus()
+    fireEvent.keyDown(cells[1], { key: "ArrowRight" })
+    expect(cells[2]).toHaveFocus()
+  })
+
   it("keeps a global select-all selected when the current server scope changes", async () => {
     const view = renderOrdersTable()
 

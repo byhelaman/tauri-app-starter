@@ -2,6 +2,7 @@ import { startTransition, useReducer, useRef } from "react"
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { Autocomplete } from "@/components/ui/autocomplete"
+import { moveGridFocus, type GridDirection } from "../core/grid-navigation"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -93,27 +94,6 @@ function editReducer(state: EditState, action: EditAction): EditState {
   }
 }
 
-function moveFocus(element: HTMLElement, direction: "up" | "down" | "left" | "right") {
-  const td = element.closest("td")
-  const tr = td?.closest("tr")
-  if (!td || !tr) return
-
-  let targetTd: Element | null | undefined = null
-
-  if (direction === "up") {
-    targetTd = tr.previousElementSibling?.children[td.cellIndex]
-  } else if (direction === "down") {
-    targetTd = tr.nextElementSibling?.children[td.cellIndex]
-  } else if (direction === "left") {
-    targetTd = td.previousElementSibling
-  } else if (direction === "right") {
-    targetTd = td.nextElementSibling
-  }
-
-  const focusable = targetTd?.querySelector<HTMLElement>('[tabindex="0"], input, button')
-  focusable?.focus()
-}
-
 export function InlineEditableCell({
   value,
   className,
@@ -132,9 +112,16 @@ export function InlineEditableCell({
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const editContainerRef = useRef<HTMLDivElement>(null)
+  const gridCellRef = useRef<HTMLElement | null>(null)
   const skipNextBlurRef = useRef(false)
   const [editState, dispatchEdit] = useReducer(editReducer, initialEditState)
   const isEditing = editState.mode !== "idle"
+
+  function gridCell() {
+    return containerRef.current?.closest<HTMLElement>("[data-grid-cell='true']")
+      ?? editContainerRef.current?.closest<HTMLElement>("[data-grid-cell='true']")
+      ?? gridCellRef.current
+  }
 
   function beginEditing(initialValue: string | null = null) {
     skipNextBlurRef.current = false
@@ -145,18 +132,18 @@ export function InlineEditableCell({
     })
   }
 
-  function scheduleFocus(action: "current" | "up" | "down" | "left" | "right") {
+  function scheduleFocus(action: "current" | GridDirection) {
     requestAnimationFrame(() => {
       if (!containerRef.current) return
       if (action === "current") {
-        containerRef.current.focus()
+        ;(gridCell() ?? containerRef.current).focus()
       } else {
-        moveFocus(containerRef.current, action)
+        moveGridFocus(containerRef.current, action)
       }
     })
   }
 
-  function handleCommit(currentValue: string, focusAction?: "current" | "up" | "down" | "left" | "right") {
+  function handleCommit(currentValue: string, focusAction?: "current" | GridDirection) {
     if (!enableEditing) {
       dispatchEdit({ type: "cancel", value: nextValue })
       if (focusAction) scheduleFocus(focusAction)
@@ -200,7 +187,7 @@ export function InlineEditableCell({
     if (e.key.startsWith("Arrow")) {
       e.preventDefault()
       const direction = e.key.replace("Arrow", "").toLowerCase() as "up" | "down" | "left" | "right"
-      if (containerRef.current) moveFocus(containerRef.current, direction)
+      if (containerRef.current) moveGridFocus(containerRef.current, direction)
       return
     }
 
@@ -269,8 +256,24 @@ export function InlineEditableCell({
   if (!isEditing) {
     return (
       <div
-        ref={containerRef}
-        tabIndex={0}
+        ref={(node) => {
+          containerRef.current = node
+          if (!node) return
+          const cell = node.closest<HTMLElement>("[data-grid-cell='true']")
+          gridCellRef.current = cell
+          if (cell) {
+            node.removeAttribute("tabindex")
+          } else {
+            node.tabIndex = 0
+          }
+        }}
+        data-grid-editable={enableEditing || undefined}
+        onMouseDown={(event) => {
+          const cell = gridCell()
+          if (!cell) return
+          event.preventDefault()
+          cell.focus()
+        }}
         onDoubleClick={() => {
           beginEditing()
         }}
@@ -278,11 +281,8 @@ export function InlineEditableCell({
         onPaste={handlePaste}
         aria-invalid={editState.hasError || undefined}
         className={cn(
-          "flex h-8 w-full min-w-0 items-center rounded-lg border border-transparent bg-transparent px-2.5 py-1 text-base transition-colors outline-none md:text-sm",
+          "flex h-8 w-full min-w-0 items-center rounded-lg bg-transparent px-2.5 py-1 text-base transition-colors md:text-sm",
           "hover:bg-input/30",
-          "focus:border-ring focus:ring-3 focus:ring-ring/50 focus:bg-background dark:focus:bg-input/30",
-          "aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
-          "focus:aria-invalid:border-ring focus:aria-invalid:ring-ring/50 dark:focus:aria-invalid:border-ring dark:focus:aria-invalid:ring-ring/50",
           className
         )}
       >

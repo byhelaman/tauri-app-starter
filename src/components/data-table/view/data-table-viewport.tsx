@@ -13,6 +13,13 @@ import {
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { DataTableSkeleton } from "./data-table-skeleton"
 import { getColumnSizeStyle, getPinnedColumnStyle } from "../core/data-table-utils"
+import {
+  activateGridCell,
+  findGridInteractiveControl,
+  gridDirectionFromKey,
+  isGridEditingTarget,
+  moveGridFocus,
+} from "../core/grid-navigation"
 
 interface DataTableViewportProps<TData, TValue> {
   table: ReactTable<TData>
@@ -65,6 +72,49 @@ export function DataTableViewport<TData, TValue>({
   isSidePanelOpen,
   onCloseSidePanel,
 }: DataTableViewportProps<TData, TValue>) {
+  function handleGridCellMouseDown(event: React.MouseEvent<HTMLTableCellElement>) {
+    if (!(event.target instanceof HTMLElement)) return
+    if (isGridEditingTarget(event.target)) return
+    if (event.target.closest("button, [role='checkbox'], input, textarea, select, [data-radix-collection-item]")) return
+
+    const hasEditableCell = event.currentTarget.querySelector("[data-grid-editable='true']")
+    const interactive = findGridInteractiveControl(event.currentTarget)
+    if (!hasEditableCell && interactive) {
+      event.preventDefault()
+      interactive.focus()
+      if (interactive instanceof HTMLButtonElement) {
+        interactive.click()
+      }
+      return
+    }
+
+    event.currentTarget.focus()
+  }
+
+  function handleGridKeyDownCapture(event: React.KeyboardEvent<HTMLTableSectionElement>) {
+    if ((event.key === "Enter" || event.key === "F2") && event.target instanceof HTMLTableCellElement) {
+      event.preventDefault()
+      activateGridCell(event.target, event.key)
+      return
+    }
+
+    const direction = gridDirectionFromKey(event.key)
+    if (!direction || isGridEditingTarget(event.target)) return
+    if (!(event.target instanceof HTMLElement)) return
+    if (!event.target.closest("[data-grid-cell='true']")) return
+
+    event.preventDefault()
+    event.stopPropagation()
+    moveGridFocus(event.target, direction)
+  }
+
+  function handleGridDoubleClickCapture(event: React.MouseEvent<HTMLTableSectionElement>) {
+    if (!(event.target instanceof HTMLElement)) return
+    const cell = event.target.closest<HTMLTableCellElement>("[data-grid-cell='true']")
+    if (!cell || event.target !== cell) return
+    activateGridCell(cell, "F2")
+  }
+
   return (
     <div className="flex flex-1 min-h-0 w-full overflow-hidden rounded-md border">
       <div
@@ -99,7 +149,10 @@ export function DataTableViewport<TData, TValue>({
               </TableRow>
             ))}
           </TableHeader>
-          <TableBody>
+          <TableBody
+            onKeyDownCapture={handleGridKeyDownCapture}
+            onDoubleClickCapture={handleGridDoubleClickCapture}
+          >
             {paddingTop > 0 && (
               <TableRow><TableCell colSpan={columns.length} style={{ height: paddingTop, padding: 0, border: 0 }} /></TableRow>
             )}
@@ -116,9 +169,15 @@ export function DataTableViewport<TData, TValue>({
                     return (
                       <TableCell
                         key={cell.id}
+                        data-grid-cell="true"
+                        tabIndex={0}
+                        onMouseDown={handleGridCellMouseDown}
                         className={cn(
+                          "relative outline-none",
+                          "after:pointer-events-none after:absolute after:inset-0 after:border after:border-transparent after:transition-colors",
+                          "focus:bg-background focus:after:border-2 focus:after:border-ring",
                           cell.column.getIsPinned() &&
-                          "relative z-10 group-hover/row:z-30 border-b group-last/row:border-b-0 bg-(--highlight-bg,var(--table-bg,var(--color-background))) transition-colors group-hover:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-has-data-open:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-has-aria-expanded:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-data-[state=selected]:bg-muted"
+                          "relative z-10 group-hover/row:z-30 focus:z-40 border-b group-last/row:border-b-0 bg-(--highlight-bg,var(--table-bg,var(--color-background))) transition-colors group-hover:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-has-data-open:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-has-aria-expanded:bg-(--highlight-bg-hover,color-mix(in_oklch,var(--color-muted)_50%,var(--table-bg,var(--color-background)))) group-data-[state=selected]:bg-muted"
                         )}
                         style={{
                           ...(cell.column.getIsPinned() ? undefined : getColumnSizeStyle(cell.column.columnDef)),
