@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
-import type { ColumnFiltersState, Table } from "@tanstack/react-table"
+import type { Table } from "@tanstack/react-table"
 import { SearchIcon, X, FilterIcon, Clock, PlusCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -24,6 +23,7 @@ import { getAvailableHours } from "./data-table-interval-filter-utils"
 import { DataTableViewOptions } from "./data-table-view-options"
 import { Autocomplete } from "@/components/ui/autocomplete"
 import type { FacetedFilterConfig, IntervalFilterConfig, InfiniteScrollConfig } from "./data-table-types"
+import { getDraftFilterValue, useTableFilterDraft } from "./use-table-filter-draft"
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>
@@ -51,39 +51,6 @@ interface DataTableToolbarProps<TData> {
   }) => React.ReactNode
 }
 
-// ── Helpers para comparar drafts con el estado actual ──────────────────────
-
-function filtersEqual(a: ColumnFiltersState, b: ColumnFiltersState): boolean {
-  if (a.length !== b.length) return false
-  for (let i = 0; i < a.length; i++) {
-    if (a[i].id !== b[i].id) return false
-    const va = a[i].value
-    const vb = b[i].value
-    if (Array.isArray(va) && Array.isArray(vb)) {
-      if (va.length !== vb.length || va.some((v, j) => v !== vb[j])) return false
-    } else if (va !== vb) {
-      return false
-    }
-  }
-  return true
-}
-
-function getDraftFilterValue(draftFilters: ColumnFiltersState, columnId: string): string[] | undefined {
-  const entry = draftFilters.find(f => f.id === columnId)
-  if (!entry) return undefined
-  return Array.isArray(entry.value) ? (entry.value as string[]) : undefined
-}
-
-function setDraftFilterValue(
-  prev: ColumnFiltersState,
-  columnId: string,
-  values: string[] | undefined
-): ColumnFiltersState {
-  const without = prev.filter(f => f.id !== columnId)
-  if (!values || values.length === 0) return without
-  return [...without, { id: columnId, value: values }]
-}
-
 export function DataTableToolbar<TData>({
   table,
   tableId,
@@ -104,51 +71,17 @@ export function DataTableToolbar<TData>({
   searchAutocomplete,
   renderSearchInput,
 }: DataTableToolbarProps<TData>) {
-  // ── Estado real (commitido) ────────────────────────────────────────────
-  const committedSearch = (table.getState().globalFilter as string) ?? ""
-  const committedFilters = table.getState().columnFilters
-
-  // ── Estado draft (pendiente de commit) ─────────────────────────────────
-  const [draftSearch, setDraftSearch] = useState(committedSearch)
-  const [draftFilters, setDraftFilters] = useState<ColumnFiltersState>(committedFilters)
-
-  // Sincroniza drafts cuando el estado real cambia externamente (reset, presets, etc.)
-  useEffect(() => {
-    setDraftSearch(committedSearch)
-  }, [committedSearch])
-
-  useEffect(() => {
-    setDraftFilters(committedFilters)
-  }, [committedFilters])
-
-  // ── Commit: empuja drafts al estado real ───────────────────────────────
-  const commitFilters = useCallback(() => {
-    table.setGlobalFilter(draftSearch || undefined)
-    // Aplica cada filtro draft al table
-    const currentIds = new Set(committedFilters.map(f => f.id))
-    const draftIds = new Set(draftFilters.map(f => f.id))
-    // Limpia filtros que se quitaron del draft
-    for (const id of currentIds) {
-      if (!draftIds.has(id)) {
-        table.getColumn(id)?.setFilterValue(undefined)
-      }
-    }
-    // Aplica filtros del draft
-    for (const filter of draftFilters) {
-      table.getColumn(filter.id)?.setFilterValue(filter.value)
-    }
-  }, [table, draftSearch, draftFilters, committedFilters])
-
-  // ── Detección de cambios pendientes ────────────────────────────────────
-  const hasPendingChanges = useMemo(() => {
-    if (draftSearch !== committedSearch) return true
-    return !filtersEqual(draftFilters, committedFilters)
-  }, [draftSearch, committedSearch, draftFilters, committedFilters])
-
-  // ── Draft filter change handler para faceted/interval filters ──────────
-  const handleDraftFilterChange = useCallback((columnId: string, values: string[] | undefined) => {
-    setDraftFilters(prev => setDraftFilterValue(prev, columnId, values))
-  }, [])
+  const {
+    committedSearch,
+    committedFilters,
+    draftSearch,
+    setDraftSearch,
+    draftFilters,
+    setDraftFilter,
+    commit,
+    reset,
+    hasPendingChanges,
+  } = useTableFilterDraft(table)
 
   // ── UI state ───────────────────────────────────────────────────────────
   const hasSearchFilter = Boolean(committedSearch.trim())
@@ -170,14 +103,9 @@ export function DataTableToolbar<TData>({
             value: draftSearch,
             onChange: setDraftSearch,
             onCommit: (selectedValue) => {
-              if (selectedValue !== undefined) setDraftSearch(selectedValue)
-              table.setGlobalFilter(selectedValue !== undefined ? (selectedValue || undefined) : (draftSearch || undefined))
-              // Sync draft filters too
-              for (const filter of draftFilters) {
-                table.getColumn(filter.id)?.setFilterValue(filter.value)
-              }
+              commit(selectedValue)
             },
-            placeholder: filterPlaceholder
+            placeholder: filterPlaceholder,
           })
         ) : searchAutocomplete ? (
           <div
@@ -200,18 +128,12 @@ export function DataTableToolbar<TData>({
                 setDraftSearch(val)
               }}
               onChange={(val) => {
-                setDraftSearch(val)
-                // Auto-commit cuando el usuario elige una sugerencia
-                table.setGlobalFilter(val || undefined)
-                // Sync draft filters too
-                for (const filter of draftFilters) {
-                  table.getColumn(filter.id)?.setFilterValue(filter.value)
-                }
+                commit(val)
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault()
-                  commitFilters()
+                  commit()
                 }
               }}
               wrapperClassName="flex-1 min-w-0"
@@ -235,7 +157,7 @@ export function DataTableToolbar<TData>({
               onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                 if (e.key === "Enter") {
                   e.preventDefault()
-                  commitFilters()
+                  commit()
                 }
               }}
             />
@@ -288,7 +210,7 @@ export function DataTableToolbar<TData>({
                               const next = new Set(selectedValues)
                               if (c) next.add(opt.value)
                               else next.delete(opt.value)
-                              handleDraftFilterChange(
+                              setDraftFilter(
                                 filter.columnId,
                                 next.size ? Array.from(next) : undefined
                               )
@@ -329,7 +251,7 @@ export function DataTableToolbar<TData>({
                               const next = new Set(selectedValues)
                               if (c) next.add(hour)
                               else next.delete(hour)
-                              handleDraftFilterChange(
+                              setDraftFilter(
                                 intervalFilter.columnId,
                                 next.size ? Array.from(next) : undefined
                               )
@@ -362,7 +284,7 @@ export function DataTableToolbar<TData>({
               title={filter.title}
               options={filter.options}
               draftValue={getDraftFilterValue(draftFilters, filter.columnId)}
-              onDraftChange={(values) => handleDraftFilterChange(filter.columnId, values)}
+              onDraftChange={(values) => setDraftFilter(filter.columnId, values)}
             />
           )
         })}
@@ -373,7 +295,7 @@ export function DataTableToolbar<TData>({
             title={intervalFilter.title}
             hours={intervalFilter.hours}
             draftValue={getDraftFilterValue(draftFilters, intervalFilter.columnId)}
-            onDraftChange={(values) => handleDraftFilterChange(intervalFilter.columnId, values)}
+            onDraftChange={(values) => setDraftFilter(intervalFilter.columnId, values)}
           />
         )}
       </div>
@@ -382,7 +304,7 @@ export function DataTableToolbar<TData>({
         <Button
           variant="secondary"
           size="sm"
-          onClick={commitFilters}
+          onClick={() => commit()}
         >
           Search <SearchIcon data-icon="inline-end" />
         </Button>
@@ -392,12 +314,7 @@ export function DataTableToolbar<TData>({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => {
-            table.resetColumnFilters()
-            table.setGlobalFilter(undefined)
-            setDraftSearch("")
-            setDraftFilters([])
-          }}
+          onClick={reset}
         >
           Reset <X data-icon="inline-end" />
         </Button>
