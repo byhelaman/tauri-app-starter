@@ -27,7 +27,7 @@ AS $$
             o.code AS label,
             'Code' AS type
         FROM public.orders o
-        WHERE o.code ILIKE '%' || query_text || '%'
+        WHERE o.code ILIKE query_text || '%'
         ORDER BY o.code
         LIMIT 3
     )

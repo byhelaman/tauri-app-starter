@@ -45,17 +45,13 @@ export function Autocomplete({
   const [open, setOpen] = React.useState(false)
   const [inputValue, setInputValue] = React.useState(value)
   const [activeItem, setActiveItem] = React.useState("")
-  const [hasNavigated, setHasNavigated] = React.useState(false)
-  const hasNavigatedRef = React.useRef(false)
+  // Modos: "none" (default), "keyboard" (usó flechas), "mouse" (usó scroll/cursor)
+  const [interactionMode, setInteractionMode] = React.useState<"none" | "keyboard" | "mouse">("none")
+  const interactionModeRef = React.useRef<"none" | "keyboard" | "mouse">("none")
 
-  const markNavigated = React.useCallback(() => {
-    hasNavigatedRef.current = true
-    setHasNavigated(true)
-  }, [])
-
-  const clearNavigated = React.useCallback(() => {
-    hasNavigatedRef.current = false
-    setHasNavigated(false)
+  const setMode = React.useCallback((mode: "none" | "keyboard" | "mouse") => {
+    interactionModeRef.current = mode
+    setInteractionMode(mode)
   }, [])
 
   React.useEffect(() => {
@@ -97,7 +93,7 @@ export function Autocomplete({
     if (e.key === "Escape") {
       e.preventDefault()
       setOpen(false)
-      clearNavigated()
+      setMode("none")
       return
     }
 
@@ -106,38 +102,43 @@ export function Autocomplete({
         e.preventDefault()
         setOpen(true)
       }
-      markNavigated()
-      // Dejar que cmdk maneje la navegación del dropdown
+      
+      if (interactionModeRef.current !== "keyboard" && e.key === "ArrowDown") {
+        e.preventDefault()
+        const firstValue = isCustom ? inputValue.trim() : filteredOptions[0]?.value
+        if (firstValue) setActiveItem(firstValue)
+      }
+      
+      setMode("keyboard")
       return
     }
 
-    if (e.key === "Tab" && open && !filterClientSide && hasNavigated && activeItem) {
-      // Tab solo rellena el input sin lanzar la búsqueda final (onChange)
+    if (e.key === "Tab" && open && !filterClientSide && interactionMode === "keyboard" && activeItem) {
       e.preventDefault()
       setInputValue(activeItem)
       onInputValueChange?.(activeItem)
       setOpen(false)
-      clearNavigated()
+      setMode("none")
       return
     }
 
-    if (e.key === "Enter" && open && !filterClientSide && hasNavigated && activeItem) {
-      // Enter rellena y lanza la búsqueda final
-      e.preventDefault()
-      handleSelect(activeItem)
-      clearNavigated()
-      return
-    }
+    if (e.key === "Enter") {
+      // 1. Si no hay navegación ACTIVA POR TECLADO, el Enter va para el Input maestro, NO para sugerencias.
+      if (interactionMode !== "keyboard") {
+        e.preventDefault() // Detiene TODA acción interna de cmdk (onSelect)
+        setOpen(false)
+        setMode("none")
+        onKeyDown?.(e) // Avisa al padre (ej. Tabla/Celda) para que tome el valor limpio actual
+        return
+      }
 
-    if (e.key === "Enter" && open && filterClientSide) {
-      // Modo client-side: dejar que cmdk maneje Enter → onSelect del CommandItem activo.
-      return
-    }
-
-    if (e.key === "Enter" && open && !filterClientSide) {
-      // No navegó con flechas → cerrar popover y dejar que el handler externo maneje Enter.
-      setOpen(false)
-      clearNavigated()
+      // 2. Si hay interactuado con el teclado, confirmamos la sugerencia ACTIVA.
+      if (open && activeItem) {
+        e.preventDefault()
+        handleSelect(activeItem)
+        setMode("none")
+        return
+      }
     }
 
     onKeyDown?.(e)
@@ -150,10 +151,8 @@ export function Autocomplete({
   return (
     <CommandPrimitive
       shouldFilter={false}
-      value={hasNavigated ? activeItem : "__none__"}
-      onValueChange={(val) => {
-        if (hasNavigated) setActiveItem(val)
-      }}
+      value={interactionMode === "none" ? "__none__" : activeItem}
+      onValueChange={setActiveItem}
     >
       <Popover open={effectiveOpen} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
@@ -169,7 +168,7 @@ export function Autocomplete({
                 onChange={(e) => {
                   setInputValue(e.target.value)
                   onInputValueChange?.(e.target.value)
-                  clearNavigated()
+                  setMode("none")
                   if (!open) setOpen(true)
                 }}
                 onBlur={handleBlur}
@@ -193,9 +192,9 @@ export function Autocomplete({
           onMouseDown={(e) => e.preventDefault()}
         >
         <CommandList
-          className={!hasNavigated ? "[&_[cmdk-item][data-selected=true]]:bg-transparent [&_[cmdk-item][data-selected=true]]:text-inherit" : ""}
-          onPointerMove={markNavigated}
-          onPointerLeave={clearNavigated}
+          className={interactionMode === "none" ? "[&_[cmdk-item][data-selected=true]]:bg-transparent [&_[cmdk-item][data-selected=true]]:text-inherit" : ""}
+          onPointerMove={() => setMode("mouse")}
+          onPointerLeave={() => setMode("none")}
         >
             {filteredOptions.length === 0 && !isCustom ? (
               <CommandEmpty className="py-2">{emptyMessage}</CommandEmpty>

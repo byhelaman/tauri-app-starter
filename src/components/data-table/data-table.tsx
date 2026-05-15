@@ -242,8 +242,7 @@ export function DataTable<TData, TValue>({
         allowDataExport={allowDataExport}
         allowDataCopy={allowDataCopy}
         onResetTable={resetTableView}
-        searchAutocomplete={toolbar?.searchAutocomplete}
-        onSearchInputChange={toolbar?.onSearchInputChange}
+        renderSearchInput={toolbar?.renderSearchInput}
       />
 
 

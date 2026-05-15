@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo } from "react"
 import { toast } from "sonner"
 import type { OnChangeFn, SortingState } from "@tanstack/react-table"
 import { Copy, Trash2 } from "lucide-react"
@@ -13,7 +13,7 @@ import { createColumns, type Order } from "@/features/orders/columns"
 import type { BulkDeleteRequest } from "@/features/orders/orders-delete-dialogs"
 import type { useOrders } from "@/features/orders/hooks/useOrders"
 import { useTableHighlights } from "@/features/orders/table-highlights"
-import { useSearchAutocomplete } from "@/features/orders/hooks/useSearchAutocomplete"
+import { OrdersSearchAutocomplete } from "@/features/orders/components/orders-search-autocomplete"
 import {
   CHANNEL_FILTER_OPTIONS,
   ORDER_COPY_FIELDS,
@@ -63,21 +63,6 @@ export function OrdersTableSection({
     [orders.actions.deleteOrder, orders.actions.handleCellChange, orders.actions.handleStatusChange]
   )
 
-  // ── Autocomplete con debounce ──────────────────────────────────────────
-  const [searchInput, setSearchInput] = useState("")
-  const [debouncedSearch, setDebouncedSearch] = useState("")
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchInput), 300)
-    return () => clearTimeout(timer)
-  }, [searchInput])
-
-  const { data: suggestions = [] } = useSearchAutocomplete(debouncedSearch)
-  const autocompleteOptions = useMemo(
-    () => suggestions.map((s) => ({ label: s.label, value: s.value })),
-    [suggestions]
-  )
-
   return (
     <DataTable
       columns={columns}
@@ -112,8 +97,7 @@ export function OrdersTableSection({
         ],
         intervalFilter: { columnId: "time", title: "Interval", hours: startHours },
         actions: toolbarActions,
-        searchAutocomplete: autocompleteOptions,
-        onSearchInputChange: setSearchInput,
+        renderSearchInput: (props) => <OrdersSearchAutocomplete {...props} />,
         viewMenuItems: canViewTrash ? (
           <DropdownMenuItem onSelect={onOpenTrash}>
             <Trash2 />

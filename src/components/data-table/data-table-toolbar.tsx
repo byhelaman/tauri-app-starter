@@ -43,7 +43,12 @@ interface DataTableToolbarProps<TData> {
   resultCountMode?: "server" | "client"
   onResetTable?: () => void
   searchAutocomplete?: { label: string; value: string }[]
-  onSearchInputChange?: (value: string) => void
+  renderSearchInput?: (props: {
+    value: string
+    onChange: (value: string) => void
+    onCommit: (selectedValue?: string) => void
+    placeholder?: string
+  }) => React.ReactNode
 }
 
 // ── Helpers para comparar drafts con el estado actual ──────────────────────
@@ -97,7 +102,7 @@ export function DataTableToolbar<TData>({
   resultCountMode = "server",
   onResetTable,
   searchAutocomplete,
-  onSearchInputChange,
+  renderSearchInput,
 }: DataTableToolbarProps<TData>) {
   // ── Estado real (commitido) ────────────────────────────────────────────
   const committedSearch = (table.getState().globalFilter as string) ?? ""
@@ -160,7 +165,21 @@ export function DataTableToolbar<TData>({
   return (
     <div className="flex items-center gap-2">
       {searchable && (
-        searchAutocomplete ? (
+        renderSearchInput ? (
+          renderSearchInput({
+            value: draftSearch,
+            onChange: setDraftSearch,
+            onCommit: (selectedValue) => {
+              if (selectedValue !== undefined) setDraftSearch(selectedValue)
+              table.setGlobalFilter(selectedValue !== undefined ? (selectedValue || undefined) : (draftSearch || undefined))
+              // Sync draft filters too
+              for (const filter of draftFilters) {
+                table.getColumn(filter.id)?.setFilterValue(filter.value)
+              }
+            },
+            placeholder: filterPlaceholder
+          })
+        ) : searchAutocomplete ? (
           <div
             className="group/input-group cursor-text relative flex h-8 w-full max-w-xs shrink-0 items-center rounded-lg border border-input transition-colors outline-none has-[input:focus-visible]:border-ring has-[input:focus-visible]:ring-3 has-[input:focus-visible]:ring-ring/50 dark:bg-input/30"
             onClick={(e) => {
@@ -179,7 +198,6 @@ export function DataTableToolbar<TData>({
               filterClientSide={false}
               onInputValueChange={(val) => {
                 setDraftSearch(val)
-                onSearchInputChange?.(val)
               }}
               onChange={(val) => {
                 setDraftSearch(val)

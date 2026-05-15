@@ -82,7 +82,7 @@ function orderIsSelectedByOperations(order: Order, operations: DataTableSelectio
 export function useOrders({
   dateFilter,
   sorting = [],
-  queryScope = "orders",
+  queryScope: _queryScope = "orders",
   realtime = true,
   enabled = true,
 }: {

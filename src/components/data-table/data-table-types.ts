@@ -35,8 +35,13 @@ export interface DataTableToolbarConfig<TData> {
   selectionMode?: "server" | "client"
   /** Opciones de autocompletado para la barra de búsqueda (server-side). */
   searchAutocomplete?: { label: string; value: string }[]
-  /** Callback invocado cuando cambia el texto de búsqueda (para alimentar el autocomplete). */
-  onSearchInputChange?: (value: string) => void
+  /** Inyecta un buscador personalizado, ideal para aislar estados de autocompletado y debounce. */
+  renderSearchInput?: (props: {
+    value: string
+    onChange: (value: string) => void
+    onCommit: (selectedValue?: string) => void
+    placeholder?: string
+  }) => ReactNode
 }
 
 export interface DataTableLayoutConfig {
